@@ -56,7 +56,8 @@ app.post('/api/auth/register', async (req, res) => {
 
     res.json({ success: true, message: 'Verification code sent', debugCode: code });
   } catch (error) {
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed', details: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -94,7 +95,8 @@ app.post('/api/auth/verify', async (req, res) => {
 
     await prisma.verificationCode.delete({ where: { email } });
   } catch (error) {
-    res.status(500).json({ error: 'Verification failed' });
+    console.error('Verification error:', error);
+    res.status(500).json({ error: 'Verification failed', details: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -109,7 +111,8 @@ app.get('/api/users/me', async (req, res) => {
       include: { channel: true, stats: true }
     });
     res.json(user);
-  } catch {
+  } catch (error) {
+    console.error('Auth check error:', error);
     res.status(401).json({ error: 'Invalid token' });
   }
 });
