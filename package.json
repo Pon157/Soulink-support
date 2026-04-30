@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
+    "start": "NODE_ENV=production tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit"
@@ -13,7 +14,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1040.0",
     "@google/genai": "^1.29.0",
-    "@prisma/client": "^6.19.3",
+    "@prisma/client": "^6.0.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -29,7 +30,7 @@
     "motion": "^12.23.24",
     "multer": "^2.1.1",
     "nodemailer": "^8.0.7",
-    "prisma": "^6.19.3",
+    "prisma": "^6.0.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "recharts": "^3.8.1",
