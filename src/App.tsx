@@ -215,8 +215,7 @@ const Navbar = ({ activeTab, onTabChange, role }: { activeTab: string, onTabChan
   const tabs = [
     { id: 'chats', icon: MessageCircle, label: 'Chats' },
     { id: 'channels', icon: Users, label: 'Channels' },
-    ...(role === 'ADMIN' || role === 'CURATOR' || role === 'OWNER' ? [{ id: 'dashboard', icon: BarChart3, label: 'Stats' }] : []),
-    ...(role === 'OWNER' ? [{ id: 'admin', icon: Shield, label: 'System' }] : []),
+    ...(role === 'ADMIN' || role === 'CURATOR' || role === 'OWNER' ? [{ id: 'system', icon: Shield, label: 'System' }] : []),
     { id: 'settings', icon: Settings, label: 'Settings' },
   ];
 
@@ -290,12 +289,14 @@ const ChatList = ({ role, onSelectChat }: { role: Role, onSelectChat: (id: strin
   );
 };
 
-const ChatView = ({ chatId, onBack }: { chatId: string, onBack: () => void }) => {
+const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, userRole: Role }) => {
   const [messages, setMessages] = useState<any[]>([
     { id: '0', content: 'Привет! Как я могу тебе сегодня помочь? Мы здесь, чтобы выслушать. 🌿', senderId: 'other', createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString() },
     { id: 'v1', type: 'voice', senderId: 'other', duration: '0:12', createdAt: new Date(Date.now() - 1000 * 60 * 4).toISOString() },
+    { id: 'p1', type: 'photo', senderId: 'me', url: 'https://images.unsplash.com/photo-1518173946687-a4c8a9833d8e?auto=format&fit=crop&q=80', createdAt: new Date(Date.now() - 1000 * 60 * 3).toISOString() },
   ]);
   const [input, setInput] = useState('');
+  const [showRating, setShowRating] = useState(false);
 
   const handleSend = () => {
     if (!input.trim()) return;
@@ -320,10 +321,39 @@ const ChatView = ({ chatId, onBack }: { chatId: string, onBack: () => void }) =>
           </div>
         </div>
         <div className="flex gap-4 text-slate-400">
+          {userRole === 'USER' && (
+            <button 
+              onClick={() => setShowRating(true)}
+              className="hover:text-amber-400 transition-colors"
+            >
+              <Star size={20} />
+            </button>
+          )}
           <button className="hover:text-white transition-colors"><ImageIcon size={20} /></button>
           <button className="hover:text-white transition-colors"><MoreVertical size={20} /></button>
         </div>
       </div>
+
+      {showRating && (
+        <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-8">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-[#242f3d] border border-slate-700 p-8 rounded-[3rem] shadow-2xl text-center space-y-6 w-full"
+          >
+            <div className="w-20 h-20 bg-amber-400/10 rounded-[2rem] flex items-center justify-center mx-auto text-amber-500">
+              <Star size={40} fill="currentColor" />
+            </div>
+            <h4 className="text-xl font-black text-white italic tracking-tighter">Оцените работу специалиста</h4>
+            <div className="flex justify-center gap-3">
+              {[1, 2, 3, 4, 5].map(s => (
+                <button key={s} className="text-amber-400 hover:scale-125 transition-transform"><Star size={32} fill={s <= 4 ? "currentColor" : "none"} /></button>
+              ))}
+            </div>
+            <button onClick={() => setShowRating(false)} className="w-full bg-blue-600 text-white font-black uppercase tracking-[0.3em] py-4 rounded-2xl text-[10px] shadow-xl shadow-blue-500/20">Подтвердить</button>
+          </motion.div>
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#17212b] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
@@ -350,6 +380,16 @@ const ChatView = ({ chatId, onBack }: { chatId: string, onBack: () => void }) =>
                   ))}
                 </div>
                 <span className="text-[10px] text-slate-400 font-bold">{msg.duration}</span>
+              </div>
+            ) : msg.type === 'photo' ? (
+              <div className="space-y-2">
+                <img 
+                  src={msg.url} 
+                  className="rounded-2xl w-full cursor-zoom-in hover:opacity-90 transition-opacity shadow-lg" 
+                  alt="shared photo" 
+                  onClick={() => onImageClick(msg.url)}
+                />
+                {msg.content && <p className="text-sm leading-relaxed font-medium">{msg.content}</p>}
               </div>
             ) : (
               <p className="text-sm leading-relaxed font-medium">{msg.content}</p>
@@ -466,85 +506,247 @@ const SettingsView = ({ user, theme, onLogout, onThemeChange }: { user: User, th
   );
 };
 
-// --- SYSTEM DASHBOARD (OWNER/ADMIN) ---
-const SystemDashboard = ({ role }: { role: Role }) => {
+// --- SYSTEM DASHBOARD (OWNER/ADMIN/CURATOR) ---
+const SystemDashboard = ({ role, user }: { role: Role, user: User }) => {
+  const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation'>('stats');
+
   return (
-    <div className="flex-1 overflow-y-auto pb-24 p-6 space-y-6 bg-[#0f172a]">
-      <header>
-        <h2 className="text-3xl font-black text-white tracking-tighter">Аналитика</h2>
-        <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-1">Live: Состояние системы</p>
-      </header>
-      
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-[2.5rem] shadow-xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 blur-3xl pointer-events-none" />
-          <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Активные чаты</p>
-          <div className="flex items-baseline space-x-2 mt-2">
-            <span className="text-3xl font-black text-white group-hover:text-blue-400 transition-colors">42</span>
-            <span className="text-emerald-500 text-[10px] font-black font-mono">+12%</span>
+    <div className="flex-1 overflow-y-auto pb-24 bg-[#0f172a]">
+      <div className="p-6 sticky top-0 bg-[#0f172a]/90 backdrop-blur-md z-20 border-b border-slate-800/30">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-white tracking-tighter">Панель Управления</h2>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-1">Доступ: {role}</p>
           </div>
-        </div>
-        <div className="bg-slate-900 border border-slate-800 p-5 rounded-[2.5rem] shadow-xl relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-20 h-20 bg-rose-500/5 blur-3xl pointer-events-none" />
-          <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest">Тикеты</p>
-          <div className="flex items-baseline space-x-2 mt-2">
-            <span className="text-3xl font-black text-white group-hover:text-rose-400 transition-colors">128</span>
-            <span className="text-rose-500 text-[10px] font-black font-mono">-5%</span>
+          <div className="flex bg-slate-900 rounded-xl p-1 gap-1">
+            <button 
+              onClick={() => setView('stats')}
+              className={cn("p-2 rounded-lg transition-all", view === 'stats' ? "bg-blue-600 text-white" : "text-slate-500")}
+            >
+              <BarChart3 size={18} />
+            </button>
+            {(role === 'OWNER' || role === 'CURATOR') && (
+              <button 
+                onClick={() => setView('staff')}
+                className={cn("p-2 rounded-lg transition-all", view === 'staff' ? "bg-blue-600 text-white" : "text-slate-500")}
+              >
+                <Users size={18} />
+              </button>
+            )}
+            {role === 'OWNER' && (
+              <button 
+                onClick={() => setView('rules')}
+                className={cn("p-2 rounded-lg transition-all", view === 'rules' ? "bg-blue-600 text-white" : "text-slate-500")}
+              >
+                <Settings size={18} />
+              </button>
+            )}
+            <button 
+              onClick={() => setView('moderation')}
+              className={cn("p-2 rounded-lg transition-all", view === 'moderation' ? "bg-blue-600 text-white" : "text-slate-500")}
+            >
+              <Shield size={18} />
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="bg-slate-900 border border-slate-800 p-8 rounded-[3rem] shadow-xl">
-        <h3 className="font-black text-xs text-slate-400 uppercase tracking-[0.2em] flex items-center space-x-3 mb-6">
-          <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500"><BarChart3 size={18} /></div>
-          <span>Активность пользователей</span>
-        </h3>
-        <div className="h-44 w-full bg-slate-800/10 rounded-[2rem] flex items-end justify-between p-6 space-x-2 border border-slate-800/30">
-          {[40, 60, 45, 80, 55, 90, 70].map((h, i) => (
-             <motion.div 
-               key={i} 
-               initial={{ height: 0 }}
-               animate={{ height: `${h}%` }}
-               transition={{ delay: i * 0.1, type: 'spring' }}
-               className={cn(
-                 "w-full rounded-t-xl opacity-80 shadow-lg shadow-blue-500/10",
-                 i === 5 ? "bg-blue-400" : "bg-slate-700"
-               )} 
-             />
-          ))}
-        </div>
-        <div className="flex justify-between mt-4 px-2 text-[9px] font-black text-slate-600 uppercase tracking-widest">
-           {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(d => <span key={d}>{d}</span>)}
-        </div>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-[3rem] p-6 shadow-xl space-y-4">
-        <h3 className="font-black text-xs text-slate-400 uppercase tracking-[0.2em] px-2">Логи Модерации</h3>
-        <div className="space-y-2">
-          {[
-            { user: 'dark_user', action: 'BANNED', reason: 'Спам', time: '2м назад', color: 'text-red-400 bg-red-400/10' },
-            { user: 'anonymous_9', action: 'WARNED', reason: 'Агрессия', time: '1ч назад', color: 'text-amber-400 bg-amber-400/10' },
-          ].map((item, i) => (
-            <div key={i} className="flex items-center justify-between p-4 bg-slate-800/20 border border-slate-800/50 rounded-[1.5rem] hover:bg-slate-800/40 transition-all">
-               <div className="flex items-center gap-4">
-                 <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center font-bold text-slate-400">{item.user[0].toUpperCase()}</div>
-                 <div>
-                   <p className="font-black text-sm text-slate-100 italic tracking-tight">@{item.user}</p>
-                   <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter mt-1">{item.reason}</p>
-                 </div>
-               </div>
-               <div className="text-right">
-                 <span className={cn(
-                   "text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest",
-                   item.color
-                 )}>{item.action}</span>
-                 <p className="text-[9px] text-slate-600 font-black mt-2 uppercase">{item.time}</p>
-               </div>
+      <div className="p-6 space-y-6">
+        {view === 'stats' && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-900 border border-slate-800 p-5 rounded-[2.5rem] shadow-xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-blue-500/5 blur-3xl" />
+                <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest leading-none mb-1">Всего чатов</p>
+                <div className="flex items-baseline space-x-2 mt-2">
+                  <span className="text-3xl font-black text-white group-hover:text-blue-400 transition-colors">1,284</span>
+                  <span className="text-emerald-500 text-[10px] font-black">+4%</span>
+                </div>
+              </div>
+              <div className="bg-slate-900 border border-slate-800 p-5 rounded-[2.5rem] shadow-xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-rose-500/5 blur-3xl" />
+                <p className="text-slate-500 text-[9px] font-black uppercase tracking-widest leading-none mb-1">Репорт-рейт</p>
+                <div className="flex items-baseline space-x-2 mt-2">
+                  <span className="text-3xl font-black text-white group-hover:text-rose-400 transition-colors">2.4%</span>
+                  <span className="text-rose-500 text-[10px] font-black">-0.8%</span>
+                </div>
+              </div>
             </div>
-          ))}
-        </div>
+
+            <div className="bg-slate-900 border border-slate-800 p-8 rounded-[3rem] shadow-xl">
+              <h3 className="font-black text-xs text-slate-400 uppercase tracking-[0.2em] flex items-center space-x-3 mb-6 italic">
+                <div className="p-2 bg-blue-500/10 rounded-xl text-blue-500"><BarChart3 size={18} /></div>
+                <span>Активность системы</span>
+              </h3>
+              <div className="h-44 w-full bg-slate-800/10 rounded-[2rem] flex items-end justify-between p-6 space-x-2 border border-slate-800/30">
+                {[40, 60, 45, 80, 55, 90, 70, 50, 65, 85].map((h, i) => (
+                  <motion.div 
+                    key={i} 
+                    initial={{ height: 0 }}
+                    animate={{ height: `${h}%` }}
+                    className={cn("w-full rounded-t-xl opacity-80", i > 7 ? "bg-blue-400 shadow-lg shadow-blue-500/20" : "bg-slate-700")}
+                  />
+                ))}
+              </div>
+              <div className="flex justify-between mt-4 px-2 text-[9px] font-black text-slate-600 uppercase tracking-[0.2em]">
+                <span>Week 12</span><span>Week 13</span><span>Week 14</span><span>Week 15</span>
+              </div>
+            </div>
+            
+            <div className="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] space-y-4 shadow-xl">
+              <h3 className="font-black text-xs text-slate-400 uppercase tracking-[0.2em] px-2 italic">Топ Специалистов</h3>
+              {[
+                { name: 'Admin_Alice', score: 4.9, count: 156, color: 'text-blue-400' },
+                { name: 'Admin_Sergei', score: 4.7, count: 98, color: 'text-emerald-400' },
+                { name: 'Kurator_Ivan', score: 4.8, count: 210, color: 'text-purple-400' },
+              ].map((item, i) => (
+                <div key={i} className="flex items-center justify-between p-4 bg-slate-800/20 rounded-2xl border border-slate-800/30 hover:border-slate-700 transition-all">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center font-black text-slate-400">{item.name[0]}</div>
+                    <div>
+                      <p className="text-sm font-black text-slate-100 italic tracking-tight">{item.name}</p>
+                      <p className="text-[9px] text-slate-500 font-bold uppercase">{item.count} диалогов</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className={cn("text-sm font-black", item.color)}>{item.score}</span>
+                    <Star size={12} fill="currentColor" className={item.color} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {view === 'staff' && (
+          <div className="space-y-6">
+            <header className="flex items-center justify-between px-2">
+              <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] italic">Управление персоналом</h3>
+              {role === 'OWNER' && <button className="text-[10px] font-black text-blue-400 uppercase border border-blue-400/30 px-3 py-1 rounded-full">+ Нанять</button>}
+            </header>
+            <div className="space-y-2">
+              {[
+                { name: 'Admin_Alice', role: 'ADMIN', supervisor: 'Kurator_Ivan', status: 'Online', color: 'bg-blue-500' },
+                { name: 'Kurator_Ivan', role: 'CURATOR', supervisor: 'Owner', status: 'Online', color: 'bg-emerald-500' },
+                { name: 'Admin_Sergei', role: 'ADMIN', supervisor: 'Kurator_Maria', status: 'Rest', color: 'bg-slate-700' },
+              ].filter(s => role === 'OWNER' || s.supervisor === user.nickname || s.name === user.nickname).map((staff, i) => (
+                <div key={i} className="bg-slate-900 border border-slate-800 rounded-[2rem] p-5 shadow-xl hover:border-slate-600 transition-all">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-4">
+                      <div className={cn("w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black", staff.color)}>{staff.name[0]}</div>
+                      <div>
+                        <p className="font-black text-lg text-white tracking-tight leading-none">{staff.name}</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase mt-1 tracking-widest">{staff.role}</p>
+                      </div>
+                    </div>
+                    <div className={cn("px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest", staff.status === 'Online' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-500')}>
+                      {staff.status}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-4">
+                    <button className="bg-slate-800/50 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors border border-slate-800">Статистика</button>
+                    <button className="bg-slate-800/50 py-3 rounded-2xl text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-red-400 transition-colors border border-slate-800">Действие</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {view === 'moderation' && (
+          <div className="space-y-6">
+             <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-6 shadow-xl space-y-4">
+               <h3 className="font-black text-xs text-slate-400 uppercase tracking-[0.2em] px-2 italic">Логи Модерации</h3>
+               <div className="space-y-2">
+                 {[
+                   { user: 'dark_user', action: 'BANNED', reason: 'Спам', time: '2м назад', color: 'text-red-400 bg-red-400/10' },
+                   { user: 'anonymous_9', action: 'WARNED', reason: 'Агрессия', time: '1ч назад', color: 'text-amber-400 bg-amber-400/10' },
+                   { user: 'helpful_soul', action: 'UNBANNED', reason: 'Апелляция', time: '5ч назад', color: 'text-emerald-400 bg-emerald-400/10' },
+                 ].map((item, i) => (
+                   <div key={i} className="flex items-center justify-between p-4 bg-slate-800/20 border border-slate-800/50 rounded-[1.5rem] hover:bg-slate-800/40 transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center font-bold text-slate-400">{item.user[0].toUpperCase()}</div>
+                        <div>
+                          <p className="font-black text-sm text-slate-100 italic tracking-tight">@{item.user}</p>
+                          <p className="text-[9px] text-slate-500 font-black uppercase tracking-tighter mt-1">{item.reason}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <span className={cn(
+                          "text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest",
+                          item.color
+                        )}>{item.action}</span>
+                        <p className="text-[9px] text-slate-600 font-black mt-2 uppercase">{item.time}</p>
+                      </div>
+                   </div>
+                 ))}
+               </div>
+             </div>
+             {role === 'OWNER' && (
+               <div className="bg-rose-500/5 border border-rose-500/20 rounded-[2.5rem] p-6 space-y-4">
+                 <h3 className="text-rose-400 text-xs font-black uppercase tracking-[0.3em] italic">Массовая рассылка</h3>
+                 <textarea 
+                   placeholder="Текст сообщения всем пользователям..." 
+                   className="w-full bg-slate-900/50 border border-rose-500/10 p-4 rounded-3xl text-sm text-slate-200 outline-none focus:border-rose-500/30 min-h-[100px]"
+                 />
+                 <button className="w-full bg-rose-600 hover:bg-rose-500 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-rose-500/20 transition-all">Отправить объявление</button>
+               </div>
+             )}
+          </div>
+        )}
+
+        {view === 'rules' && (
+          <div className="space-y-6">
+            <h3 className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] italic">Системные констрейнты</h3>
+            <div className="space-y-3">
+              {[
+                { title: 'Макс. активных диалогов (Админ)', value: '15', icon: MessageCircle },
+                { title: 'Время ответа (SLO)', value: '120 сек', icon: Bell },
+                { title: 'Авто-бан при 3 варнах', value: 'Вкл', icon: Shield },
+                { title: 'S3 Квота на пользователя', value: '500 MB', icon: Settings },
+              ].map((rule, i) => (
+                <div key={i} className="bg-slate-900 border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between group shadow-xl">
+                  <div className="flex items-center gap-4">
+                    <div className="p-3 bg-slate-800 rounded-2xl text-slate-400 group-hover:text-blue-400 transition-colors">
+                      <rule.icon size={20} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-200">{rule.title}</span>
+                  </div>
+                  <span className="text-xs font-black text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full">{rule.value}</span>
+                </div>
+              ))}
+              <button className="w-full py-4 bg-blue-600 text-white font-black uppercase tracking-widest text-[10px] rounded-[2rem] shadow-xl shadow-blue-500/20 active:scale-95 transition-all mt-4">Обновить конфигурацию</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
+  );
+};
+
+const ImagePreview = ({ url, onClose }: { url: string, onClose: () => void }) => {
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-center backdrop-blur-xl"
+      onClick={onClose}
+    >
+      <button onClick={onClose} className="absolute top-10 right-10 text-white font-black uppercase tracking-widest text-xs bg-white/10 px-4 py-2 rounded-full hover:bg-white/20 transition-all">Закрыть [X]</button>
+      <motion.img 
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        src={url} 
+        className="max-w-[90%] max-h-[80%] rounded-xl shadow-[0_0_50px_rgba(59,130,246,0.2)] border border-white/10" 
+        alt="preview" 
+        onClick={(e) => e.stopPropagation()}
+      />
+      <div className="mt-8 text-center space-y-2">
+        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.3em]">Просмотр изображения</p>
+        <p className="text-slate-600 font-mono text-[9px]">media_file_source.jpg</p>
+      </div>
+    </motion.div>
   );
 };
 
@@ -554,6 +756,7 @@ export default function App() {
   const [auth, setAuth] = useState<AuthState>({ user: null, token: null, isLoading: true });
   const [activeTab, setActiveTab] = useState('chats');
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [theme, setTheme] = useState<ThemeKey>('HIGH_DENSITY');
 
   useEffect(() => {
@@ -597,7 +800,7 @@ export default function App() {
           className="flex-1 flex flex-col overflow-hidden"
         >
           {activeTab === 'chats' && <ChatList role={auth.user.role} onSelectChat={setSelectedChat} />}
-          {activeTab === 'dashboard' && <SystemDashboard role={auth.user.role} />}
+          {activeTab === 'system' && auth.user && <SystemDashboard role={auth.user.role} user={auth.user} />}
           {activeTab === 'settings' && <SettingsView user={auth.user} theme={theme} onLogout={handleLogout} onThemeChange={setTheme} />}
           {activeTab === 'channels' && (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-[#0f172a]">
@@ -632,8 +835,19 @@ export default function App() {
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed inset-0 z-50"
           >
-            <ChatView chatId={selectedChat} onBack={() => setSelectedChat(null)} />
+            <ChatView 
+              chatId={selectedChat} 
+              onBack={() => setSelectedChat(null)} 
+              onImageClick={(url) => setPreviewImage(url)} 
+              userRole={auth.user.role}
+            />
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {previewImage && (
+          <ImagePreview url={previewImage} onClose={() => setPreviewImage(null)} />
         )}
       </AnimatePresence>
     </div>
