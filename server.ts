@@ -47,7 +47,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (process.env.SMTP_USER) {
       await transporter.sendMail({
-        from: '"SoulLink" <noreply@soullink.app>',
+        from: '"SoulLink" mail@dialogengine.ru',
         to: email,
         subject: 'SoulLink Verification Code',
         text: `Your verification code is: ${code}`,
