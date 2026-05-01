@@ -55,7 +55,7 @@ export const ChannelsView = ({ user }: { user: any }) => {
                 >
                     <div className="flex items-center gap-4">
                         <div className="relative">
-                            <img src={ch.avatar || 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070&auto=format&fit=crop'} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-800" />
+                            <img src={ch.avatar || 'https://cdn-icons-png.flaticon.com/512/4712/4712139.png'} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-800" />
                             <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-accent rounded-full border-2 border-bg-secondary flex items-center justify-center text-[10px] text-white">
                                 <Plus size={10} strokeWidth={4} />
                             </div>
@@ -138,7 +138,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
 
                 <div className="absolute bottom-0 left-0 right-0 p-8 flex items-end justify-between">
                     <div className="flex items-center gap-6">
-                        <img src={channel.avatar || ''} className="w-20 h-20 rounded-[2rem] border-4 border-bg-primary object-cover" />
+                        <img src={channel.avatar || 'https://cdn-icons-png.flaticon.com/512/4712/4712139.png'} className="w-20 h-20 rounded-[2rem] border-4 border-bg-primary object-cover" />
                         <div>
                             <h3 className="text-3xl font-black italic tracking-tighter text-white">{channel.name}</h3>
                             <p className="text-accent text-[10px] font-black uppercase tracking-widest mt-1">@{channel.owner?.nickname || 'admin'}</p>
