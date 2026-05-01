@@ -87,6 +87,9 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
           {activeTab === 'channels' && (
              <ChannelsView user={user} />
           )}
+          {activeTab === 'system' && (user.role !== 'USER') && (
+            <SystemDashboard role={user.role} onExpandChat={setSelectedChat} />
+          )}
           {activeTab === 'settings' && (
             <SettingsView user={user} setUser={setUser} onLogout={onLogout} />
           )}
@@ -198,6 +201,25 @@ const ChatList = ({ onSelectChat }: { onSelectChat: (id: string) => void }) => {
           </div>
         </div>
       )}
+
+      <div className="px-6 mb-4">
+        <button 
+          onClick={() => onSelectChat('SYSTEM')} 
+          className="w-full flex items-center p-5 rounded-[2.5rem] bg-accent/5 border border-accent/10 hover:border-accent/30 transition-all group"
+        >
+          <div className="relative">
+            <div className="w-12 h-12 rounded-2xl bg-accent flex items-center justify-center text-white shadow-lg shadow-accent/20">
+              <Shield size={24} />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-bg-primary shadow-lg" />
+          </div>
+          <div className="ml-4 text-left">
+            <h3 className="font-black text-text-main italic tracking-tight text-sm">Техподдержка Команды</h3>
+            <p className="text-[9px] text-accent font-black uppercase tracking-widest mt-0.5">Административный сектор</p>
+          </div>
+          <ChevronRight size={16} className="ml-auto text-accent opacity-0 group-hover:opacity-100 transition-opacity" />
+        </button>
+      </div>
 
       <div className="px-3">
         {chats.map((chat) => (
