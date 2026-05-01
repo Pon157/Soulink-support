@@ -205,39 +205,50 @@ const ChatList = ({ onSelectChat }: { onSelectChat: (id: string) => void }) => {
       )}
 
       <div className="px-6 mb-4">
-        <button 
-          onClick={() => onSelectChat('SYSTEM')} 
-          className="w-full flex items-center p-5 rounded-[2.5rem] bg-accent/5 border border-accent/10 hover:border-accent/30 transition-all group"
-        >
-          <div className="relative">
-            <div className="w-12 h-12 rounded-2xl bg-accent flex items-center justify-center text-white shadow-lg shadow-accent/20">
-              <Shield size={24} />
-            </div>
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-bg-primary shadow-lg" />
-          </div>
-          <div className="ml-4 text-left">
-            <h3 className="font-black text-text-main italic tracking-tight text-sm">Техподдержка Команды</h3>
-            <p className="text-[9px] text-accent font-black uppercase tracking-widest mt-0.5">Административный сектор</p>
-          </div>
-          <ChevronRight size={16} className="ml-auto text-accent opacity-0 group-hover:opacity-100 transition-opacity" />
-        </button>
+        {(() => {
+          const systemChat = chats.find(c => c.id === 'SYSTEM');
+          return (
+            <button 
+              onClick={() => onSelectChat('SYSTEM')} 
+              className="w-full flex items-center p-5 rounded-[2.5rem] bg-accent/5 border border-accent/10 hover:border-accent/30 transition-all group"
+            >
+              <div className="relative">
+                <div className="w-12 h-12 rounded-2xl bg-accent flex items-center justify-center text-white shadow-lg shadow-accent/20">
+                  <Shield size={24} />
+                </div>
+                {systemChat && systemChat.unread > 0 ? (
+                  <div className="absolute -top-2 -right-2 min-w-[20px] h-5 bg-rose-500 rounded-full border-2 border-bg-primary flex items-center justify-center text-[10px] text-white font-black px-1 shadow-lg shadow-rose-500/20">
+                    {systemChat.unread}
+                  </div>
+                ) : (
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-bg-primary shadow-lg" />
+                )}
+              </div>
+              <div className="ml-4 text-left">
+                <h3 className="font-black text-text-main italic tracking-tight text-sm">Техподдержка Команды</h3>
+                <p className="text-[9px] text-accent font-black uppercase tracking-widest mt-0.5">Административный сектор</p>
+              </div>
+              <ChevronRight size={16} className="ml-auto text-accent opacity-0 group-hover:opacity-100 transition-opacity" />
+            </button>
+          );
+        })()}
       </div>
 
       <div className="px-3">
-        {chats.map((chat) => (
+        {chats.filter(c => c.id !== 'SYSTEM').map((chat) => (
           <button key={chat.id} onClick={() => onSelectChat(chat.id)} className="w-full flex items-center p-4 mb-2 rounded-[2.5rem] bg-bg-secondary/40 border border-slate-800/10 hover:border-accent/30 transition-all">
             <div className="relative">
               <img src={chat.avatar || `https://i.pravatar.cc/150?u=${chat.id}`} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-800/50" />
-              {chat.unreadCount > 0 && (
-                <div className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full border-2 border-bg-primary flex items-center justify-center text-[10px] text-white font-black">{chat.unreadCount}</div>
+              {chat.unread > 0 && (
+                <div className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full border-2 border-bg-primary flex items-center justify-center text-[10px] text-white font-black">{chat.unread}</div>
               )}
             </div>
             <div className="ml-4 flex-1 text-left">
               <div className="flex justify-between items-center">
-                <span className={cn("font-bold italic tracking-tight", chat.unreadCount > 0 ? "text-text-main" : "text-text-dim")}>{chat.name}</span>
+                <span className={cn("font-bold italic tracking-tight", chat.unread > 0 ? "text-text-main" : "text-text-dim")}>{chat.name}</span>
                 <span className="text-[9px] text-text-dim uppercase font-black tracking-widest">{new Date(chat.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               </div>
-              <p className={cn("text-xs truncate mt-1 italic", chat.unreadCount > 0 ? "text-text-main font-bold" : "text-text-dim")}>{chat.lastMsg || 'Нет сообщений'}</p>
+              <p className={cn("text-xs truncate mt-1 italic", chat.unread > 0 ? "text-text-main font-bold" : "text-text-dim")}>{chat.lastMsg || 'Нет сообщений'}</p>
             </div>
           </button>
         ))}
