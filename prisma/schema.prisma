@@ -27,9 +27,12 @@ model User {
   nickname      String
   password      String
   avatar        String?
+  banner        String?
+  theme         String    @default("dark")
   role          Role      @default(USER)
   banStatus     BanStatus @default(NONE)
   warnCount     Int       @default(0)
+  description   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -101,6 +104,7 @@ model Review {
   id        String   @id @default(cuid())
   rating    Int
   comment   String?
+  mediaUrl  String?
   admin     User     @relation("AdminReviews", fields: [adminId], references: [id])
   adminId   String
   user      User     @relation("UserReviews", fields: [userId], references: [id])
