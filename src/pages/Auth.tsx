@@ -6,6 +6,8 @@ import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck, Check } from 'lucide
 import { apiFetch } from '../lib/api';
 import { Modal } from '../components/ui/Modal';
 
+const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
+
 export const LoginPage = ({ setUser }: { setUser: (u: any) => void }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -157,21 +159,41 @@ export const RegisterPage = () => {
 
   const PolicyContent = () => (
     <div className="space-y-6 text-sm">
-      <section>
-        <h4 className="text-white font-black uppercase mb-1 tracking-widest text-[10px]">1. Сбор данных</h4>
-        <p className="italic text-slate-400">Мы собираем email, никнейм и зашифрованный пароль для работы сервиса.</p>
+      <div className="p-4 bg-blue-600/10 border border-blue-600/20 rounded-2xl">
+        <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1 leading-none">Версия 2.4.1</p>
+        <p className="text-xs text-blue-300 italic font-medium">Последнее обновление: 1 мая 2026</p>
+      </div>
+
+      <section className="space-y-2">
+        <h4 className="text-white font-black uppercase tracking-widest text-[11px] px-1">1. Анонимность и Данные</h4>
+        <div className="bg-slate-800/30 p-4 rounded-2xl border border-slate-800 text-xs text-slate-400 italic leading-relaxed">
+          SoulLink — это платформа для анонимной психологической поддержки. Мы не запрашиваем ваше реальное имя, адрес проживания или номер телефона. Email используется исключительно для восстановления доступа.
+        </div>
       </section>
-      <section>
-        <h4 className="text-white font-black uppercase mb-1 tracking-widest text-[10px]">2. Безопасность</h4>
-        <p className="italic text-slate-400">Данные хранятся на защищенных серверах с использованием SSL.</p>
+
+      <section className="space-y-2">
+        <h4 className="text-white font-black uppercase tracking-widest text-[11px] px-1">2. Шифрование переписки</h4>
+        <div className="bg-slate-800/30 p-4 rounded-2xl border border-slate-800 text-xs text-slate-400 italic leading-relaxed">
+          Все ваши диалоги со специалистами защищены сквозным шифрованием. Сотрудники SoulLink имеют доступ к чату только в случае поступления жалобы на нарушение правил сообщества.
+        </div>
       </section>
-      <button 
-        type="button"
-        onClick={() => { setAcceptedPolicy(true); setShowPolicy(false); }}
-        className="w-full bg-blue-600 text-white font-black uppercase py-4 rounded-2xl shadow-xl shadow-blue-600/20"
-      >
-        Я согласен
-      </button>
+
+      <section className="space-y-2">
+        <h4 className="text-white font-black uppercase tracking-widest text-[11px] px-1">3. Правила общения</h4>
+        <div className="bg-slate-800/30 p-4 rounded-2xl border border-slate-800 text-xs text-slate-400 italic leading-relaxed">
+          Запрещены угрозы, пропаганда насилия, реклама сторонних услуг и попытки деанонимизации специалиста. За нарушение правил аккаунт может быть заблокирован навсегда.
+        </div>
+      </section>
+
+      <div className="pt-4">
+        <button 
+          type="button"
+          onClick={() => { setAcceptedPolicy(true); setShowPolicy(false); }}
+          className="w-full bg-blue-600 text-white font-black uppercase py-5 rounded-2xl shadow-xl shadow-blue-600/20 hover:scale-[1.02] active:scale-100 transition-all text-[10px] tracking-widest"
+        >
+          Подтверждаю и согласен
+        </button>
+      </div>
     </div>
   );
 
@@ -282,6 +304,3 @@ export const RegisterPage = () => {
     </div>
   );
 };
-
-// Helper for classes
-const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
