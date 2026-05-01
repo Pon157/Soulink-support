@@ -115,7 +115,6 @@ export const RegisterPage = () => {
       const data = await res.json();
       if (res.ok) {
         setStep(2);
-        if (data.debugCode) alert(`DEBUG: Ваш код ${data.debugCode}`);
       } else {
         setError(data.error);
       }
