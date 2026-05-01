@@ -10,23 +10,24 @@ export const ChannelsView = ({ user }: { user: any }) => {
   const [selectedChannel, setSelectedChannel] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchChannels = async () => {
+    try {
+      const res = await apiFetch('/api/channels');
+      const data = await res.json();
+      setChannels(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchChannels = async () => {
-      try {
-        const res = await apiFetch('/api/channels');
-        const data = await res.json();
-        setChannels(data);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchChannels();
   }, []);
 
   if (selectedChannel) {
-    return <ChannelDetail channel={selectedChannel} onBack={() => setSelectedChannel(null)} userId={user.id} />;
+    return <ChannelDetail channel={selectedChannel} onBack={() => setSelectedChannel(null)} user={user} onUpdate={fetchChannels} />;
   }
 
   return (
@@ -70,17 +71,50 @@ export const ChannelsView = ({ user }: { user: any }) => {
   );
 };
 
-const ChannelDetail = ({ channel, onBack, userId }: { channel: any, onBack: () => void, userId: string }) => {
+const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBack: () => void, user: any, onUpdate: () => void }) => {
     const [posts, setPosts] = useState<any[]>([]);
     const [isSubscribed, setIsSubscribed] = useState(false);
+    const [showPostModal, setShowPostModal] = useState(false);
+    const [newPost, setNewPost] = useState({ content: '', mediaUrl: '' });
+    const [uploading, setUploading] = useState(false);
+
+    const isOwner = user.id === channel.ownerId;
+
+    const fetchPosts = async () => {
+        try {
+            const res = await apiFetch(`/api/posts?channelId=${channel.id}`);
+            const data = await res.json();
+            setPosts(data);
+        } catch (e) { console.error(e); }
+    };
 
     useEffect(() => {
-        // Fetch posts logic here
-        setPosts([
-            { id: '1', content: 'Сегодня мы запускаем обновление нашей системы!', createdAt: new Date() },
-            { id: '2', content: 'Не забудьте проверить настройки профиля для новой темы.', createdAt: new Date(Date.now() - 86400000) }
-        ]);
+        fetchPosts();
     }, [channel.id]);
+
+    const handleCreatePost = async () => {
+        if (!newPost.content) return;
+        try {
+            await apiFetch('/api/posts', {
+                method: 'POST',
+                body: JSON.stringify({ ...newPost, channelId: channel.id })
+            });
+            setShowPostModal(false);
+            setNewPost({ content: '', mediaUrl: '' });
+            fetchPosts();
+            onUpdate();
+        } catch (e) { console.error(e); }
+    };
+
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setUploading(true);
+        try {
+            const url = await uploadFile(file);
+            setNewPost(p => ({ ...p, mediaUrl: url }));
+        } finally { setUploading(false); }
+    };
 
     const handleSubscribe = async () => {
         try {
@@ -108,9 +142,35 @@ const ChannelDetail = ({ channel, onBack, userId }: { channel: any, onBack: () =
                             <p className="text-accent text-[10px] font-black uppercase tracking-widest mt-1">@{channel.owner?.nickname || 'admin'}</p>
                         </div>
                     </div>
-                    {!isSubscribed && <button onClick={handleSubscribe} className="bg-accent text-white px-8 py-4 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-accent/20 active:scale-95 transition-all">Подписаться</button>}
+                    {isOwner ? (
+                        <button onClick={() => setShowPostModal(true)} className="bg-accent text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl shadow-accent/20 active:scale-95 transition-all">
+                             <Plus size={28} />
+                        </button>
+                    ) : (
+                        !isSubscribed && <button onClick={handleSubscribe} className="bg-accent text-white px-8 py-4 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-accent/20 active:scale-95 transition-all">Подписаться</button>
+                    )}
                 </div>
             </div>
+
+            <Modal isOpen={showPostModal} onClose={() => setShowPostModal(false)} title="Новая публикация">
+                 <div className="space-y-4">
+                    <textarea 
+                        value={newPost.content}
+                        onChange={e => setNewPost({...newPost, content: e.target.value})}
+                        placeholder="О чем хотите рассказать?"
+                        className="w-full bg-bg-primary p-4 rounded-2xl outline-none text-text-main border border-slate-800 min-h-[120px] italic text-sm"
+                    />
+                    <div className="flex items-center gap-4">
+                        <label className="flex-1 flex items-center justify-center gap-2 p-3 bg-bg-primary border border-slate-800 rounded-2xl cursor-pointer hover:border-accent transition-all">
+                            <ImageIcon size={18} className={newPost.mediaUrl ? "text-accent" : "text-text-dim"} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">{newPost.mediaUrl ? 'Фото готово' : 'Добавить фото'}</span>
+                            <input type="file" hidden accept="image/*" onChange={handleFile} />
+                        </label>
+                        {uploading && <Loader2 size={20} className="animate-spin text-accent" />}
+                    </div>
+                    <button onClick={handleCreatePost} disabled={!newPost.content || uploading} className="w-full bg-accent text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest disabled:opacity-50">Опубликовать</button>
+                 </div>
+            </Modal>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-6">
                 <div className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50">
