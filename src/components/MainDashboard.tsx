@@ -11,6 +11,7 @@ import { SettingsView } from './dashboard/SettingsView';
 import { ChatView } from './dashboard/ChatView';
 import { SystemDashboard } from './dashboard/SystemDashboard';
 import { ChannelsView } from './dashboard/ChannelsView';
+import { ReviewsView } from './dashboard/ReviewsView';
 
 // --- TYPES ---
 type Role = 'USER' | 'ADMIN' | 'CURATOR' | 'OWNER';
@@ -33,6 +34,8 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  const [totalUnread, setTotalUnread] = useState(0);
+
   useEffect(() => {
     if (user?.theme) {
       document.documentElement.setAttribute('data-theme', user.theme);
@@ -40,6 +43,20 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
       document.documentElement.setAttribute('data-theme', 'dark');
     }
   }, [user?.theme]);
+
+  // Sync total unread count from profile
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await apiFetch(`/api/users/profile/${user.id}`);
+        const data = await res.json();
+        if (data.unreadCount !== undefined) setTotalUnread(data.unreadCount);
+      } catch (e) {}
+    };
+    fetchProfile();
+    const interval = setInterval(fetchProfile, 10000);
+    return () => clearInterval(interval);
+  }, [user.id]);
 
   const mainStyle = user?.banner ? {
     backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.85), rgba(var(--bg-primary-rgb), 0.95)), url(${user.banner})`,
@@ -64,11 +81,11 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
           {activeTab === 'chats' && (
              <ChatList onSelectChat={(id) => setSelectedChat(id)} />
           )}
-          {activeTab === 'channels' && (
-            <ChannelsView user={user} />
+          {activeTab === 'reviews' && (
+             <ReviewsView />
           )}
-          {activeTab === 'system' && (user.role !== 'USER') && (
-            <SystemDashboard role={user.role} onExpandChat={setSelectedChat} />
+          {activeTab === 'channels' && (
+             <ChannelsView user={user} />
           )}
           {activeTab === 'settings' && (
             <SettingsView user={user} setUser={setUser} onLogout={onLogout} />
@@ -76,7 +93,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
         </motion.div>
       </AnimatePresence>
 
-      {!selectedChat && <Navbar activeTab={activeTab} onTabChange={setActiveTab} role={user.role} unreadCount={user.unreadCount} />}
+      {!selectedChat && <Navbar activeTab={activeTab} onTabChange={setActiveTab} role={user.role} unreadCount={totalUnread} />}
 
       <AnimatePresence>
         {selectedChat && (
@@ -209,6 +226,7 @@ const ChatList = ({ onSelectChat }: { onSelectChat: (id: string) => void }) => {
 const Navbar = ({ activeTab, onTabChange, role, unreadCount }: { activeTab: string, onTabChange: (t: string) => void, role: string, unreadCount?: number }) => {
   const tabs = [
     { id: 'chats', label: 'Чаты', icon: MessageSquare, hasBadge: (unreadCount || 0) > 0 },
+    { id: 'reviews', label: 'Отзывы', icon: Star },
     { id: 'channels', label: 'Каналы', icon: Users },
     { id: 'system', label: 'Система', icon: LayoutDashboard, hide: role === 'USER' },
     { id: 'settings', label: 'Профиль', icon: Settings },
