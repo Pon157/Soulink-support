@@ -6,12 +6,15 @@ import { uploadFile } from '../../lib/services';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
+import { Modal } from '../ui/Modal';
+
 export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, userRole: string }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [input, setInput] = useState('');
   const [showRating, setShowRating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [errorModal, setErrorModal] = useState<string|null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -61,7 +64,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
       const url = await uploadFile(file);
       await handleSend('', url, file.type.startsWith('image/') ? 'photo' : 'file');
     } catch (error) {
-      alert('Ошибка при загрузке файла');
+      setErrorModal('Ошибка при загрузке. Файл может быть слишком большим.');
     } finally {
       setUploading(false);
     }
@@ -74,26 +77,38 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
         body: JSON.stringify({ adminId: chatId, rating }),
       });
       setShowRating(false);
-      alert('Спасибо за оценку!');
+      // Success feedback without alert
     } catch (e) {
-      console.error(e);
+      setErrorModal('Не удалось отправить оценку');
     }
   };
 
   return (
     <div className="flex flex-col h-full bg-[#17212b]">
+      <Modal isOpen={!!errorModal} onClose={() => setErrorModal(null)} title="Внимание">
+        <div className="text-center space-y-6">
+          <p className="text-rose-400 font-bold italic">{errorModal}</p>
+          <button onClick={() => setErrorModal(null)} className="w-full bg-slate-800 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Понятно</button>
+        </div>
+      </Modal>
+
+      {/* ... header */}
       <header className="p-4 flex items-center justify-between border-b border-slate-800 bg-[#0f172a]/95 backdrop-blur-md">
         <div className="flex items-center">
           <button onClick={onBack} className="p-2 -ml-2 text-slate-400 hover:text-white transition-colors"><ChevronRight size={28} className="rotate-180" /></button>
           <div className="ml-2">
-            <h3 className="font-black text-white tracking-tight leading-none text-base">Специалист</h3>
-            <span className="text-[10px] text-blue-400 font-black uppercase tracking-widest mt-1 inline-block">в сети</span>
+            <h3 className="font-black text-white tracking-tight leading-none text-base italic">Specialist</h3>
+            <div className="flex items-center gap-1.5 mt-1.5">
+               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
+               <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">в сети</span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {userRole === 'USER' && <button onClick={() => setShowRating(true)} className="p-3 bg-blue-600/10 text-blue-400 rounded-2xl hover:bg-blue-600/20 transition-all"><Star size={20} /></button>}
         </div>
       </header>
+      {/* ... rest of the file */}
 
       {showRating && (
         <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-lg flex items-center justify-center p-6">
