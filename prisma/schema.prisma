@@ -28,6 +28,7 @@ model User {
   password      String
   avatar        String?
   banner        String?
+  wallpaper     String?
   theme         String    @default("dark")
   role          Role      @default(USER)
   banStatus     BanStatus @default(NONE)
