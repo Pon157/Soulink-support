@@ -24,14 +24,28 @@ interface User {
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
-export const MainDashboard = ({ user: initialUser, onLogout }: { user: User, onLogout: () => void }) => {
+export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLogout: () => void }) => {
   const [user, setUser] = useState(initialUser);
   const [activeTab, setActiveTab] = useState('chats');
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (user?.theme) {
+      document.documentElement.setAttribute('data-theme', user.theme);
+    } else {
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  }, [user?.theme]);
+
+  const mainStyle = user?.banner ? {
+    backgroundImage: `linear-gradient(rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.95)), url(${user.banner})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  } : {};
+
   return (
-    <div className="flex flex-col h-screen bg-[#0f172a] text-slate-200 overflow-hidden">
+    <div className="flex flex-col h-screen bg-bg-primary text-text-main overflow-hidden" style={mainStyle}>
       <div className="h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-emerald-500 w-full" />
 
       <AnimatePresence mode="wait">
@@ -53,19 +67,26 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: User, onL
             <SettingsView user={user} setUser={setUser} onLogout={onLogout} />
           )}
           {activeTab === 'channels' && (
-            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-[#0f172a]">
-              <motion.div 
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="w-24 h-24 bg-blue-600/10 rounded-full flex items-center justify-center mb-6 text-blue-500"
-              >
-                <Users size={48} />
-              </motion.div>
-              <h2 className="text-2xl font-black text-white italic tracking-tighter">Каналы & Ресурсы</h2>
-              <p className="text-slate-500 text-sm mt-3 font-medium max-w-xs leading-relaxed italic">
-                Библиотека полезных практик и новостей нашего комьюнити готовится к запуску.
-              </p>
-              <button className="mt-8 bg-slate-800 hover:bg-slate-700 text-slate-400 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all border border-slate-700">Оповестить меня</button>
+            <div className="flex-1 overflow-y-auto p-6 bg-bg-primary">
+              <div className="bg-bg-secondary border border-slate-800 p-8 rounded-[3rem] text-center space-y-4 mb-8">
+                <Users size={48} className="mx-auto text-accent" />
+                <h2 className="text-2xl font-black italic tracking-tighter">Авторские каналы</h2>
+                <p className="text-text-dim text-xs italic px-6">Подписывайтесь на блоги наших администраторов, чтобы быть в курсе обновлений и эксклюзивного контента.</p>
+              </div>
+              
+              {/* Demo channels */}
+              {['Nexus Daily', 'Soul Support', 'Private Lounge'].map((name, i) => (
+                <div key={i} className="bg-bg-secondary p-5 rounded-[2rem] border border-slate-800 mb-3 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-accent/20 rounded-2xl" />
+                    <div>
+                      <p className="font-black italic tracking-tight">{name}</p>
+                      <p className="text-[9px] text-text-dim uppercase font-bold tracking-widest">124 Поста • 8.2k Подп.</p>
+                    </div>
+                  </div>
+                  <button className="bg-accent px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">Читать</button>
+                </div>
+              ))}
             </div>
           )}
         </motion.div>
