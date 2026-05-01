@@ -7,24 +7,31 @@ import { Modal } from '../ui/Modal';
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const SystemDashboard = ({ role }: { role: string }) => {
-  const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation'>('stats');
+  const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation' | 'channels' | 'reviews'>('stats');
   const [stats, setStats] = useState<any>(null);
   const [staff, setStaff] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [broadcasts, setBroadcasts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddStaff, setShowAddStaff] = useState(false);
   const [newStaff, setNewStaff] = useState({ nickname: '', username: '', password: '', role: 'ADMIN' });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchData = async () => {
     try {
-      const [statsRes, staffRes, reportsRes] = await Promise.all([
+      const [statsRes, staffRes, reportsRes, revRes, broadRes] = await Promise.all([
         apiFetch('/api/stats/system'),
         apiFetch('/api/staff'),
-        apiFetch('/api/moderation/reports')
+        apiFetch('/api/moderation/reports'),
+        apiFetch('/api/reviews/all'),
+        apiFetch('/api/broadcasts')
       ]);
       setStats(await statsRes.json());
       setStaff(await staffRes.json());
       setReports(await reportsRes.json());
+      if (revRes.ok) setReviews(await revRes.json());
+      if (broadRes.ok) setBroadcasts(await broadRes.json());
     } catch (e) {
       console.error(e);
     } finally {
@@ -124,6 +131,8 @@ export const SystemDashboard = ({ role }: { role: string }) => {
           { id: 'stats', label: 'Данные', icon: BarChart3 },
           { id: 'staff', label: 'Штат', icon: Users },
           { id: 'moderation', label: 'Жалобы', icon: ShieldAlert },
+          { id: 'channels', label: 'Каналы', icon: Mail },
+          { id: 'reviews', label: 'Отзывы', icon: Star },
           { id: 'rules', label: 'Устав', icon: FileText },
         ].map(tab => (
           <button 
@@ -188,16 +197,82 @@ export const SystemDashboard = ({ role }: { role: string }) => {
       )}
 
       {view === 'moderation' && (
-        <div className="space-y-3">
-          {reports.length === 0 ? (
-             <div className="p-12 text-center text-slate-600 italic font-medium">Жалоб пока нет</div>
-          ) : reports.map(r => (
-            <div key={r.id} className="bg-slate-900 border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between">
-              <div>
-                <p className="text-sm font-black text-white italic">{r.reason}</p>
-                <p className="text-[9px] text-slate-500 uppercase mt-1">ID: {r.id}</p>
+        <div className="space-y-6">
+          <div className="relative">
+            <Shield size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input 
+              type="text" 
+              placeholder="Поиск по nickname или UID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-800 p-4 pl-12 rounded-2xl outline-none text-white focus:border-rose-500/50"
+            />
+          </div>
+          <div className="space-y-3">
+            {reports.length === 0 ? (
+               <div className="p-12 text-center text-slate-600 italic font-medium">Жалоб пока нет</div>
+            ) : reports.map(r => (
+              <div key={r.id} className="bg-slate-900 border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-black text-rose-400 italic">{r.reason}</p>
+                  <p className="text-[9px] text-slate-500 uppercase mt-1">Отправитель: {r.reporterId} • Нарушитель: {r.targetId}</p>
+                </div>
+                <div className="flex gap-2">
+                  <button className="bg-rose-600/10 text-rose-500 text-[9px] font-black uppercase px-4 py-2 rounded-xl">Бан</button>
+                  <button className="bg-slate-800 text-slate-400 text-[9px] font-black uppercase px-4 py-2 rounded-xl">Игнор</button>
+                </div>
               </div>
-              <button className="text-[9px] font-black uppercase text-blue-400 border border-blue-400/20 px-3 py-1.5 rounded-xl hover:bg-blue-400 hover:text-white transition-all">Разбор</button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'reviews' && (
+        <div className="space-y-4">
+          {reviews.length === 0 ? (
+            <div className="p-12 text-center text-slate-600 italic font-medium">Отзывов пока нет</div>
+          ) : reviews.map(r => (
+            <div key={r.id} className="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img src={r.user?.avatar || `https://i.pravatar.cc/100?u=${r.userId}`} className="w-8 h-8 rounded-lg object-cover" />
+                  <div>
+                    <p className="text-[10px] font-black text-white italic tracking-tight">{r.user?.nickname || 'Anon'}</p>
+                    <div className="flex gap-0.5">{Array(r.rating).fill(0).map((_, i) => <Star key={i} size={8} className="text-amber-500" fill="currentColor" />)}</div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-[8px] text-slate-500 font-black uppercase tracking-widest">На специалиста</p>
+                  <p className="text-[10px] font-black text-blue-400 italic">@{r.admin?.username}</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-400 italic leading-relaxed bg-slate-800/10 p-4 rounded-2xl border border-slate-800/50">"{r.comment}"</p>
+              <p className="text-[8px] text-slate-600 uppercase font-black tracking-[0.2em] px-2">{new Date(r.createdAt).toLocaleDateString()} {new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {view === 'channels' && (
+        <div className="space-y-4">
+          <div className="bg-blue-600/10 border border-blue-600/20 p-8 rounded-[3rem] text-center space-y-4 relative overflow-hidden">
+             <div className="absolute top-0 left-0 w-full h-[2px] bg-blue-500/50"></div>
+             <Mail size={40} className="mx-auto text-blue-500" />
+             <h4 className="text-2xl font-black text-white italic tracking-tighter leading-none">Внутренние рассылки</h4>
+             <p className="text-xs text-slate-400 italic max-w-xs mx-auto">Каналы для важной информации, обновлений правил и объявлений состава администрации.</p>
+             <button className="bg-blue-600 text-white font-black uppercase text-[10px] px-8 py-4 rounded-2xl shadow-xl shadow-blue-600/20 active:scale-95 transition-all">Создать канал</button>
+          </div>
+          {broadcasts.map(b => (
+            <div key={b.id} className="bg-slate-900 border border-slate-800 p-6 rounded-[2.5rem] space-y-3 relative overflow-hidden">
+               <div className="flex items-center justify-between relative z-10">
+                  <span className={cn(
+                    "text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-lg",
+                    b.author === 'SYSTEM' ? "bg-rose-600/10 text-rose-500" : "bg-blue-600/10 text-blue-500"
+                  )}>{b.author}</span>
+                  <span className="text-[9px] text-slate-600 font-bold">{new Date(b.createdAt).toLocaleDateString()}</span>
+               </div>
+               <h5 className="font-black text-white italic tracking-tight relative z-10">{b.title}</h5>
+               <p className="text-sm text-slate-400 italic leading-relaxed relative z-10">{b.content}</p>
             </div>
           ))}
         </div>
