@@ -14,39 +14,80 @@
 @layer base {
   :root, [data-theme='dark'] {
     --bg-primary: #0f172a;
+    --bg-primary-rgb: 15, 23, 42;
     --bg-secondary: #1e293b;
     --text-main: #f8fafc;
     --text-dim: #94a3b8;
     --accent-color: #3b82f6;
+    --sidebar-bg: #0f172a;
   }
 
   [data-theme='oled'] {
     --bg-primary: #000000;
-    --bg-secondary: #111111;
+    --bg-primary-rgb: 0, 0, 0;
+    --bg-secondary: #0a0a0a;
     --text-main: #ffffff;
-    --text-dim: #666666;
+    --text-dim: #888888;
     --accent-color: #3b82f6;
+    --sidebar-bg: #000000;
   }
 
   [data-theme='light'] {
-    --bg-primary: #f1f5f9;
+    --bg-primary: #f8fafc;
+    --bg-primary-rgb: 248, 250, 252;
     --bg-secondary: #ffffff;
-    --text-main: #0f172a;
+    --text-main: #1e293b;
     --text-dim: #64748b;
     --accent-color: #2563eb;
+    --sidebar-bg: #f1f5f9;
   }
 
   [data-theme='forest'] {
     --bg-primary: #061f14;
+    --bg-primary-rgb: 6, 31, 20;
     --bg-secondary: #0d2e1f;
     --text-main: #ecfdf5;
     --text-dim: #6ee7b7;
     --accent-color: #10b981;
+    --sidebar-bg: #061f14;
   }
 
   body {
     @apply bg-bg-primary text-text-main transition-colors duration-300;
   }
+}
+
+.markdown-body {
+  color: var(--text-main);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+[data-theme='light'] .sidebar {
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid rgba(0,0,0,0.05);
+}
+
+[data-theme='light'] .bg-slate-900\/50 {
+  background-color: rgba(255,255,255,0.8);
+}
+
+[data-theme='light'] .border-slate-800 {
+  border-color: rgba(0,0,0,0.1);
+}
+
+[data-theme='light'] .text-white {
+  color: var(--text-main);
+}
+
+[data-theme='light'] .text-slate-500 {
+  color: var(--text-dim);
+}
+
+[data-theme='light'] .bg-slate-800\/50 {
+  background-color: rgba(0,0,0,0.05);
 }
 
 body {
