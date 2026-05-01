@@ -26,7 +26,22 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
   };
 
   const onLoadedMetadata = () => {
-    if (audioRef.current) setDuration(audioRef.current.duration);
+    if (audioRef.current) {
+        if (audioRef.current.duration === Infinity) {
+            // Dirty fix for Infinity duration in some browsers for webm blobs
+            audioRef.current.currentTime = 1e101;
+            const checkDuration = () => {
+                if (audioRef.current) {
+                    setDuration(audioRef.current.duration);
+                    audioRef.current.currentTime = 0;
+                    audioRef.current.removeEventListener('timeupdate', checkDuration);
+                }
+            };
+            audioRef.current.addEventListener('timeupdate', checkDuration);
+        } else {
+            setDuration(audioRef.current.duration);
+        }
+    }
   };
 
   const formatTime = (time: number) => {
@@ -78,7 +93,7 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
   );
 };
 
-export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, userRole: string, userBanner?: string }) => {
+export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, userRole: string, wallpaper?: string }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [partner, setPartner] = useState<any>(null);
   const [input, setInput] = useState('');
@@ -195,7 +210,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
             setRecording(false);
             setMediaRecorder(null);
 
-            if (blob.size < 2000) return; // Ignore very short clicks
+            if (blob.size < 500) return; // Ignore very short clicks
             
             const file = new File([blob], 'voice.webm', { type: 'audio/webm' });
             setUploading(true);
@@ -366,8 +381,8 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
 
       <div 
         className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
-        style={partner?.banner || userBanner ? {
-          backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.9), rgba(var(--bg-primary-rgb), 0.95)), url(${partner?.banner || userBanner})`,
+        style={wallpaper ? {
+          backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.9), rgba(var(--bg-primary-rgb), 0.95)), url(${wallpaper})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundAttachment: 'fixed'
