@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, User, AtSign, ArrowRight, ShieldCheck, Check } from 'lucide-react';
 import { apiFetch } from '../lib/api';
+import { Modal } from '../components/ui/Modal';
 
 export const LoginPage = ({ setUser }: { setUser: (u: any) => void }) => {
   const [email, setEmail] = useState('');
@@ -101,10 +102,16 @@ export const RegisterPage = () => {
   const [formData, setFormData] = useState({ email: '', username: '', nickname: '', password: '', code: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [acceptedPolicy, setAcceptedPolicy] = useState(false);
+  const [showPolicy, setShowPolicy] = useState(false);
   const navigate = useNavigate();
 
   const handleRequestCode = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!acceptedPolicy) {
+      setError('Примите информацию о политике');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -148,6 +155,26 @@ export const RegisterPage = () => {
     }
   };
 
+  const PolicyContent = () => (
+    <div className="space-y-6 text-sm">
+      <section>
+        <h4 className="text-white font-black uppercase mb-1 tracking-widest text-[10px]">1. Сбор данных</h4>
+        <p className="italic text-slate-400">Мы собираем email, никнейм и зашифрованный пароль для работы сервиса.</p>
+      </section>
+      <section>
+        <h4 className="text-white font-black uppercase mb-1 tracking-widest text-[10px]">2. Безопасность</h4>
+        <p className="italic text-slate-400">Данные хранятся на защищенных серверах с использованием SSL.</p>
+      </section>
+      <button 
+        type="button"
+        onClick={() => { setAcceptedPolicy(true); setShowPolicy(false); }}
+        className="w-full bg-blue-600 text-white font-black uppercase py-4 rounded-2xl shadow-xl shadow-blue-600/20"
+      >
+        Я согласен
+      </button>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
       <motion.div 
@@ -155,6 +182,9 @@ export const RegisterPage = () => {
         animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-md bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-8"
       >
+        <Modal isOpen={showPolicy} onClose={() => setShowPolicy(false)} title="Условия SoulLink">
+          <PolicyContent />
+        </Modal>
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-black text-white italic tracking-tighter">Регистрация</h1>
           <div className="flex justify-center gap-1">
@@ -196,6 +226,22 @@ export const RegisterPage = () => {
                   value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})}
                   className="w-full bg-slate-800/50 border border-slate-800 p-4 pl-12 rounded-2xl text-slate-200 outline-none focus:border-blue-500/50"
                 />
+              </div>
+
+              <div className="flex items-center gap-3 px-2">
+                <button 
+                  type="button"
+                  onClick={() => setAcceptedPolicy(!acceptedPolicy)}
+                  className={cn(
+                    "w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all",
+                    acceptedPolicy ? "bg-blue-600 border-blue-600 text-white" : "border-slate-800 bg-slate-800/50"
+                  )}
+                >
+                  {acceptedPolicy && <Check size={14} />}
+                </button>
+                <button type="button" onClick={() => setShowPolicy(true)} className="text-[10px] text-slate-500 font-bold uppercase tracking-widest text-left hover:text-blue-400 decoration-dotted underline underline-offset-4">
+                  Принимаю условия и политику
+                </button>
               </div>
               {error && <p className="text-rose-500 text-[10px] text-center font-black uppercase tracking-widest">{error}</p>}
               <button disabled={loading} className="w-full bg-blue-600 py-5 rounded-2xl font-black text-white uppercase tracking-widest text-[10px] shadow-xl shadow-blue-600/20">
