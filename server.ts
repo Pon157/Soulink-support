@@ -17,10 +17,11 @@ const __dirname = path.dirname(__filename);
 
 const prisma = new PrismaClient();
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -61,7 +62,42 @@ const authenticateToken = (req: any, res: any, next: any) => {
   });
 };
 
+const requireOwner = (req: any, res: any, next: any) => {
+  if (req.user.role !== 'OWNER') return res.status(403).json({ error: 'Access denied' });
+  next();
+};
+
 // --- API ROUTES ---
+
+// Staff Management
+app.post('/api/staff/create', authenticateToken, requireOwner, async (req: any, res: any) => {
+  const { username, password, nickname, role } = req.body;
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        username,
+        password: hashedPassword,
+        nickname,
+        role: role as any,
+        email: `${username}@soullink.staff`, 
+      }
+    });
+    res.json(user);
+  } catch (error) {
+    console.error('Staff creation error:', error);
+    res.status(500).json({ error: 'Failed to create staff' });
+  }
+});
+
+// Moderation
+app.get('/api/moderation/reports', authenticateToken, async (req: any, res: any) => {
+  if (req.user.role === 'USER') return res.sendStatus(403);
+  res.json([
+    { id: '1', reason: 'Жалоба на спам', status: 'pending', createdAt: new Date() },
+    { id: '2', reason: 'Некорректное поведение', status: 'pending', createdAt: new Date() }
+  ]);
+});
 
 // 1. Upload to S3
 app.post('/api/upload', authenticateToken, upload.single('file'), async (req: any, res: any) => {
