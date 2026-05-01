@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2 } from 'lucide-react';
+import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
@@ -29,7 +29,7 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
           isOwn ? "bg-white/20 hover:bg-white/30" : "bg-accent/10 hover:bg-accent/20 text-accent"
         )}
       >
-        {playing ? <X size={18} /> : <div className="ml-0.5"><ArrowRight size={18} /></div>}
+        {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
       </button>
       <div className="flex-1 space-y-1">
         <div className="h-1 bg-current opacity-20 rounded-full overflow-hidden">
@@ -40,7 +40,7 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
             className="h-full bg-current" 
            />
         </div>
-        <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Голосовое сообщение</p>
+        <p className="text-[9px] font-black uppercase tracking-widest opacity-60 italic">Голосовое сообщение</p>
       </div>
       <audio 
         ref={audioRef} 
@@ -66,6 +66,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
   const [recording, setRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [errorModal, setErrorModal] = useState<string|null>(null);
+  const [reviewPhoto, setReviewPhoto] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -120,74 +121,92 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 50 * 1024 * 1024) { // 50MB limit
+      setErrorModal('Файл слишком большой. Лимит 50МБ.');
+      return;
+    }
+
     setUploading(true);
     try {
       const url = await uploadFile(file);
-      await handleSend('', url, file.type.startsWith('image/') ? 'photo' : 'file');
+      let type: string = 'file';
+      if (file.type.startsWith('image/')) type = 'photo';
+      if (file.type.startsWith('video/')) type = 'video';
+      await handleSend('', url, type);
     } catch (error) {
-      setErrorModal('Ошибка при загрузке. Файл может быть слишком большим.');
+      setErrorModal('Ошибка при загрузке.');
     } finally {
       setUploading(false);
     }
   };
 
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Fixing the audio blob issue by using a more standard mime type and options
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-      const chunks: Blob[] = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-      
-      recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
-        
-        // Clean up immediately
-        setRecording(false);
-        setMediaRecorder(null);
-        stream.getTracks().forEach(track => track.stop());
-
-        if (blob.size < 1000) return; // Prevent empty/too short recordings
-        
-        const file = new File([blob], 'voice.webm', { type: 'audio/webm;codecs=opus' });
-        setUploading(true);
+  const toggleRecording = async () => {
+    if (recording) {
+        mediaRecorder?.stop();
+    } else {
         try {
-          const url = await uploadFile(file);
-          await handleSend('', url, 'voice');
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+          const chunks: Blob[] = [];
+          
+          recorder.ondataavailable = (e) => {
+            if (e.data.size > 0) chunks.push(e.data);
+          };
+          
+          recorder.onstop = async () => {
+            const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+            stream.getTracks().forEach(track => track.stop());
+            setRecording(false);
+            setMediaRecorder(null);
+
+            if (blob.size < 1000) return;
+            
+            const file = new File([blob], 'voice.webm', { type: 'audio/webm;codecs=opus' });
+            setUploading(true);
+            try {
+              const url = await uploadFile(file);
+              await handleSend('', url, 'voice');
+            } catch (e) {
+              setErrorModal('Ошибка отправки голосового');
+            } finally {
+              setUploading(false);
+            }
+          };
+
+          recorder.start(); 
+          setMediaRecorder(recorder);
+          setRecording(true);
         } catch (e) {
-          setErrorModal('Ошибка отправки голосового');
-        } finally {
-          setUploading(false);
+          setErrorModal('Микрофон недоступен');
         }
-      };
-
-      recorder.start(); 
-      setMediaRecorder(recorder);
-      setRecording(true);
-    } catch (e) {
-      setErrorModal('Микрофон недоступен');
     }
-  };
-
-  const stopRecording = () => {
-    mediaRecorder?.stop();
-    setRecording(false);
-    setMediaRecorder(null);
   };
 
   const handleRatingSubmit = async () => {
     try {
       await apiFetch('/api/reviews', {
         method: 'POST',
-        body: JSON.stringify({ adminId: chatId, rating, comment }),
+        body: JSON.stringify({ adminId: chatId, rating, comment, mediaUrl: reviewPhoto }),
       });
       setShowRating(false);
       setComment('');
+      setReviewPhoto(null);
     } catch (e) {
       setErrorModal('Не удалось отправить отзыв');
+    }
+  };
+
+  const handleReviewPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(file);
+      setReviewPhoto(url);
+    } catch (e) {
+      setErrorModal('Ошибка загрузки фото');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -261,11 +280,24 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
             placeholder="Что вам понравилось (или нет)?"
             className="w-full bg-slate-800 border border-slate-700 p-4 rounded-2xl outline-none text-white italic min-h-[100px]"
           />
+          <div className="flex items-center gap-4">
+              <label className="flex-1 flex items-center justify-center gap-2 p-3 bg-slate-800 border border-slate-700 rounded-2xl cursor-pointer hover:border-accent transition-all">
+                  <ImageIcon size={18} className={reviewPhoto ? "text-accent" : "text-text-dim"} />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-white">{reviewPhoto ? 'Заменено' : 'Прикрепить фото'}</span>
+                  <input type="file" hidden accept="image/*" onChange={handleReviewPhoto} />
+              </label>
+              {reviewPhoto && (
+                  <div className="w-12 h-12 rounded-xl overflow-hidden border border-accent">
+                      <img src={reviewPhoto} className="w-full h-full object-cover" />
+                  </div>
+              )}
+          </div>
           <button
             onClick={handleRatingSubmit}
-            className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-600/20"
+            disabled={rating === 0 || uploading}
+            className="w-full bg-blue-600 py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-600/20 disabled:opacity-50"
           >
-            Отправить отзыв
+            {uploading ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'Отправить отзыв'}
           </button>
         </div>
       </Modal>
@@ -274,11 +306,20 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
         <div className="flex items-center cursor-pointer" onClick={() => setShowProfile(true)}>
           <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="p-2 -ml-2 text-text-dim hover:text-text-main transition-colors"><ChevronRight size={28} className="rotate-180" /></button>
           <div className="ml-2">
-            <h3 className="font-black text-text-main tracking-tight leading-none text-base italic">{partner?.nickname || 'Загрузка...'}</h3>
-            <div className="flex items-center gap-1.5 mt-1.5">
-               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
-               <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">в сети</span>
-            </div>
+            <h3 className="font-black text-text-main tracking-tight leading-none text-base italic">
+                {chatId === 'SYSTEM' ? 'Техподдержка Команды' : (partner?.nickname || 'Загрузка...')}
+            </h3>
+            {chatId === 'SYSTEM' ? (
+                <div className="flex items-center gap-1.5 mt-1.5 text-blue-400">
+                    <Shield size={10} />
+                    <span className="text-[9px] font-black uppercase tracking-widest">административный сектор</span>
+                </div>
+            ) : (
+                <div className="flex items-center gap-1.5 mt-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
+                    <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">в сети</span>
+                </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -309,6 +350,8 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
               <VoiceMessage url={msg.mediaUrl!} isOwn={msg.senderId !== chatId} />
             ) : msg.mediaType === 'photo' ? (
               <img src={msg.mediaUrl} className="rounded-2xl w-full cursor-zoom-in shadow-lg" onClick={() => onImageClick(msg.mediaUrl)} />
+            ) : msg.mediaType === 'video' ? (
+              <video src={msg.mediaUrl} controls className="rounded-2xl w-full shadow-lg max-h-[300px]" />
             ) : (
               <p className="text-sm font-medium leading-relaxed">{msg.content}</p>
             )}
@@ -324,14 +367,11 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
       <div className="p-4 bg-bg-primary flex items-center gap-2 border-t border-slate-800/50">
         <label className="text-text-dim hover:text-accent p-2 cursor-pointer transition-colors">
           {uploading ? <Loader2 className="animate-spin" size={24} /> : <Camera size={24} />}
-          <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={uploading} />
+          <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={uploading} />
         </label>
         
         <button 
-          onMouseDown={startRecording}
-          onMouseUp={stopRecording}
-          onTouchStart={startRecording}
-          onTouchEnd={stopRecording}
+          onClick={toggleRecording}
           className={cn(
             "p-2 rounded-xl transition-all",
             recording ? "bg-rose-600 text-white animate-pulse scale-110" : "text-text-dim hover:text-accent"
