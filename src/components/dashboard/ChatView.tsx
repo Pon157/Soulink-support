@@ -9,7 +9,9 @@ const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
   const [playing, setPlaying] = useState(false);
-  const audioRef = React.useRef<HTMLAudioElement>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
   const togglePlay = () => {
     if (playing) {
@@ -19,36 +21,58 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
     }
   };
 
+  const onTimeUpdate = () => {
+    if (audioRef.current) setCurrentTime(audioRef.current.currentTime);
+  };
+
+  const onLoadedMetadata = () => {
+    if (audioRef.current) setDuration(audioRef.current.duration);
+  };
+
+  const formatTime = (time: number) => {
+    const mins = Math.floor(time / 60);
+    const secs = Math.floor(time % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
-    <div className={cn("flex items-center gap-3 p-1 min-w-[200px]", isOwn ? "text-white" : "text-text-main")}>
+    <div className={cn(
+      "flex items-center gap-3 p-3 rounded-2xl min-w-[180px]",
+      isOwn ? "bg-white/10" : "bg-accent/5 border border-accent/10"
+    )}>
       <button 
         onClick={togglePlay}
         className={cn(
-          "w-10 h-10 rounded-full flex items-center justify-center transition-all",
-          isOwn ? "bg-white/20 hover:bg-white/30" : "bg-accent/10 hover:bg-accent/20 text-accent"
+            "w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-lg",
+            isOwn ? "bg-white text-slate-900" : "bg-accent text-white"
         )}
       >
-        {playing ? <Pause size={18} /> : <Play size={18} className="ml-0.5" />}
+        {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
       </button>
+      
       <div className="flex-1 space-y-1">
         <div className="h-1 bg-current opacity-20 rounded-full overflow-hidden">
-           <motion.div 
-            initial={{ width: 0 }}
-            animate={{ width: playing ? '100%' : '0%' }}
-            transition={{ duration: 10, ease: 'linear' }}
-            className="h-full bg-current" 
-           />
+          <motion.div 
+            className="h-full bg-current"
+            animate={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
+          />
         </div>
-        <p className="text-[9px] font-black uppercase tracking-widest opacity-60 italic">Голосовое сообщение</p>
+        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest opacity-60">
+          <span>{formatTime(currentTime)}</span>
+          <span>{duration ? formatTime(duration) : '...'}</span>
+        </div>
       </div>
+
       <audio 
         ref={audioRef} 
         src={url} 
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)} 
+        onEnded={() => setPlaying(false)}
+        onTimeUpdate={onTimeUpdate}
+        onLoadedMetadata={onLoadedMetadata}
         className="hidden" 
-        controlsList="nodownload"
+        preload="metadata"
       />
     </div>
   );
@@ -75,15 +99,25 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
   };
 
   useEffect(() => {
-    const fetchPartner = async () => {
-      try {
-        const res = await apiFetch(`/api/users/profile/${chatId}`);
-        if (res.ok) setPartner(await res.json());
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    fetchPartner();
+    if (chatId === 'SYSTEM') {
+      setPartner({
+        nickname: 'Техподдержка Команды',
+        role: 'OWNER',
+        avatar: null,
+        isSystem: true
+      });
+      setLoading(false);
+    } else {
+      const fetchPartner = async () => {
+        try {
+          const res = await apiFetch(`/api/users/profile/${chatId}`);
+          if (res.ok) setPartner(await res.json());
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      fetchPartner();
+    }
 
     const fetchMessages = async () => {
       try {
@@ -147,7 +181,8 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
     } else {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+          // Force mime type to ensure it's playable in most browsers
+          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
           const chunks: Blob[] = [];
           
           recorder.ondataavailable = (e) => {
@@ -155,26 +190,27 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }:
           };
           
           recorder.onstop = async () => {
-            const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+            const blob = new Blob(chunks, { type: 'audio/webm' });
             stream.getTracks().forEach(track => track.stop());
             setRecording(false);
             setMediaRecorder(null);
 
-            if (blob.size < 1000) return;
+            if (blob.size < 2000) return; // Ignore very short clicks
             
-            const file = new File([blob], 'voice.webm', { type: 'audio/webm;codecs=opus' });
+            const file = new File([blob], 'voice.webm', { type: 'audio/webm' });
             setUploading(true);
             try {
               const url = await uploadFile(file);
               await handleSend('', url, 'voice');
             } catch (e) {
-              setErrorModal('Ошибка отправки голосового');
+                console.error(e);
+                setErrorModal('Ошибка отправки голосового');
             } finally {
               setUploading(false);
             }
           };
 
-          recorder.start(); 
+          recorder.start(100); // Sample every 100ms
           setMediaRecorder(recorder);
           setRecording(true);
         } catch (e) {
