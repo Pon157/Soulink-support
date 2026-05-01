@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video } from 'lucide-react';
+import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video, Shield, Image as ImageIcon } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
@@ -17,7 +17,6 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
     } else {
       audioRef.current?.play();
     }
-    setPlaying(!playing);
   };
 
   return (
@@ -45,6 +44,8 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
       <audio 
         ref={audioRef} 
         src={url} 
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
         onEnded={() => setPlaying(false)} 
         className="hidden" 
         controlsList="nodownload"
