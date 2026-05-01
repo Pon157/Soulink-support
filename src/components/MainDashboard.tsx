@@ -22,7 +22,9 @@ interface User {
   avatar?: string;
   role: Role;
   banner?: string;
+  wallpaper?: string;
   theme?: string;
+  isOnRest?: boolean;
   unreadCount?: number;
 }
 
@@ -112,7 +114,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
               onBack={() => setSelectedChat(null)} 
               onImageClick={(url) => setPreviewImage(url)} 
               userRole={user.role}
-              userBanner={user.banner}
+              wallpaper={user.wallpaper}
             />
           </motion.div>
         )}
