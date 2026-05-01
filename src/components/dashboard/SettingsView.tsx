@@ -138,6 +138,21 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
     }
   };
 
+  const handleWallpaper = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadFile(file);
+      const updatedUser = await updateProfile({ wallpaper: url });
+      setUser(updatedUser);
+    } catch (e) {
+      setErrorModal('Ошибка загрузки обоев');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <div className="flex-1 overflow-y-auto pb-24 relative bg-bg-primary">
       <Modal isOpen={showNickModal} onClose={() => setShowNickModal(false)} title="Сменить имя">
@@ -255,8 +270,15 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
 
           {[
             { label: 'Безопасность', icon: Shield, color: 'text-emerald-400', onClick: () => setShowSecurity(true) },
-            { label: 'Оформление', icon: Palette, color: 'text-purple-400', onClick: () => setShowTheme(true) },
-            { label: 'Нарисовать баннер', icon: PenTool, color: 'text-orange-400', onClick: () => setShowPaint(true) },
+            { label: 'Тема интерфейса', icon: Palette, color: 'text-purple-400', onClick: () => setShowTheme(true) },
+            { label: 'Обои чата', icon: ImageIcon, color: 'text-amber-400', onClick: () => {
+              const input = document.createElement('input');
+              input.type = 'file';
+              input.accept = 'image/*';
+              input.onchange = (e: any) => handleWallpaper(e);
+              input.click();
+            }},
+            { label: 'Создать баннер', icon: PenTool, color: 'text-orange-400', onClick: () => setShowPaint(true) },
             { label: user.isOnRest ? 'Закончить отдых' : 'Уйти на отдых', icon: Coffee, color: user.isOnRest ? 'text-amber-400' : 'text-blue-400', onClick: handleToggleRest, hide: user.role === 'USER' },
             { label: 'Помощь', icon: HelpCircle, color: 'text-slate-400', onClick: () => setShowHelp(true) },
           ].filter(i => !i.hide).map((item, i) => (
