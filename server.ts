@@ -212,7 +212,7 @@ app.post('/api/auth/register-confirm', async (req, res) => {
   }
 });
 
-// 4. Login
+    // 4. Login
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -227,6 +227,21 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET);
+
+    // Auto-create channel for staff if missing
+    if (['ADMIN', 'CURATOR', 'OWNER'].includes(user.role)) {
+        const channel = await prisma.channel.findUnique({ where: { ownerId: user.id } });
+        if (!channel) {
+            await prisma.channel.create({
+                data: {
+                    name: `Канал: ${user.nickname}`,
+                    ownerId: user.id,
+                    description: `Официальный блог: ${user.nickname}`
+                }
+            });
+        }
+    }
+
     res.json({ user, token });
   } catch (error) {
     res.status(500).json({ error: 'Ошибка входа' });
@@ -261,13 +276,35 @@ app.post('/api/users/toggle-rest', authenticateToken, async (req: any, res: any)
   }
 });
 
-// 5.1 Get User Profile (for chat modal)
+// 5.1 Get User Profile (for chat modal / settings)
 app.get('/api/users/profile/:id', authenticateToken, async (req: any, res: any) => {
   try {
+    const userId = req.params.id;
     const user = await prisma.user.findUnique({
-      where: { id: req.params.id },
-      select: { id: true, nickname: true, avatar: true, description: true, role: true, stats: true, reviews: { include: { user: { select: { nickname: true, avatar: true } } }, orderBy: { createdAt: 'desc' } } }
+      where: { id: userId },
+      select: { 
+        id: true, 
+        nickname: true, 
+        avatar: true, 
+        description: true, 
+        role: true, 
+        banner: true,
+        isOnRest: true,
+        stats: true, 
+        reviews: { 
+            include: { user: { select: { nickname: true, avatar: true } } }, 
+            orderBy: { createdAt: 'desc' } 
+        } 
+      }
     });
+
+    if (user?.role === 'USER') {
+        const givenReviews = await prisma.review.findMany({ where: { userId } });
+        const avg = givenReviews.length > 0 ? (givenReviews.reduce((a, b) => a + b.rating, 0) / givenReviews.length) : 0;
+        (user as any).givenReviewsCount = givenReviews.length;
+        (user as any).averageRatingGiven = avg;
+    }
+
     res.json(user);
   } catch (error) {
     res.status(404).json({ error: 'User not found' });
@@ -553,10 +590,12 @@ app.get('/api/admins', authenticateToken, async (req, res) => {
   }
 });
 
+// All reviews with filtering
 app.get('/api/reviews/all', authenticateToken, async (req: any, res: any) => {
-  if (req.user.role === 'USER') return res.sendStatus(403);
+  const { adminId } = req.query;
   try {
     const reviews = await prisma.review.findMany({
+      where: adminId ? { adminId } : {},
       include: { 
         user: { select: { nickname: true, avatar: true } },
         admin: { select: { nickname: true, username: true } }
