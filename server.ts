@@ -17,16 +17,16 @@ const prisma = new PrismaClient();
 const app = express();
 app.use(express.json());
 
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // SMTP Transporter setup
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.timeweb.ru',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, 
+  host: process.env.SMTP_HOST || 'smtp.mail.ru',
+  port: parseInt(process.env.SMTP_PORT || '465'),
+  secure: true, 
   auth: {
-    user: process.env.SMTP_USER,
+    user: process.env.SMTP_USER || 'mail@dialogengine.ru',
     pass: process.env.SMTP_PASS,
   },
 });
