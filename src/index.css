@@ -3,6 +3,50 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-text-main: var(--text-main);
+  --color-text-dim: var(--text-dim);
+  --color-accent: var(--accent-color);
+}
+
+@layer base {
+  :root, [data-theme='dark'] {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --text-main: #f8fafc;
+    --text-dim: #94a3b8;
+    --accent-color: #3b82f6;
+  }
+
+  [data-theme='oled'] {
+    --bg-primary: #000000;
+    --bg-secondary: #111111;
+    --text-main: #ffffff;
+    --text-dim: #666666;
+    --accent-color: #3b82f6;
+  }
+
+  [data-theme='light'] {
+    --bg-primary: #f1f5f9;
+    --bg-secondary: #ffffff;
+    --text-main: #0f172a;
+    --text-dim: #64748b;
+    --accent-color: #2563eb;
+  }
+
+  [data-theme='forest'] {
+    --bg-primary: #061f14;
+    --bg-secondary: #0d2e1f;
+    --text-main: #ecfdf5;
+    --text-dim: #6ee7b7;
+    --accent-color: #10b981;
+  }
+
+  body {
+    @apply bg-bg-primary text-text-main transition-colors duration-300;
+  }
 }
 
 body {
