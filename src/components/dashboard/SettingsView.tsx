@@ -5,8 +5,13 @@ import { uploadFile, updateProfile } from '../../lib/services';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
+import { Modal } from '../ui/Modal';
+
 export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: (u: any) => void, onLogout: () => void }) => {
   const [uploading, setUploading] = useState(false);
+  const [showNickModal, setShowNickModal] = useState(false);
+  const [newNick, setNewNick] = useState(user.nickname);
+  const [errorModal, setErrorModal] = useState<string | null>(null);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -18,27 +23,48 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       const updatedUser = await updateProfile({ avatar: url });
       setUser(updatedUser);
     } catch (error) {
-      alert('Ошибка при загрузке аватара');
+      setErrorModal('Не удалось обновить аватар. Возможно файл слишком большой.');
     } finally {
       setUploading(false);
     }
   };
 
-  const handleNicknameChange = async () => {
-    const newNickname = prompt('Введите новый никнейм:', user.nickname);
-    if (!newNickname || newNickname === user.nickname) return;
+  const handleUpdateNickname = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNick || newNick === user.nickname) return;
 
     try {
-      const updatedUser = await updateProfile({ nickname: newNickname });
+      const updatedUser = await updateProfile({ nickname: newNick });
       setUser(updatedUser);
+      setShowNickModal(false);
     } catch (error) {
-      alert('Ошибка при обновлении профиля');
+      setErrorModal('Ошибка при обновлении профиля');
     }
   };
 
   return (
-    <div className="flex-1 overflow-y-auto pb-24 bg-[#0f172a]">
+    <div className="flex-1 overflow-y-auto pb-24 bg-[#0f172a] relative">
+      <Modal isOpen={showNickModal} onClose={() => setShowNickModal(false)} title="Сменить никнейм">
+        <form onSubmit={handleUpdateNickname} className="space-y-4">
+          <input 
+            value={newNick} 
+            onChange={e => setNewNick(e.target.value)}
+            className="w-full bg-slate-800 border border-slate-700 p-4 rounded-2xl outline-none text-white focus:border-blue-500 font-bold italic"
+            placeholder="Новый никнейм"
+          />
+          <button type="submit" className="w-full bg-blue-600 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Сохранить</button>
+        </form>
+      </Modal>
+
+      <Modal isOpen={!!errorModal} onClose={() => setErrorModal(null)} title="Внимание">
+        <div className="text-center space-y-6">
+          <p className="text-rose-400 font-bold italic">{errorModal}</p>
+          <button onClick={() => setErrorModal(null)} className="w-full bg-slate-800 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Понятно</button>
+        </div>
+      </Modal>
+
       <div className="p-8">
+        {/* ... Profile header */}
         <header className="mb-10 text-center">
            <div className="relative inline-block group">
              <div className="absolute inset-0 bg-blue-600 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity" />
@@ -58,8 +84,8 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
 
         <div className="space-y-3">
           <button 
-            onClick={handleNicknameChange}
-            className="w-full bg-slate-900/50 border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between group hover:border-slate-700 transition-all text-left"
+            onClick={() => setShowNickModal(true)}
+            className="w-full bg-slate-900/50 border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between group hover:border-slate-700 transition-all text-left relative z-10"
           >
             <div className="flex items-center gap-4">
               <div className="p-2 rounded-xl bg-slate-800 text-blue-400">
@@ -69,6 +95,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
             </div>
             <ChevronRight size={18} className="text-slate-600 group-hover:text-white transition-colors" />
           </button>
+          {/* ... Rest of items */}
 
           {[
             { label: 'Безопасность и пароль', icon: Shield, color: 'text-emerald-400' },
