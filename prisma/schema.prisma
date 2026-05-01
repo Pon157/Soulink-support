@@ -21,7 +21,7 @@ enum BanStatus {
 }
 
 model User {
-  id            String    @id @default(uuid())
+  id            String    @id @default(cuid())
   email         String    @unique
   username      String    @unique
   nickname      String
@@ -34,41 +34,49 @@ model User {
   updatedAt     DateTime  @updatedAt
 
   // Relationships
-  managedBy     User?     @relation("StaffHierarchy", fields: [managedById], references: [id])
+  managedBy     User?     @relation("AdminSupervisor", fields: [managedById], references: [id])
   managedById   String?
-  subordinates  User[]    @relation("StaffHierarchy")
-  
-  channel       Channel?
+  subordinates  User[]    @relation("AdminSupervisor")
+
+  channel       Channel?  @relation("AdminChannel")
   subscriptions Subscription[]
+  
+  // Chats
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
-  reviews          Review[] @relation("AdminReviews")
-  givenReviews     Review[] @relation("UserReviews")
-  stats            UserStats?
-  tasks            Task[] @relation("AssignedTasks")
-  createdTasks     Task[] @relation("CreatedTasks")
-}
+  
+  reviews          Review[]  @relation("AdminReviews")
+  givenReviews     Review[]  @relation("UserReviews")
 
-model VerificationCode {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  code      String
-  expiresAt DateTime
+  stats            UserStats?
+  tasks            Task[]    @relation("AssignedTasks")
+  createdTasks     Task[]    @relation("CreatedTasks")
 }
 
 model Channel {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   name        String
+  avatar      String?
   description String?
-  owner       User     @relation(fields: [ownerId], references: [id])
+  owner       User     @relation("AdminChannel", fields: [ownerId], references: [id])
   ownerId     String   @unique
   posts       Post[]
-  createdAt   DateTime @default(now())
+  subscribers Subscription[]
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  channel   Channel  @relation(fields: [channelId], references: [id])
+  channelId String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, channelId])
 }
 
 model Post {
-  id        String   @id @default(uuid())
-  title     String
+  id        String   @id @default(cuid())
   content   String
   mediaUrl  String?
   channel   Channel  @relation(fields: [channelId], references: [id])
@@ -76,31 +84,21 @@ model Post {
   createdAt DateTime @default(now())
 }
 
-model Subscription {
-  id        String   @id @default(uuid())
-  user      User     @relation(fields: [userId], references: [id])
-  userId    String
-  target    String   // Could be channel ID or admin ID
-  type      String   // 'CHANNEL' or 'SUPPORT'
-  createdAt DateTime @default(now())
-  @@unique([userId, target])
-}
-
 model Message {
-  id         String   @id @default(uuid())
+  id         String   @id @default(cuid())
   content    String
   mediaUrl   String?
-  mediaType  String?  // 'photo', 'voice', 'file'
+  mediaType  String?  // photo, voice, file
   sender     User     @relation("SentMessages", fields: [senderId], references: [id])
   senderId   String
   receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
   receiverId String
-  read       Boolean  @default(false)
   createdAt  DateTime @default(now())
+  read       Boolean  @default(false)
 }
 
 model Review {
-  id        String   @id @default(uuid())
+  id        String   @id @default(cuid())
   rating    Int
   comment   String?
   admin     User     @relation("AdminReviews", fields: [adminId], references: [id])
@@ -110,25 +108,32 @@ model Review {
   createdAt DateTime @default(now())
 }
 
-model UserStats {
-  id             String @id @default(uuid())
-  user           User   @relation(fields: [userId], references: [id])
-  userId         String @unique
-  messagesSent   Int    @default(0)
-  dialogsCount   Int    @default(0)
-  averageRating  Float  @default(0.0)
-  completionRate Float  @default(0.0)
-}
-
 model Task {
-  id          String   @id @default(uuid())
+  id          String   @id @default(cuid())
   title       String
   description String
-  status      String   @default("OPEN") // OPEN, IN_PROGRESS, CLOSED
-  priority    String   @default("NORMAL")
-  assignee    User?    @relation("AssignedTasks", fields: [assigneeId], references: [id])
-  assigneeId  String?
+  status      String   @default("pending") // pending, completed
+  assignee    User     @relation("AssignedTasks", fields: [assigneeId], references: [id])
+  assigneeId  String
   creator     User     @relation("CreatedTasks", fields: [creatorId], references: [id])
   creatorId   String
+  deadline    DateTime?
   createdAt   DateTime @default(now())
+}
+
+model UserStats {
+  id              String @id @default(cuid())
+  user            User   @relation(fields: [userId], references: [id])
+  userId          String @unique
+  dialogsCount    Int    @default(0)
+  messagesSent    Int    @default(0)
+  averageRating   Float  @default(0)
+  completionRate  Float  @default(0)
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  code      String
+  expiresAt DateTime
 }
