@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2 } from 'lucide-react';
+import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
 
