@@ -88,12 +88,21 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      // Fixing the audio blob issue by using a more standard mime type and options
+      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
       const chunks: Blob[] = [];
 
-      recorder.ondataavailable = (e) => chunks.push(e.data);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunks.push(e.data);
+      };
+      
       recorder.onstop = async () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
+        if (blob.size < 100) { // Safety check for empty recordings
+          setErrorModal('Запись слишком короткая или пустая');
+          return;
+        }
+        
         const file = new File([blob], 'voice.webm', { type: 'audio/webm' });
         setUploading(true);
         try {
@@ -103,10 +112,11 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
           setErrorModal('Ошибка отправки голосового');
         } finally {
           setUploading(false);
+          stream.getTracks().forEach(track => track.stop()); // Stop microphone stream
         }
       };
 
-      recorder.start();
+      recorder.start(1000); // Collect data every 1s
       setMediaRecorder(recorder);
       setRecording(true);
     } catch (e) {
@@ -134,11 +144,11 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#17212b]">
+    <div className="flex flex-col h-full bg-bg-secondary">
       <Modal isOpen={!!errorModal} onClose={() => setErrorModal(null)} title="Внимание">
         <div className="text-center space-y-6">
           <p className="text-rose-400 font-bold italic">{errorModal}</p>
-          <button onClick={() => setErrorModal(null)} className="w-full bg-slate-800 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Понятно</button>
+          <button onClick={() => setErrorModal(null)} className="w-full bg-bg-primary py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Понятно</button>
         </div>
       </Modal>
 
@@ -146,13 +156,21 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
         {partner ? (
           <div className="space-y-6">
             <div className="flex flex-col items-center text-center">
-              <img src={partner.avatar || `https://i.pravatar.cc/150?u=${partner.id}`} className="w-24 h-24 rounded-3xl object-cover border-2 border-slate-800 mb-4" />
-              <h4 className="text-xl font-black text-white italic">{partner.nickname}</h4>
-              <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest mt-1">{partner.role}</p>
+              <div className="relative mb-4">
+                 <div className="absolute inset-0 bg-accent blur-xl opacity-20" />
+                 <img src={partner.avatar || `https://i.pravatar.cc/150?u=${partner.id}`} className="relative w-24 h-24 rounded-3xl object-cover border-2 border-slate-800" />
+              </div>
+              <h4 className="text-xl font-black text-text-main italic">{partner.nickname}</h4>
+              <p className="text-accent text-[10px] font-black uppercase tracking-widest mt-1">{partner.role}</p>
             </div>
+            {partner.banner && (
+              <div className="h-24 w-full rounded-2xl overflow-hidden border border-slate-800">
+                <img src={partner.banner} className="w-full h-full object-cover" />
+              </div>
+            )}
             {partner.description && (
-              <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-800">
-                <p className="text-xs text-slate-400 italic">"{partner.description}"</p>
+              <div className="bg-bg-primary p-4 rounded-2xl border border-slate-800">
+                <p className="text-xs text-text-dim italic">"{partner.description}"</p>
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
@@ -204,11 +222,11 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
         </div>
       </Modal>
 
-      <header className="p-4 flex items-center justify-between border-b border-slate-800 bg-[#0f172a]/95 backdrop-blur-md">
+      <header className="p-4 flex items-center justify-between border-b border-slate-800/50 bg-bg-primary/95 backdrop-blur-md">
         <div className="flex items-center cursor-pointer" onClick={() => setShowProfile(true)}>
-          <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="p-2 -ml-2 text-slate-400 hover:text-white transition-colors"><ChevronRight size={28} className="rotate-180" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="p-2 -ml-2 text-text-dim hover:text-text-main transition-colors"><ChevronRight size={28} className="rotate-180" /></button>
           <div className="ml-2">
-            <h3 className="font-black text-white tracking-tight leading-none text-base italic">{partner?.nickname || 'Загрузка...'}</h3>
+            <h3 className="font-black text-text-main tracking-tight leading-none text-base italic">{partner?.nickname || 'Загрузка...'}</h3>
             <div className="flex items-center gap-1.5 mt-1.5">
                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
                <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">в сети</span>
@@ -216,7 +234,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {userRole === 'USER' && <button onClick={() => setShowRating(true)} className="p-3 bg-blue-600/10 text-blue-400 rounded-2xl hover:bg-blue-600/20 transition-all"><Star size={20} /></button>}
+          {userRole === 'USER' && <button onClick={() => setShowRating(true)} className="p-3 bg-accent/10 text-accent rounded-2xl hover:bg-accent/20 transition-all"><Star size={20} /></button>}
         </div>
       </header>
 
@@ -228,7 +246,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
             key={msg.id}
             className={cn(
               "max-w-[85%] p-3.5 rounded-3xl relative",
-              msg.senderId !== chatId ? "bg-[#2b5278] text-white ml-auto" : "bg-[#242f3d] text-slate-100 mr-auto"
+              msg.senderId !== chatId ? "bg-accent text-white ml-auto" : "bg-bg-primary text-text-main border border-slate-800/50 mr-auto"
             )}
           >
             {msg.mediaType === 'photo' ? (
@@ -252,8 +270,8 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-[#0f172a] flex items-center gap-2">
-        <label className="text-slate-500 hover:text-blue-400 p-2 cursor-pointer transition-colors">
+      <div className="p-4 bg-bg-primary flex items-center gap-2 border-t border-slate-800/50">
+        <label className="text-text-dim hover:text-accent p-2 cursor-pointer transition-colors">
           {uploading ? <Loader2 className="animate-spin" size={24} /> : <Camera size={24} />}
           <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} disabled={uploading} />
         </label>
@@ -265,7 +283,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
           onTouchEnd={stopRecording}
           className={cn(
             "p-2 rounded-xl transition-all",
-            recording ? "bg-rose-600 text-white animate-pulse scale-110" : "text-slate-500 hover:text-blue-400"
+            recording ? "bg-rose-600 text-white animate-pulse scale-110" : "text-text-dim hover:text-accent"
           )}
         >
           <Mic size={24} />
@@ -277,11 +295,11 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
           onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
           placeholder={recording ? "Запись голоса..." : "Ваш ответ..."} 
           disabled={recording}
-          className="flex-1 bg-slate-800/50 rounded-3xl px-4 py-3 text-sm focus:outline-none text-white border border-slate-800 focus:border-blue-500/50 transition-all font-medium"
+          className="flex-1 bg-bg-secondary rounded-3xl px-4 py-3 text-sm focus:outline-none text-text-main border border-slate-800 focus:border-accent/50 transition-all font-medium italic"
         />
         <button 
           onClick={() => handleSend(input)} 
-          className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-600/20 active:scale-90 transition-all"
+          className="bg-accent p-3 rounded-2xl text-white shadow-lg shadow-accent/20 active:scale-90 transition-all"
         >
           <ArrowRight size={22} />
         </button>
