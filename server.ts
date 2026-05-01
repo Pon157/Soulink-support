@@ -17,8 +17,8 @@ const __dirname = path.dirname(__filename);
 
 const prisma = new PrismaClient();
 const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json({ limit: '60mb' }));
+app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
 const PORT = 3212;
@@ -233,17 +233,31 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Update Profile
+// 5. Update Profile
 app.patch('/api/users/profile', authenticateToken, async (req: any, res: any) => {
-  const { nickname, avatar, theme, description, banner } = req.body;
+  const { nickname, avatar, theme, description, banner, isOnRest } = req.body;
   try {
     const user = await prisma.user.update({
       where: { id: req.user.userId },
-      data: { nickname, avatar, theme, description, banner },
+      data: { nickname, avatar, theme, description, banner, isOnRest },
     });
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// Toggle Rest Mode
+app.post('/api/users/toggle-rest', authenticateToken, async (req: any, res: any) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    const updated = await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { isOnRest: !user?.isOnRest }
+    });
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
@@ -303,7 +317,19 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
       };
     });
 
-    res.json(chats);
+    // Add Technical Support Chat (System)
+    const techMsg = messages.find(m => m.senderId === 'SYSTEM' || m.receiverId === 'SYSTEM');
+    const techChat = {
+        id: 'SYSTEM',
+        name: 'Техподдержка Команды',
+        avatar: 'https://cdn-icons-png.flaticon.com/512/4712/4712139.png',
+        lastMsg: techMsg?.content || 'Системные уведомления и новости',
+        time: techMsg?.createdAt || new Date(),
+        unread: messages.filter(m => m.receiverId === userId && m.senderId === 'SYSTEM' && !m.read).length,
+        isPinned: true
+    };
+
+    res.json([techChat, ...chats]);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
@@ -436,16 +462,55 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
   }
 });
 
-// Broadcast - Global mailing
+// Channels API
+app.get('/api/channels', authenticateToken, async (req: any, res: any) => {
+  try {
+    const channels = await prisma.channel.findMany({
+      include: { 
+        owner: { select: { nickname: true, avatar: true } },
+        _count: { select: { subscribers: true, posts: true } }
+      }
+    });
+    res.json(channels);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/channels/post', authenticateToken, async (req: any, res: any) => {
+  const { content, mediaUrl } = req.body;
+  try {
+    const channel = await prisma.channel.findUnique({ where: { ownerId: req.user.userId } });
+    if (!channel) return res.status(404).json({ error: 'Channel not found' });
+    const post = await prisma.post.create({
+      data: { content, mediaUrl, channelId: channel.id }
+    });
+    res.json(post);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to post' });
+  }
+});
+
+app.post('/api/channels/subscribe/:id', authenticateToken, async (req: any, res: any) => {
+  try {
+    const sub = await prisma.subscription.create({
+      data: { userId: req.user.userId, channelId: req.params.id }
+    });
+    res.json(sub);
+  } catch {
+    res.status(400).json({ error: 'Already subscribed' });
+  }
+});
+
+// Broadcast - Global mailing to SYSTEM chat
 app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any, res: any) => {
   const { title, content } = req.body;
   try {
-    // Find special system user or owner
     const users = await prisma.user.findMany({ select: { id: true } });
     const tasks = users.map(u => 
       prisma.message.create({
         data: {
-          senderId: req.user.userId,
+          senderId: 'SYSTEM',
           receiverId: u.id,
           content: `[РАССЫЛКА: ${title}]\n${content}`,
           mediaType: 'text'
