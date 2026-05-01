@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Camera, Shield, Bell, Palette, HelpCircle, User as UserIcon, LogOut, ChevronRight, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Camera, Shield, Bell, Palette, HelpCircle, User as UserIcon, LogOut, ChevronRight, Loader2, Image as ImageIcon, PenTool, Coffee } from 'lucide-react';
 import { uploadFile, updateProfile } from '../../lib/services';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
+import { DrawingCanvas } from './DrawingCanvas';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
@@ -15,7 +16,48 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
   const [showSecurity, setShowSecurity] = useState(false);
   const [showTheme, setShowTheme] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showPaint, setShowPaint] = useState(false);
   const [passwords, setPasswords] = useState({ old: '', new: '' });
+  const [stats, setStats] = useState<any>(null);
+
+  React.useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await apiFetch(`/api/users/profile/${user.id}`);
+        const data = await res.json();
+        setStats(data.stats);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    fetchStats();
+  }, [user.id]);
+
+  const handleToggleRest = async () => {
+    try {
+      const res = await apiFetch('/api/users/toggle-rest', { method: 'POST' });
+      const updated = await res.json();
+      setUser(updated);
+    } catch (e) {
+      setErrorModal('Не удалось переключить режим отдыха');
+    }
+  };
+
+  const handleBannerDraw = async (dataUrl: string) => {
+    setUploading(true);
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'banner_paint.png', { type: 'image/png' });
+      const url = await uploadFile(file);
+      const updatedUser = await updateProfile({ banner: url });
+      setUser(updatedUser);
+      setShowPaint(false);
+    } catch (error) {
+      setErrorModal('Не удалось сохранить рисунок.');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const themes = [
     { id: 'dark', label: 'Dark Slate', color: 'bg-[#0f172a]' },
@@ -144,6 +186,10 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
         </div>
       </Modal>
 
+      <Modal isOpen={showPaint} onClose={() => setShowPaint(false)} title="Создать баннер">
+        <DrawingCanvas onSave={handleBannerDraw} onCancel={() => setShowPaint(false)} />
+      </Modal>
+
       <div className="p-8">
         <header className="mb-10 text-center relative pt-12">
             <div className="absolute inset-0 top-0 h-48 -mx-8 overflow-hidden">
@@ -163,7 +209,40 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
            </div>
            <h2 className="text-3xl font-black text-text-main italic tracking-tighter relative z-10">{user.nickname}</h2>
            <p className="text-accent text-[10px] font-black uppercase tracking-[0.3em] mt-1 relative z-10">{user.role}</p>
+           {user.isOnRest && <p className="text-rose-400 text-[10px] font-black uppercase tracking-widest mt-1 relative z-10 italic animate-pulse">В РЕЖИМЕ ОТДЫХА</p>}
         </header>
+
+        <div className="grid grid-cols-2 gap-3 mb-8">
+            {user.role === 'USER' ? (
+                <>
+                <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
+                    <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Оставлено отзывов</p>
+                    <p className="text-2xl font-black italic mt-1">{user.givenReviewsCount || 0}</p>
+                </div>
+                <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
+                    <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Средний балл</p>
+                    <div className="flex items-center gap-1.5 mt-1 text-amber-500">
+                        <span className="text-2xl font-black italic">{user.averageRatingGiven?.toFixed(1) || '0.0'}</span>
+                        <Star size={16} fill="currentColor" />
+                    </div>
+                </div>
+                </>
+            ) : (
+                <>
+                <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
+                    <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Сообщений</p>
+                    <p className="text-2xl font-black italic mt-1">{stats?.messagesSent || 0}</p>
+                </div>
+                <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
+                    <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Рейтинг</p>
+                    <div className="flex items-center gap-1.5 mt-1 text-amber-500">
+                        <span className="text-2xl font-black italic">{stats?.averageRating?.toFixed(1) || '0.0'}</span>
+                        <Star size={16} fill="currentColor" />
+                    </div>
+                </div>
+                </>
+            )}
+        </div>
 
         <div className="space-y-3">
           <button onClick={() => setShowNickModal(true)} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between group hover:border-slate-700 transition-all text-left">
@@ -177,8 +256,10 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
           {[
             { label: 'Безопасность', icon: Shield, color: 'text-emerald-400', onClick: () => setShowSecurity(true) },
             { label: 'Оформление', icon: Palette, color: 'text-purple-400', onClick: () => setShowTheme(true) },
+            { label: 'Нарисовать баннер', icon: PenTool, color: 'text-orange-400', onClick: () => setShowPaint(true) },
+            { label: user.isOnRest ? 'Закончить отдых' : 'Уйти на отдых', icon: Coffee, color: user.isOnRest ? 'text-amber-400' : 'text-blue-400', onClick: handleToggleRest, hide: user.role === 'USER' },
             { label: 'Помощь', icon: HelpCircle, color: 'text-slate-400', onClick: () => setShowHelp(true) },
-          ].map((item, i) => (
+          ].filter(i => !i.hide).map((item, i) => (
             <button key={i} onClick={item.onClick} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between group hover:border-slate-700 transition-all text-left">
               <div className="flex items-center gap-4">
                 <div className={cn("p-2 rounded-xl bg-bg-primary", item.color)}><item.icon size={20} /></div>
