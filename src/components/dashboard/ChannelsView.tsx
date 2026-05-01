@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, ChevronRight, Plus, MessageSquare, ImageIcon, ArrowLeft, Heart, Share2, MoreHorizontal } from 'lucide-react';
+import { Users, ChevronRight, Plus, MessageSquare, ImageIcon, ArrowLeft, Heart, Share2, MoreHorizontal, Shield, Loader2 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
+import { uploadFile } from '../../lib/services';
+import { Modal } from '../ui/Modal';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
