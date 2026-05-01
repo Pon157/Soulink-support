@@ -268,7 +268,7 @@ app.post('/api/users/toggle-rest', authenticateToken, async (req: any, res: any)
     const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
     const updated = await prisma.user.update({
       where: { id: req.user.userId },
-      data: { isOnRest: !user?.isOnRest } as any
+      data: { isOnRest: !(user as any)?.isOnRest } as any
     });
     res.json(updated);
   } catch (e) {
@@ -306,7 +306,7 @@ app.get('/api/users/profile/:id', authenticateToken, async (req: any, res: any) 
         });
         (user as any).unreadCount = unreadCount;
 
-        if (user.role === 'USER') {
+    if (user && (user as any).role === 'USER') {
             const givenReviews = await prisma.review.findMany({ where: { userId } });
             const avg = givenReviews.length > 0 ? (givenReviews.reduce((a, b) => a + b.rating, 0) / givenReviews.length) : 0;
             (user as any).givenReviewsCount = givenReviews.length;
@@ -364,14 +364,15 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
     });
 
     // Add Technical Support Chat (System)
-    const techMsg = messages.find(m => m.senderId === 'SYSTEM' || m.receiverId === 'SYSTEM');
+    const systemUser = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
+    const techMsg = messages.find(m => m.senderId === systemUser?.id || m.receiverId === systemUser?.id);
     const techChat = {
         id: 'SYSTEM',
         name: 'Техподдержка Команды',
         avatar: 'https://cdn-icons-png.flaticon.com/512/4712/4712139.png',
         lastMsg: techMsg?.content || 'Системные уведомления и новости',
         time: techMsg?.createdAt || new Date(),
-        unread: messages.filter(m => m.receiverId === userId && m.senderId === 'SYSTEM' && !m.read).length,
+        unread: systemUser ? messages.filter(m => m.receiverId === userId && m.senderId === systemUser.id && !m.read).length : 0,
         isPinned: true
     };
 
@@ -383,9 +384,14 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
 
 // 8. Messages history
 app.get('/api/messages/:otherId', authenticateToken, async (req: any, res: any) => {
-  const { otherId } = req.params;
+  let { otherId } = req.params;
   const userId = req.user.userId;
   try {
+    if (otherId === 'SYSTEM') {
+        const sys = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
+        if (sys) otherId = sys.id;
+    }
+
     const messages = await prisma.message.findMany({
       where: {
         OR: [
@@ -513,7 +519,7 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
   }
 });
 
-// Channels API
+// Channels and Posts API
 app.get('/api/channels', authenticateToken, async (req: any, res: any) => {
   try {
     const channels = await prisma.channel.findMany({
@@ -528,17 +534,34 @@ app.get('/api/channels', authenticateToken, async (req: any, res: any) => {
   }
 });
 
-app.post('/api/channels/post', authenticateToken, async (req: any, res: any) => {
-  const { content, mediaUrl } = req.body;
+app.get('/api/posts', authenticateToken, async (req: any, res: any) => {
+  const { channelId } = req.query;
   try {
-    const channel = await prisma.channel.findUnique({ where: { ownerId: req.user.userId } });
-    if (!channel) return res.status(404).json({ error: 'Channel not found' });
+    const posts = await prisma.post.findMany({
+      where: channelId ? { channelId: String(channelId) } : {},
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(posts);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
+  const { channelId, content, mediaUrl } = req.body;
+  try {
+    // Check if user owns this channel
+    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+    if (!channel || channel.ownerId !== req.user.userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+
     const post = await prisma.post.create({
-      data: { content, mediaUrl, channelId: channel.id }
+      data: { content, mediaUrl, channelId }
     });
     res.json(post);
   } catch (e) {
-    res.status(500).json({ error: 'Failed to post' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
@@ -557,11 +580,14 @@ app.post('/api/channels/subscribe/:id', authenticateToken, async (req: any, res:
 app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any, res: any) => {
   const { title, content } = req.body;
   try {
+    const systemUser = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
+    if (!systemUser) return res.status(500).json({ error: 'System user not initialized' });
+
     const users = await prisma.user.findMany({ select: { id: true } });
     const tasks = users.map(u => 
       prisma.message.create({
         data: {
-          senderId: 'SYSTEM',
+          senderId: systemUser.id,
           receiverId: u.id,
           content: `[РАССЫЛКА: ${title}]\n${content}`,
           mediaType: 'text'
