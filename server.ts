@@ -250,11 +250,11 @@ app.post('/api/auth/login', async (req, res) => {
 
 // 5. Update Profile
 app.patch('/api/users/profile', authenticateToken, async (req: any, res: any) => {
-  const { nickname, avatar, theme, description, banner, isOnRest } = req.body;
+  const { nickname, avatar, theme, description, banner, isOnRest, wallpaper } = req.body;
   try {
     const user = await prisma.user.update({
       where: { id: req.user.userId },
-      data: { nickname, avatar, theme, description, banner, isOnRest },
+      data: { nickname, avatar, theme, description, banner, isOnRest, wallpaper } as any,
     });
     res.json(user);
   } catch (error) {
@@ -268,7 +268,7 @@ app.post('/api/users/toggle-rest', authenticateToken, async (req: any, res: any)
     const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
     const updated = await prisma.user.update({
       where: { id: req.user.userId },
-      data: { isOnRest: !user?.isOnRest }
+      data: { isOnRest: !user?.isOnRest } as any
     });
     res.json(updated);
   } catch (e) {
@@ -289,20 +289,29 @@ app.get('/api/users/profile/:id', authenticateToken, async (req: any, res: any) 
         description: true, 
         role: true, 
         banner: true,
+        wallpaper: true,
         isOnRest: true,
         stats: true, 
         reviews: { 
             include: { user: { select: { nickname: true, avatar: true } } }, 
             orderBy: { createdAt: 'desc' } 
         } 
-      }
+      } as any
     });
 
-    if (user?.role === 'USER') {
-        const givenReviews = await prisma.review.findMany({ where: { userId } });
-        const avg = givenReviews.length > 0 ? (givenReviews.reduce((a, b) => a + b.rating, 0) / givenReviews.length) : 0;
-        (user as any).givenReviewsCount = givenReviews.length;
-        (user as any).averageRatingGiven = avg;
+    if (user) {
+        // Calculate unread messages
+        const unreadCount = await prisma.message.count({
+            where: { receiverId: userId, read: false }
+        });
+        (user as any).unreadCount = unreadCount;
+
+        if (user.role === 'USER') {
+            const givenReviews = await prisma.review.findMany({ where: { userId } });
+            const avg = givenReviews.length > 0 ? (givenReviews.reduce((a, b) => a + b.rating, 0) / givenReviews.length) : 0;
+            (user as any).givenReviewsCount = givenReviews.length;
+            (user as any).averageRatingGiven = avg;
+        }
     }
 
     res.json(user);
@@ -399,8 +408,13 @@ app.get('/api/messages/:otherId', authenticateToken, async (req: any, res: any) 
 
 // 9. Send message
 app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
-  const { receiverId, content, mediaUrl, mediaType } = req.body;
+  let { receiverId, content, mediaUrl, mediaType } = req.body;
   try {
+    if (receiverId === 'SYSTEM') {
+        const sys = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
+        if (sys) receiverId = sys.id;
+    }
+
     const message = await prisma.message.create({
       data: {
         senderId: req.user.userId,
@@ -671,7 +685,24 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  // Initialize SYSTEM user for tech support
+async function initSystemUser() {
+  const systemUser = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
+  if (!systemUser) {
+    await prisma.user.create({
+      data: {
+        email: 'system@team.local',
+        username: 'SYSTEM',
+        nickname: 'Команда Поддержки',
+        password: 'prevent_login_' + Math.random(),
+        role: 'OWNER',
+      }
+    });
+  }
+}
+initSystemUser().catch(console.error);
+
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
