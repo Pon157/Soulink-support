@@ -7,6 +7,8 @@ import nodemailer from 'nodemailer';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
+import multer from 'multer';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 dotenv.config();
 
@@ -17,23 +19,75 @@ const prisma = new PrismaClient();
 const app = express();
 app.use(express.json());
 
-const PORT = 3000;
+// Port MUST be 3000 for this environment
+const PORT = 3212;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
+
+// S3 Client setup
+const s3 = new S3Client({
+  endpoint: process.env.S3_ENDPOINT || 'https://s3.twcstorage.ru',
+  region: process.env.S3_REGION || 'ru-1',
+  credentials: {
+    accessKeyId: process.env.S3_ACCESS_KEY || '',
+    secretAccessKey: process.env.S3_SECRET_KEY || '',
+  },
+  forcePathStyle: true,
+});
 
 // SMTP Transporter setup
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.mail.ru',
-  port: parseInt(process.env.SMTP_PORT || '465'),
-  secure: true, 
+  host: process.env.SMTP_HOST || 'smtp.timeweb.ru',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_PORT === '465', 
   auth: {
     user: process.env.SMTP_USER || 'mail@dialogengine.ru',
     pass: process.env.SMTP_PASS,
   },
 });
 
+// Multer for file uploads
+const upload = multer({ storage: multer.memoryStorage() });
+
+// --- MIDDLEWARE ---
+const authenticateToken = (req: any, res: any, next: any) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
 // --- API ROUTES ---
 
-// 1. Request Registration Code
+// 1. Upload to S3
+app.post('/api/upload', authenticateToken, upload.single('file'), async (req: any, res: any) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const fileKey = `${Date.now()}-${req.file.originalname}`;
+  try {
+    const command = new PutObjectCommand({
+      Bucket: process.env.S3_BUCKET || 'soul-link',
+      Key: fileKey,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+      ACL: 'public-read',
+    });
+
+    await s3.send(command);
+    
+    const url = `${process.env.S3_ENDPOINT}/${process.env.S3_BUCKET}/${fileKey}`;
+    res.json({ url });
+  } catch (error) {
+    console.error('S3 Upload error:', error);
+    res.status(500).json({ error: 'Failed to upload to S3' });
+  }
+});
+
+// 2. Request Registration Code
 app.post('/api/auth/register-request', async (req, res) => {
   const { email } = req.body;
   try {
@@ -46,24 +100,22 @@ app.post('/api/auth/register-request', async (req, res) => {
       create: { email, code, expiresAt },
     });
 
-    // Send real email if configured
-    if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-      await transporter.sendMail({
-        from: `"SoulLink Support" <${process.env.SMTP_USER}>`,
-        to: email,
-        subject: 'Код подтверждения SoulLink',
-        text: `Ваш код для регистрации: ${code}. Он действителен 10 минут.`,
-      });
-    }
+    // Send real email
+    await transporter.sendMail({
+      from: `"SoulLink Support" <${process.env.SMTP_USER || 'mail@dialogengine.ru'}>`,
+      to: email,
+      subject: 'Код подтверждения SoulLink',
+      text: `Ваш код для регистрации: ${code}. Он действителен 10 минут.`,
+    });
 
-    res.json({ success: true, message: 'Код отправлен на почту', debugCode: process.env.NODE_ENV !== 'production' ? code : undefined });
+    res.json({ success: true, message: 'Код отправлен на почту' });
   } catch (error) {
     console.error('Code request error:', error);
-    res.status(500).json({ error: 'Не удалось отправить код' });
+    res.status(500).json({ error: 'Не удалось отправить код. Убедитесь, что SMTP пароль указан в .env' });
   }
 });
 
-// 2. Complete Registration
+// 3. Complete Registration
 app.post('/api/auth/register-confirm', async (req, res) => {
   const { email, code, username, nickname, password } = req.body;
   try {
@@ -81,6 +133,7 @@ app.post('/api/auth/register-confirm', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    const userCount = await prisma.user.count();
 
     const user = await prisma.user.create({
       data: {
@@ -88,21 +141,21 @@ app.post('/api/auth/register-confirm', async (req, res) => {
         username,
         nickname,
         password: hashedPassword,
-        role: (await prisma.user.count()) === 0 ? 'OWNER' : 'USER'
+        role: userCount === 0 ? 'OWNER' : 'USER'
       }
     });
 
     const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET);
-    res.json({ user, token });
-
     await prisma.verificationCode.delete({ where: { email } });
+    
+    res.json({ user, token });
   } catch (error) {
-    console.error('Registration fix error:', error);
+    console.error('Registration confirming error:', error);
     res.status(500).json({ error: 'Ошибка регистрации' });
   }
 });
 
-// 3. Login
+// 4. Login
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -123,36 +176,39 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// User routes (stats, profile, etc.)
-app.get('/api/users/me', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+// 5. Update Profile
+app.patch('/api/users/profile', authenticateToken, async (req: any, res: any) => {
+  const { nickname, avatar } = req.body;
   try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      include: { channel: true, stats: true }
+    const user = await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { nickname, avatar },
     });
     res.json(user);
   } catch (error) {
-    console.error('Auth check error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// 6. User info
+app.get('/api/users/me', authenticateToken, async (req: any, res: any) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      include: { stats: true }
+    });
+    res.json(user);
+  } catch (error) {
     res.status(401).json({ error: 'Invalid token' });
   }
 });
 
-// Chats list
-app.get('/api/chats', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+// 7. Chats list
+app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
+  const userId = req.user.userId;
   try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
-    const userId = decoded.userId;
-
-    // Get unique users with whom the current user has messages
     const messages = await prisma.message.findMany({
-      where: {
-        OR: [{ senderId: userId }, { receiverId: userId }],
-      },
+      where: { OR: [{ senderId: userId }, { receiverId: userId }] },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -162,7 +218,7 @@ app.get('/api/chats', async (req, res) => {
 
     const partners = await prisma.user.findMany({
       where: { id: { in: chatPartnersIds } },
-      select: { id: true, nickname: true, username: true, avatar: true, role: true }
+      select: { id: true, nickname: true, avatar: true }
     });
 
     const chats = partners.map(partner => {
@@ -173,7 +229,7 @@ app.get('/api/chats', async (req, res) => {
         avatar: partner.avatar || `https://i.pravatar.cc/150?u=${partner.id}`,
         lastMsg: lastMsg?.content || (lastMsg?.mediaType === 'voice' ? 'Голосовое сообщение' : 'Медиа'),
         time: lastMsg?.createdAt || new Date(),
-        unread: 0, // Simplified
+        unread: messages.filter(m => m.receiverId === userId && m.senderId === partner.id && !m.read).length,
       };
     });
 
@@ -183,17 +239,38 @@ app.get('/api/chats', async (req, res) => {
   }
 });
 
-// Send message
-app.post('/api/messages', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+// 8. Messages history
+app.get('/api/messages/:otherId', authenticateToken, async (req: any, res: any) => {
+  const { otherId } = req.params;
+  const userId = req.user.userId;
   try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
-    const { receiverId, content, mediaUrl, mediaType } = req.body;
+    const messages = await prisma.message.findMany({
+      where: {
+        OR: [
+          { senderId: userId, receiverId: otherId },
+          { senderId: otherId, receiverId: userId },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    // Mark as read
+    await prisma.message.updateMany({
+      where: { senderId: otherId, receiverId: userId, read: false },
+      data: { read: true }
+    });
+    res.json(messages);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
 
+// 9. Send message
+app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
+  const { receiverId, content, mediaUrl, mediaType } = req.body;
+  try {
     const message = await prisma.message.create({
       data: {
-        senderId: decoded.userId,
+        senderId: req.user.userId,
         receiverId,
         content: content || '',
         mediaUrl,
@@ -201,11 +278,10 @@ app.post('/api/messages', async (req, res) => {
       },
     });
 
-    // Update user stats
     await prisma.userStats.upsert({
-      where: { userId: decoded.userId },
+      where: { userId: req.user.userId },
       update: { messagesSent: { increment: 1 } },
-      create: { userId: decoded.userId, messagesSent: 1 }
+      create: { userId: req.user.userId, messagesSent: 1 }
     });
 
     res.json(message);
@@ -214,119 +290,60 @@ app.post('/api/messages', async (req, res) => {
   }
 });
 
-// Messages history
-app.get('/api/messages/:otherId', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  const { otherId } = req.params;
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+// 10. Staff and Stats for Dashboards
+app.get('/api/staff', authenticateToken, async (req: any, res: any) => {
   try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
-    const messages = await prisma.message.findMany({
-      where: {
-        OR: [
-          { senderId: decoded.userId, receiverId: otherId },
-          { senderId: otherId, receiverId: decoded.userId },
-        ],
-      },
-      orderBy: { createdAt: 'asc' },
-    });
-    res.json(messages);
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch messages' });
-  }
-});
-
-// Staff list (for management)
-app.get('/api/staff', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-  try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
     const admins = await prisma.user.findMany({
-      where: {
-        OR: [
-          { role: 'ADMIN' },
-          { role: 'CURATOR' },
-        ],
-      },
-      include: { stats: true, managedBy: true },
+      where: { OR: [{ role: 'ADMIN' }, { role: 'CURATOR' }, { role: 'OWNER' }] },
+      include: { stats: true },
     });
     res.json(admins);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch staff' });
+  } catch {
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
-// System analytics
-app.get('/api/stats/system', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
   try {
     const totalUsers = await prisma.user.count();
     const totalMessages = await prisma.message.count();
     const bannedUsers = await prisma.user.count({ where: { banStatus: 'BANNED' } });
-    
-    // Simulate some trend data
-    const dailyStats = [40, 60, 45, 80, 55, 90, 70, 50, 65, 85]; 
-
-    res.json({
-      totalUsers,
-      totalMessages,
-      bannedUsers,
-      dailyStats,
-    });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch system stats' });
+    res.json({ totalUsers, totalMessages, bannedUsers, dailyStats: [30, 40, 35, 50, 45, 60, 55, 40, 50, 65] });
+  } catch {
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
-// Reviews handling
-app.post('/api/reviews', async (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+app.get('/api/admins', authenticateToken, async (req, res) => {
   try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
-    const { adminId, rating, comment } = req.body;
-
-    const review = await prisma.review.create({
-      data: {
-        adminId,
-        userId: decoded.userId,
-        rating,
-        comment,
-      },
+    const admins = await prisma.user.findMany({
+      where: { role: 'ADMIN' },
+      include: { stats: true },
     });
+    res.json(admins);
+  } catch {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
 
-    // Update admin's average rating
-    const allReviews = await prisma.review.findMany({ where: { adminId } });
-    const avg = allReviews.reduce((acc, r) => acc + r.rating, 0) / allReviews.length;
-
+app.post('/api/reviews', authenticateToken, async (req: any, res: any) => {
+  const { adminId, rating, comment } = req.body;
+  try {
+    const review = await prisma.review.create({
+      data: { adminId, userId: req.user.userId, rating, comment: comment || '' },
+    });
+    const all = await prisma.review.findMany({ where: { adminId } });
+    const avg = all.reduce((a, b) => a + b.rating, 0) / all.length;
     await prisma.userStats.upsert({
       where: { userId: adminId },
       update: { averageRating: avg },
       create: { userId: adminId, averageRating: avg }
     });
-
     res.json(review);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to post review' });
-  }
-});
-
-// Admin list for users to pick from (for starting new chat)
-app.get('/api/admins', async (req, res) => {
-  try {
-    const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN' },
-      include: { stats: true, channel: true },
-    });
-    res.json(admins);
   } catch {
-    res.status(500).json({ error: 'Failed to fetch admins' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
-
-// --- VITE MIDDLEWARE ---
 
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
