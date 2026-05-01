@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Camera, Shield, Bell, Palette, HelpCircle, User as UserIcon, LogOut, ChevronRight, Loader2, Image as ImageIcon, PenTool, Coffee } from 'lucide-react';
+import { Camera, Shield, Bell, Palette, HelpCircle, User as UserIcon, LogOut, ChevronRight, Loader2, Image as ImageIcon, PenTool, Coffee, Star } from 'lucide-react';
 import { uploadFile, updateProfile } from '../../lib/services';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
