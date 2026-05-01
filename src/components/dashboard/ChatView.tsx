@@ -7,7 +7,53 @@ import { Modal } from '../ui/Modal';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
-export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, userRole: string }) => {
+const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
+  const [playing, setPlaying] = useState(false);
+  const audioRef = React.useRef<HTMLAudioElement>(null);
+
+  const togglePlay = () => {
+    if (playing) {
+      audioRef.current?.pause();
+    } else {
+      audioRef.current?.play();
+    }
+    setPlaying(!playing);
+  };
+
+  return (
+    <div className={cn("flex items-center gap-3 p-1 min-w-[200px]", isOwn ? "text-white" : "text-text-main")}>
+      <button 
+        onClick={togglePlay}
+        className={cn(
+          "w-10 h-10 rounded-full flex items-center justify-center transition-all",
+          isOwn ? "bg-white/20 hover:bg-white/30" : "bg-accent/10 hover:bg-accent/20 text-accent"
+        )}
+      >
+        {playing ? <X size={18} /> : <div className="ml-0.5"><ArrowRight size={18} /></div>}
+      </button>
+      <div className="flex-1 space-y-1">
+        <div className="h-1 bg-current opacity-20 rounded-full overflow-hidden">
+           <motion.div 
+            initial={{ width: 0 }}
+            animate={{ width: playing ? '100%' : '0%' }}
+            transition={{ duration: 10, ease: 'linear' }}
+            className="h-full bg-current" 
+           />
+        </div>
+        <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Голосовое сообщение</p>
+      </div>
+      <audio 
+        ref={audioRef} 
+        src={url} 
+        onEnded={() => setPlaying(false)} 
+        className="hidden" 
+        controlsList="nodownload"
+      />
+    </div>
+  );
+};
+
+export const ChatView = ({ chatId, onBack, onImageClick, userRole, userBanner }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, userRole: string, userBanner?: string }) => {
   const [messages, setMessages] = useState<any[]>([]);
   const [partner, setPartner] = useState<any>(null);
   const [input, setInput] = useState('');
@@ -98,12 +144,15 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
       
       recorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/webm;codecs=opus' });
-        if (blob.size < 100) { // Safety check for empty recordings
-          setErrorModal('Запись слишком короткая или пустая');
-          return;
-        }
         
-        const file = new File([blob], 'voice.webm', { type: 'audio/webm' });
+        // Clean up immediately
+        setRecording(false);
+        setMediaRecorder(null);
+        stream.getTracks().forEach(track => track.stop());
+
+        if (blob.size < 1000) return; // Prevent empty/too short recordings
+        
+        const file = new File([blob], 'voice.webm', { type: 'audio/webm;codecs=opus' });
         setUploading(true);
         try {
           const url = await uploadFile(file);
@@ -112,11 +161,10 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
           setErrorModal('Ошибка отправки голосового');
         } finally {
           setUploading(false);
-          stream.getTracks().forEach(track => track.stop()); // Stop microphone stream
         }
       };
 
-      recorder.start(1000); // Collect data every 1s
+      recorder.start(); 
       setMediaRecorder(recorder);
       setRecording(true);
     } catch (e) {
@@ -238,7 +286,15 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div 
+        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+        style={partner?.banner || userBanner ? {
+          backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.9), rgba(var(--bg-primary-rgb), 0.95)), url(${partner?.banner || userBanner})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed'
+        } : {}}
+      >
         {messages.map((msg) => (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
@@ -249,15 +305,10 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole }: { chatId: s
               msg.senderId !== chatId ? "bg-accent text-white ml-auto" : "bg-bg-primary text-text-main border border-slate-800/50 mr-auto"
             )}
           >
-            {msg.mediaType === 'photo' ? (
+        {msg.mediaType === 'voice' ? (
+              <VoiceMessage url={msg.mediaUrl!} isOwn={msg.senderId !== chatId} />
+            ) : msg.mediaType === 'photo' ? (
               <img src={msg.mediaUrl} className="rounded-2xl w-full cursor-zoom-in shadow-lg" onClick={() => onImageClick(msg.mediaUrl)} />
-            ) : msg.mediaType === 'voice' ? (
-              <div className="flex items-center gap-3 py-1 px-1 min-w-[160px]">
-                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white">
-                  <Mic size={14} />
-                </div>
-                <audio src={msg.mediaUrl} controls className="h-8 w-full brightness-90 contrast-125 rounded-lg" />
-              </div>
             ) : (
               <p className="text-sm font-medium leading-relaxed">{msg.content}</p>
             )}
