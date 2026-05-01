@@ -563,12 +563,13 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
 
 // All reviews
 app.get('/api/reviews/all', authenticateToken, async (req: any, res: any) => {
-  if (req.user.role === 'USER') return res.sendStatus(403);
+  const { adminId } = req.query;
   try {
     const reviews = await prisma.review.findMany({
+      where: adminId ? { adminId: String(adminId) } : {},
       include: {
         user: { select: { nickname: true, avatar: true } },
-        admin: { select: { username: true } }
+        admin: { select: { nickname: true, username: true } }
       },
       orderBy: { createdAt: 'desc' }
     });
