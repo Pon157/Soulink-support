@@ -15,7 +15,7 @@ export const uploadFile = async (file: File): Promise<string> => {
   return data.url;
 };
 
-export const updateProfile = async (data: { nickname?: string, avatar?: string }) => {
+export const updateProfile = async (data: { nickname?: string, avatar?: string, description?: string }) => {
   const res = await apiFetch('/api/users/profile', {
     method: 'PATCH',
     body: JSON.stringify(data),
