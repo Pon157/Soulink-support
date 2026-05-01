@@ -90,6 +90,27 @@ app.post('/api/staff/create', authenticateToken, requireOwner, async (req: any, 
   }
 });
 
+// Moderation Actions
+app.post('/api/moderation/action', authenticateToken, async (req: any, res: any) => {
+  if (req.user.role === 'USER') return res.sendStatus(403);
+  const { userId, action } = req.body; // action: ban, unban, warn, mute
+  
+  try {
+    let data: any = {};
+    if (action === 'ban') data = { banStatus: 'BANNED' };
+    if (action === 'unban') data = { banStatus: 'NONE' };
+    if (action === 'warn') data = { warnCount: { increment: 1 } };
+    
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data
+    });
+    res.json(user);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // Moderation
 app.get('/api/moderation/reports', authenticateToken, async (req: any, res: any) => {
   if (req.user.role === 'USER') return res.sendStatus(403);
@@ -212,17 +233,30 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// 5. Update Profile
+// Update Profile
 app.patch('/api/users/profile', authenticateToken, async (req: any, res: any) => {
-  const { nickname, avatar } = req.body;
+  const { nickname, avatar, theme, description, banner } = req.body;
   try {
     const user = await prisma.user.update({
       where: { id: req.user.userId },
-      data: { nickname, avatar },
+      data: { nickname, avatar, theme, description, banner },
     });
     res.json(user);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// 5.1 Get User Profile (for chat modal)
+app.get('/api/users/profile/:id', authenticateToken, async (req: any, res: any) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, nickname: true, avatar: true, description: true, role: true, stats: true, reviews: { include: { user: { select: { nickname: true, avatar: true } } }, orderBy: { createdAt: 'desc' } } }
+    });
+    res.json(user);
+  } catch (error) {
+    res.status(404).json({ error: 'User not found' });
   }
 });
 
@@ -341,11 +375,103 @@ app.get('/api/staff', authenticateToken, async (req: any, res: any) => {
 
 app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
   try {
-    const totalUsers = await prisma.user.count();
-    const totalMessages = await prisma.message.count();
-    const bannedUsers = await prisma.user.count({ where: { banStatus: 'BANNED' } });
-    res.json({ totalUsers, totalMessages, bannedUsers, dailyStats: [30, 40, 35, 50, 45, 60, 55, 40, 50, 65] });
+    if (req.user.role === 'OWNER') {
+      const totalUsers = await prisma.user.count();
+      const totalMessages = await prisma.message.count();
+      const bannedUsers = await prisma.user.count({ where: { banStatus: 'BANNED' } });
+      return res.json({ totalUsers, totalMessages, bannedUsers, dailyStats: [30, 40, 35, 50, 45, 60, 55, 40, 50, 65] });
+    }
+    
+    // Admins see only their stats
+    const stats = await prisma.userStats.findUnique({ where: { userId: req.user.userId } });
+    res.json({ 
+      personal: true,
+      messagesSent: stats?.messagesSent || 0,
+      averageRating: stats?.averageRating || 0,
+      dialogsCount: stats?.dialogsCount || 0
+    });
   } catch {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Owner: All Chats View
+app.get('/api/admin/all-chats', authenticateToken, requireOwner, async (req: any, res: any) => {
+  try {
+    const chats = await prisma.message.findMany({
+      distinct: ['senderId', 'receiverId'],
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: {
+        sender: { select: { nickname: true, avatar: true } },
+        receiver: { select: { nickname: true, avatar: true } }
+      }
+    });
+    res.json(chats);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to fetch all chats' });
+  }
+});
+
+// Sanctions: Ban/Warn/Unban
+app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res: any) => {
+  const { targetId, action, reason } = req.body;
+  try {
+    let updateData: any = {};
+    if (action === 'ban') updateData = { banStatus: 'BANNED' };
+    if (action === 'unban') updateData = { banStatus: 'NONE' };
+    if (action === 'warn') updateData = { warnCount: { increment: 1 }, banStatus: 'WARNED' };
+    if (action === 'unwarn') updateData = { warnCount: 0, banStatus: 'NONE' };
+
+    const user = await prisma.user.update({
+      where: { 
+        id: targetId.includes('-') ? targetId : undefined, // Check if UUID
+        username: !targetId.includes('-') ? targetId : undefined // Or Username
+      },
+      data: updateData
+    });
+    res.json(user);
+  } catch (e) {
+    res.status(404).json({ error: 'User not found' });
+  }
+});
+
+// Broadcast - Global mailing
+app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any, res: any) => {
+  const { title, content } = req.body;
+  try {
+    // Find special system user or owner
+    const users = await prisma.user.findMany({ select: { id: true } });
+    const tasks = users.map(u => 
+      prisma.message.create({
+        data: {
+          senderId: req.user.userId,
+          receiverId: u.id,
+          content: `[РАССЫЛКА: ${title}]\n${content}`,
+          mediaType: 'text'
+        }
+      })
+    );
+    await Promise.all(tasks);
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to broadcast' });
+  }
+});
+
+// All reviews
+app.get('/api/reviews/all', authenticateToken, async (req: any, res: any) => {
+  if (req.user.role === 'USER') return res.sendStatus(403);
+  try {
+    const reviews = await prisma.review.findMany({
+      include: {
+        user: { select: { nickname: true, avatar: true } },
+        admin: { select: { username: true } }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(reviews);
+  } catch (e) {
     res.status(500).json({ error: 'Failed' });
   }
 });
@@ -362,11 +488,33 @@ app.get('/api/admins', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/api/reviews/all', authenticateToken, async (req: any, res: any) => {
+  if (req.user.role === 'USER') return res.sendStatus(403);
+  try {
+    const reviews = await prisma.review.findMany({
+      include: { 
+        user: { select: { nickname: true, avatar: true } },
+        admin: { select: { nickname: true, username: true } }
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(reviews);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 app.post('/api/reviews', authenticateToken, async (req: any, res: any) => {
-  const { adminId, rating, comment } = req.body;
+  const { adminId, rating, comment, mediaUrl } = req.body;
   try {
     const review = await prisma.review.create({
-      data: { adminId, userId: req.user.userId, rating, comment: comment || '' },
+      data: { 
+        adminId, 
+        userId: req.user.userId, 
+        rating, 
+        comment: comment || '',
+        mediaUrl
+      },
     });
     const all = await prisma.review.findMany({ where: { adminId } });
     const avg = all.reduce((a, b) => a + b.rating, 0) / all.length;
@@ -378,6 +526,28 @@ app.post('/api/reviews', authenticateToken, async (req: any, res: any) => {
     res.json(review);
   } catch {
     res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// Security: Change Password
+app.post('/api/auth/change-password', authenticateToken, async (req: any, res: any) => {
+  const { old: oldPassword, new: newPassword } = req.body;
+  if (!oldPassword || !newPassword) return res.status(400).json({ error: 'Missing fields' });
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) return res.status(400).json({ error: 'Старый пароль неверен' });
+    
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { password: hashedPassword }
+    });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Ошибка сервера' });
   }
 });
 
