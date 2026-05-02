@@ -70,11 +70,11 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName }: Game
           </div>
           <div>
             <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter leading-none">
-              {gameType === 'chess' ? 'Chess Master' : gameType === 'words' ? 'Word Battle' : gameType === 'checkers' ? 'Strike Checkers' : 'SoulBattle'}
+              {gameType === 'chess' ? 'Шахматный Мастер' : gameType === 'words' ? 'Битва Слов' : gameType === 'checkers' ? 'Ударные Шашки' : 'SoulБитва'}
             </h2>
             <div className="flex items-center gap-2 mt-2">
                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-                <p className="text-[11px] font-black text-accent uppercase tracking-widest">LIVE • VS {partnerName}</p>
+                <p className="text-[11px] font-black text-accent uppercase tracking-widest">В ЭФИРЕ • ПРОТИВ {partnerName}</p>
             </div>
           </div>
         </div>
@@ -121,14 +121,16 @@ const ChessGame = ({ sessionId, partnerName, state }: { sessionId: string, partn
                     );
                 })}
             </div>
-            <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-[2px]">
-                <div className="bg-bg-primary p-8 rounded-[3rem] border border-accent/30 text-center space-y-6 shadow-2xl max-w-xs transform -rotate-1">
-                    <div className="w-20 h-20 bg-accent/10 rounded-full flex items-center justify-center mx-auto">
-                        <Brain className="text-accent animate-pulse" size={40} />
-                    </div>
-                    <div className="space-y-2">
-                        <p className="text-lg font-black italic uppercase tracking-tighter text-white">Ход {partnerName}...</p>
-                        <p className="text-[10px] text-text-dim uppercase font-black tracking-widest leading-normal">Твой соперник обдумывает следующую комбинацию</p>
+            <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
+                <div className="bg-bg-primary/90 backdrop-blur-md p-6 rounded-[2.5rem] border border-accent/30 text-center space-y-2 shadow-2xl max-w-xs transform -rotate-1 pointer-events-auto">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center">
+                            <Brain className="text-accent animate-pulse" size={20} />
+                        </div>
+                        <div className="text-left">
+                            <p className="text-sm font-black italic uppercase tracking-tighter text-white">Ход {partnerName}...</p>
+                            <p className="text-[8px] text-text-dim uppercase font-black tracking-widest leading-none">Соперник обдумывает ход</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -155,11 +157,13 @@ const CheckersGame = ({ partnerName }: { partnerName: string }) => {
                     );
                 })}
             </div>
-            <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-[2px]">
-                 <div className="bg-bg-primary p-6 rounded-[2rem] border border-indigo-500/20 text-center space-y-2 translate-y-10">
-                    <p className="text-xs font-black uppercase text-indigo-400">Твой ход</p>
-                    <p className="text-[10px] text-text-dim uppercase font-black tracking-widest">Разработчики дописывают логику...</p>
-                 </div>
+                    <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
+                        <div className="bg-bg-primary/90 backdrop-blur-md p-6 rounded-[2.5rem] border border-indigo-500/20 text-center space-y-2 translate-y-0 shadow-2xl pointer-events-auto">
+                            <p className="text-xs font-black uppercase text-indigo-400">Твой ход</p>
+                            <p className="text-[8px] text-text-dim uppercase font-black tracking-widest leading-none">Обдумайте следующую атаку</p>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -169,19 +173,51 @@ const WordsGame = ({ sessionId, partnerName, state }: { sessionId: string, partn
     const [words, setWords] = useState<string[]>(state?.words || []);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
+    
+    // Check if it's current user's turn
+    // Since we don't have currentUserId directly here easily, we infer from previous turns
+    // The server should ideally pass the current userId, but we can manage locally
+    const lastWord = words[words.length - 1];
+    const isMyTurn = state?.turn !== partnerName; // Simple logic: if turn is not partner, it's me
 
     useEffect(() => {
-        if (state?.words) setWords(state.words);
+        if (state?.words) {
+            setWords(state.words);
+            const lastW = state.words[state.words.length - 1];
+            if (lastW) {
+                const lastChar = lastW.charAt(lastW.length - 1).toUpperCase();
+                // Avoid pre-filling if it's already filled or if it's not my turn
+                if (!input.startsWith(lastChar)) {
+                    setInput(lastChar);
+                }
+            }
+        }
     }, [state?.words]);
 
     const handleSendWord = async () => {
-        if (!input || sending) return;
+        if (!input || sending || !isMyTurn) return;
+        
+        // Basic validation: must start with last letter of previous word
+        if (lastWord) {
+            const lastChar = lastWord.charAt(lastWord.length - 1).toUpperCase();
+            if (input.charAt(0).toUpperCase() !== lastChar) {
+                // UI feedback could go here
+                return;
+            }
+        }
+
         setSending(true);
         try {
             const nextWords = [...words, input.toUpperCase()];
             await apiFetch(`/api/games/${sessionId}/move`, {
                 method: 'POST',
-                body: JSON.stringify({ state: { ...state, words: nextWords } })
+                body: JSON.stringify({ 
+                    state: { 
+                        ...state, 
+                        words: nextWords,
+                        turn: partnerName // pass turn to partner
+                    } 
+                })
             });
             setInput('');
         } catch (e) { console.error(e); } finally { setSending(false); }
@@ -213,18 +249,26 @@ const WordsGame = ({ sessionId, partnerName, state }: { sessionId: string, partn
                     </motion.div>
                 ))}
             </div>
-            <div className="flex gap-4 items-center bg-bg-primary/50 p-4 rounded-[2.5rem] border border-slate-800 shadow-2xl backdrop-blur-xl">
+            <div className="flex gap-4 items-center bg-bg-primary/50 p-4 rounded-[2.5rem] border border-slate-800 shadow-2xl backdrop-blur-xl relative">
+                {!isMyTurn && (
+                    <div className="absolute inset-0 bg-bg-secondary/80 backdrop-blur-sm rounded-[2.5rem] flex items-center justify-center z-10 transition-all">
+                        <div className="flex items-center gap-3">
+                            <RefreshCw className="animate-spin text-accent" size={16} />
+                            <p className="text-[9px] font-black uppercase tracking-widest text-white italic">Ожидание хода {partnerName}...</p>
+                        </div>
+                    </div>
+                )}
                 <input 
                     value={input} 
-                    onChange={e => setInput(e.target.value)} 
+                    onChange={e => setInput(e.target.value.toUpperCase())} 
                     onKeyDown={e => e.key === 'Enter' && handleSendWord()}
-                    placeholder="Ваше слово..." 
-                    disabled={sending}
+                    placeholder={isMyTurn ? "Введите слово..." : ""} 
+                    disabled={sending || !isMyTurn}
                     className="flex-1 bg-transparent p-2 outline-none text-lg font-black italic uppercase text-text-main tracking-tighter"
                 />
                 <button 
                     onClick={handleSendWord}
-                    disabled={sending}
+                    disabled={sending || !isMyTurn || !input}
                     className="bg-accent w-14 h-14 rounded-2xl text-white shadow-xl shadow-accent/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
                 >
                     {sending ? <RefreshCw className="animate-spin" size={24} /> : <ArrowRight size={28} />}
@@ -235,15 +279,42 @@ const WordsGame = ({ sessionId, partnerName, state }: { sessionId: string, partn
 };
 
 const SeaBattleGame = ({ sessionId, partnerName, state }: any) => {
+    const [ships, setShips] = useState<number[]>(state?.ships || []);
+    const [hits, setHits] = useState<number[]>(state?.hits || []);
+
+    const toggleShip = async (index: number) => {
+        let newShips = [...ships];
+        if (newShips.includes(index)) {
+            newShips = newShips.filter(s => s !== index);
+        } else {
+            if (newShips.length >= 20) return; // Limit 20 cells for ships
+            newShips.push(index);
+        }
+        setShips(newShips);
+        try {
+            await apiFetch(`/api/games/${sessionId}/move`, {
+                method: 'POST',
+                body: JSON.stringify({ state: { ...state, ships: newShips } })
+            });
+        } catch (e) { console.error(e); }
+    };
+
     return (
         <div className="w-full max-w-md h-full flex flex-col p-8 space-y-6 animate-in zoom-in duration-500">
             <h3 className="text-xl font-black italic uppercase tracking-tighter text-center text-white">Морской Бой LIVE</h3>
             <div className="grid grid-cols-2 gap-6 flex-1">
                 <div className="space-y-4">
-                    <p className="text-[9px] font-black uppercase text-center text-emerald-400 tracking-widest">Твой флот</p>
+                    <p className="text-[9px] font-black uppercase text-center text-emerald-400 tracking-widest">Твой флот ({ships.length}/20)</p>
                     <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-2 border-slate-700 aspect-square rounded-xl overflow-hidden shadow-2xl">
                         {Array.from({ length: 100 }).map((_, i) => (
-                            <div key={i} className="bg-slate-900 hover:bg-slate-800 transition-colors" />
+                            <div 
+                                key={i} 
+                                onClick={() => toggleShip(i)}
+                                className={cn(
+                                    "bg-slate-900 hover:bg-slate-800 transition-colors cursor-pointer",
+                                    ships.includes(i) ? "bg-emerald-500/40" : ""
+                                )} 
+                            />
                         ))}
                     </div>
                 </div>
@@ -253,13 +324,16 @@ const SeaBattleGame = ({ sessionId, partnerName, state }: any) => {
                         {Array.from({ length: 100 }).map((_, i) => (
                             <div key={i} className="bg-slate-900 group relative cursor-crosshair">
                                 <div className="absolute inset-0 bg-accent opacity-0 group-hover:opacity-20 transition-opacity" />
+                                {hits.includes(i) && <div className="absolute inset-0 flex items-center justify-center text-rose-500 font-bold text-xs">X</div>}
                             </div>
                         ))}
                     </div>
                 </div>
             </div>
-            <div className="bg-bg-primary/50 backdrop-blur-xl p-4 rounded-3xl border border-accent/20 text-center animate-pulse">
-                 <p className="text-[10px] font-black uppercase text-accent tracking-[0.2em]">Расстановка кораблей {partnerName}...</p>
+            <div className="bg-bg-primary/50 backdrop-blur-xl p-4 rounded-3xl border border-accent/20 text-center">
+                 <p className="text-[10px] font-black uppercase text-white tracking-widest">
+                     {ships.length < 20 ? 'Расставьте корабли (нажимайте на клетки)' : `Ожидание готовности ${partnerName}...`}
+                 </p>
             </div>
         </div>
     );
