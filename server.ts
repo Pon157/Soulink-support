@@ -456,6 +456,16 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Неверный пароль' });
     }
 
+    if (user.banStatus === 'BANNED') {
+        if (user.banUntil && user.banUntil < new Date()) {
+            await prisma.user.update({ where: { id: user.id }, data: { banStatus: 'NONE', banUntil: null, warnCount: 0 } });
+        } else {
+            return res.status(403).json({ 
+                error: `Ваш аккаунт заблокирован.\nПричина: ${user.banReason || 'Не указана'}\n${user.banUntil ? 'До: ' + new Date(user.banUntil).toLocaleString() : 'Бессрочно'}` 
+            });
+        }
+    }
+
     const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET);
 
     // Auto-create channel for staff if missing
@@ -568,7 +578,10 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
   const userId = req.user.userId;
   try {
     const messages = await prisma.message.findMany({
-      where: { OR: [{ senderId: userId }, { receiverId: userId }] },
+      where: { 
+        OR: [{ senderId: userId }, { receiverId: userId }],
+        NOT: { senderId: 'SYSTEM', receiverId: userId, content: { startsWith: 'Тикет #' } } // Filter out ticket meta-messages if needed
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -577,7 +590,7 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
     ));
 
     const partners = await prisma.user.findMany({
-      where: { id: { in: chatPartnersIds } },
+      where: { id: { in: chatPartnersIds }, username: { not: 'SYSTEM' } },
       select: { id: true, nickname: true, avatar: true, isOnRest: true }
     });
 
@@ -590,24 +603,44 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
         lastMsg: lastMsg?.content || (lastMsg?.mediaType === 'voice' ? 'Голосовое сообщение' : 'Медиа'),
         time: lastMsg?.createdAt || new Date(),
         unread: messages.filter(m => m.receiverId === userId && m.senderId === partner.id && !m.read).length,
-        isOnRest: (partner as any).isOnRest
+        isOnRest: (partner as any).isOnRest,
+        type: 'chat'
       };
     });
+
+    // Add Tickets
+    const tickets = await prisma.ticket.findMany({
+        where: req.user.role === 'USER' ? { userId, status: 'open' } : { managerId: userId, status: 'open' },
+        include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 }, user: true },
+        orderBy: { updatedAt: 'desc' }
+    });
+
+    const ticketChats = tickets.map(t => ({
+        id: `TICKET_${t.id}`,
+        name: `Тикет #${t.id.slice(0, 4)}`,
+        avatar: 'https://cdn-icons-png.flaticon.com/512/1067/1067562.png',
+        lastMsg: t.messages[0]?.content || t.subject,
+        time: t.updatedAt,
+        unread: 0,
+        isOnRest: false,
+        type: 'ticket'
+    }));
 
     // Add Technical Support Chat (System)
     const systemUser = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
     const techMsg = messages.find(m => m.senderId === systemUser?.id || m.receiverId === systemUser?.id);
     const techChat = {
         id: 'SYSTEM',
-        name: 'Техподдержка Команды',
+        name: 'SoulLink Notifications',
         avatar: 'https://cdn-icons-png.flaticon.com/512/4712/4712139.png',
         lastMsg: techMsg?.content || 'Системные уведомления и новости',
         time: techMsg?.createdAt || new Date(),
         unread: systemUser ? messages.filter(m => m.receiverId === userId && m.senderId === systemUser.id && !m.read).length : 0,
-        isPinned: true
+        isPinned: true,
+        type: 'system'
     };
 
-    res.json([techChat, ...chats]);
+    res.json([techChat, ...ticketChats, ...chats]);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
@@ -618,6 +651,26 @@ app.get('/api/messages/:otherId', authenticateToken, async (req: any, res: any) 
   let { otherId } = req.params;
   const userId = req.user.userId;
   try {
+    if (otherId.startsWith('TICKET_')) {
+        const ticketId = otherId.split('_')[1];
+        const messages = await prisma.ticketMessage.findMany({
+            where: { ticketId },
+            orderBy: { createdAt: 'asc' },
+            include: { sender: { select: { nickname: true, avatar: true, role: true } } }
+        });
+        // Map to standard message format
+        return res.json(messages.map(m => ({
+            id: m.id,
+            content: m.content,
+            senderId: m.senderId,
+            receiverId: otherId,
+            mediaUrl: m.mediaUrl,
+            mediaType: m.mediaType,
+            createdAt: m.createdAt,
+            read: true
+        })));
+    }
+
     if (otherId === 'SYSTEM') {
         const sys = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
         if (sys) otherId = sys.id;
@@ -646,8 +699,27 @@ app.get('/api/messages/:otherId', authenticateToken, async (req: any, res: any) 
 // 9. Send message
 app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
   let { receiverId, content, mediaUrl, mediaType, replyToId } = req.body;
+  const userId = req.user.userId;
   try {
+    if (receiverId.startsWith('TICKET_')) {
+        const ticketId = receiverId.split('_')[1];
+        const message = await prisma.ticketMessage.create({
+            data: {
+                ticketId,
+                senderId: userId,
+                content,
+                mediaUrl,
+                mediaType: mediaType || 'text'
+            }
+        });
+        await prisma.ticket.update({ where: { id: ticketId }, data: { updatedAt: new Date() } });
+        return res.json({ ...message, receiverId });
+    }
+
     if (receiverId === 'SYSTEM') {
+        if (req.user.role === 'USER') {
+            return res.status(403).json({ error: 'SYSTEM chat is read-only. Create a ticket for support.' });
+        }
         const sys = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
         if (sys) receiverId = sys.id;
     }
@@ -900,13 +972,100 @@ app.post('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
 
 app.post('/api/channels/subscribe/:id', authenticateToken, async (req: any, res: any) => {
   try {
+    const existing = await prisma.subscription.findUnique({
+      where: {
+        userId_channelId: {
+          userId: req.user.userId,
+          channelId: req.params.id
+        }
+      }
+    });
+    if (existing) {
+        await prisma.subscription.delete({ where: { id: existing.id } });
+        return res.json({ success: true, unsubscribed: true });
+    }
+
     const sub = await prisma.subscription.create({
       data: { userId: req.user.userId, channelId: req.params.id }
     });
     res.json(sub);
-  } catch {
-    res.status(400).json({ error: 'Already subscribed' });
+  } catch (e) {
+    res.status(400).json({ error: 'Failed to subscribe' });
   }
+});
+
+// Moderation API
+app.post('/api/moderation/warn', authenticateToken, async (req: any, res: any) => {
+    const { targetUserId, reason } = req.body;
+    if (!['ADMIN', 'CURATOR', 'OWNER'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+
+    try {
+        const user = await prisma.user.findUnique({ where: { id: targetUserId } });
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        const newWarnings = (user.warnCount || 0) + 1;
+        let banStatus = user.banStatus;
+        let banReason = user.banReason;
+        let banUntil = user.banUntil;
+
+        if (newWarnings >= 3) {
+            banStatus = 'BANNED';
+            banReason = 'Автоматическая блокировка за 3 нарушения';
+            banUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days ban
+        }
+
+        await prisma.user.update({
+            where: { id: targetUserId },
+            data: { 
+                warnCount: newWarnings,
+                banStatus,
+                banReason,
+                banUntil
+            }
+        });
+
+        await prisma.message.create({
+            data: {
+                senderId: 'SYSTEM',
+                receiverId: targetUserId,
+                content: `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason}\n\nНарушений: ${newWarnings}/3.\n${newWarnings >= 3 ? 'Вы заблокированы на 7 дней.' : ''}`
+            }
+        });
+
+        res.json({ success: true, warnings: newWarnings });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/moderation/ban', authenticateToken, async (req: any, res: any) => {
+    const { targetUserId, reason, durationDays } = req.body;
+    if (!['ADMIN', 'CURATOR', 'OWNER'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+
+    try {
+        const banUntil = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null;
+        await prisma.user.update({
+            where: { id: targetUserId },
+            data: { banStatus: 'BANNED', banReason: reason, banUntil }
+        });
+
+        await prisma.message.create({
+            data: {
+                senderId: 'SYSTEM',
+                receiverId: targetUserId,
+                content: `🚫 БЛОКИРОВКА: ${reason}\n\nСрок: ${durationDays ? durationDays + ' дн.' : 'Бессрочно'}`
+            }
+        });
+
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/moderation/unban', authenticateToken, async (req: any, res: any) => {
+    const { targetUserId } = req.body;
+    if (!['ADMIN', 'CURATOR', 'OWNER'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+    try {
+        await prisma.user.update({ where: { id: targetUserId }, data: { banStatus: 'NONE', banUntil: null, warnCount: 0 } });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
 // Broadcast - Global mailing to SYSTEM chat
