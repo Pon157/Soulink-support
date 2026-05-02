@@ -413,16 +413,16 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
       </Modal>
 
       <header className="p-4 flex items-center justify-between border-b border-slate-800/50 bg-bg-primary/95 backdrop-blur-md">
-        <div className="flex items-center cursor-pointer" onClick={() => setShowProfile(true)}>
+        <div className={cn("flex items-center", (chatId !== 'SYSTEM' && !chatId.startsWith('TICKET_')) ? "cursor-pointer" : "")} onClick={() => (chatId !== 'SYSTEM' && !chatId.startsWith('TICKET_')) && setShowProfile(true)}>
           <button onClick={(e) => { e.stopPropagation(); onBack(); }} className="p-2 -ml-2 text-text-dim hover:text-text-main transition-colors"><ChevronRight size={28} className="rotate-180" /></button>
           <div className="ml-2">
             <h3 className="font-black text-text-main tracking-tight leading-none text-base italic">
-                {chatId === 'SYSTEM' ? 'Техподдержка Команды' : (partner?.nickname || 'Загрузка...')}
+                {chatId === 'SYSTEM' ? 'SoulLink Уведомления' : (chatId.startsWith('TICKET_') ? 'Техподдержка' : (partner?.nickname || 'Загрузка...'))}
             </h3>
-            {chatId === 'SYSTEM' ? (
-                <div className="flex items-center gap-1.5 mt-1.5 text-blue-400">
+            {chatId === 'SYSTEM' || chatId.startsWith('TICKET_') ? (
+                <div className={cn("flex items-center gap-1.5 mt-1.5", chatId === 'SYSTEM' ? "text-blue-400" : "text-emerald-400")}>
                     <Shield size={10} />
-                    <span className="text-[9px] font-black uppercase tracking-widest">административный сектор</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest">{chatId === 'SYSTEM' ? 'администратор' : 'служба поддержки'}</span>
                 </div>
             ) : (
                 <div className="flex items-center gap-1.5 mt-1.5">
@@ -453,7 +453,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
               <button 
                 onClick={() => setShowGameMenu(true)} 
                 className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl hover:bg-indigo-500/20 transition-all focus:scale-110 active:scale-95 shadow-lg shadow-indigo-500/10"
-                title="Играть"
+                title="Игры"
               >
                   <Gamepad2 size={20} />
               </button>
@@ -626,7 +626,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
         <div ref={messagesEndRef} />
       </div>
 
-      {((chatId !== 'SYSTEM' && !chatId.startsWith('TICKET_')) || (['ADMIN', 'CURATOR', 'OWNER'].includes(userRole))) && (
+      {(chatId !== 'SYSTEM' || (['ADMIN', 'CURATOR', 'OWNER'].includes(userRole))) && (
         <div className="p-4 bg-bg-primary border-t border-slate-800/50 space-y-3">
           {replyTo && (
               <div className="flex items-center justify-between bg-bg-secondary p-3 rounded-2xl border border-slate-800">
@@ -654,15 +654,17 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
               <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={uploading} />
               </label>
               
-              <button 
-              onClick={toggleRecording}
-              className={cn(
-                  "p-2 rounded-xl transition-all",
-                  recording ? "bg-rose-600 text-white animate-pulse scale-110" : "text-text-dim hover:text-accent"
+              {!chatId.startsWith('TICKET_') && !['ADMIN', 'CURATOR', 'OWNER'].includes(userRole) && (
+                  <button 
+                  onClick={toggleRecording}
+                  className={cn(
+                      "p-2 rounded-xl transition-all",
+                      recording ? "bg-rose-600 text-white animate-pulse scale-110" : "text-text-dim hover:text-accent"
+                  )}
+                  >
+                  <Mic size={24} />
+                  </button>
               )}
-              >
-              <Mic size={24} />
-              </button>
   
               <input 
               value={input}
