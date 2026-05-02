@@ -34,6 +34,7 @@ model User {
   banStatus     BanStatus @default(NONE)
   warnCount     Int       @default(0)
   isOnRest      Boolean   @default(false)
+  lastSeen      DateTime  @default(now())
   description   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -56,6 +57,8 @@ model User {
   stats            UserStats?
   tasks            Task[]    @relation("AssignedTasks")
   createdTasks     Task[]    @relation("CreatedTasks")
+  postReactions    PostReaction[]
+  postComments     PostComment[]
 }
 
 model Channel {
@@ -88,6 +91,8 @@ model Post {
   channel   Channel  @relation(fields: [channelId], references: [id])
   channelId String
   createdAt DateTime @default(now())
+  reactions PostReaction[]
+  comments  PostComment[]
 }
 
 model Message {
@@ -143,4 +148,26 @@ model VerificationCode {
   email     String   @unique
   code      String
   expiresAt DateTime
+}
+
+model PostReaction {
+  id        String   @id @default(cuid())
+  type      String   @default("like")
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  postId    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId, type])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  content   String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  postId    String
+  createdAt DateTime @default(now())
 }
