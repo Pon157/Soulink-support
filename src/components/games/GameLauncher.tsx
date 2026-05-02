@@ -5,32 +5,46 @@ import { Modal } from '../ui/Modal';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
+import { apiFetch } from '../../lib/api';
+
 interface GameLauncherProps {
   gameType: 'chess' | 'checkers' | 'words' | 'seabattle';
+  sessionId: string;
   onClose: () => void;
   partnerName: string;
 }
 
-export const GameLauncher = ({ gameType, onClose, partnerName }: GameLauncherProps) => {
+export const GameLauncher = ({ gameType, sessionId, onClose, partnerName }: GameLauncherProps) => {
   const [loading, setLoading] = useState(true);
+  const [gameState, setGameState] = useState<any>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    const fetchGame = async () => {
+        try {
+            const res = await apiFetch(`/api/games/${sessionId}`);
+            const data = await res.json();
+            setGameState(data);
+            setLoading(false);
+        } catch (e) { console.error(e); }
+    };
+    fetchGame();
+    const interval = setInterval(fetchGame, 3000);
+    return () => clearInterval(interval);
+  }, [sessionId]);
 
   const renderGame = () => {
-    if (loading) return (
+    if (loading || !gameState) return (
         <div className="flex flex-col items-center gap-4 animate-pulse">
             <RefreshCw className="animate-spin text-accent" size={48} />
-            <p className="text-[10px] font-black uppercase tracking-widest text-text-dim text-center px-8">Подключение к игровой сессии с {partnerName}...</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-dim text-center px-8 text-white/50">Подключение к игровой сессии...</p>
         </div>
     );
 
     switch (gameType) {
-      case 'chess': return <ChessGame partnerName={partnerName} />;
-      case 'words': return <WordsGame partnerName={partnerName} />;
-      case 'checkers': return <CheckersGame partnerName={partnerName} />;
+      case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} state={gameState.state} />;
+      case 'words': return <WordsGame sessionId={sessionId} partnerName={partnerName} state={gameState.state} />;
+      case 'checkers': return <CheckersGame sessionId={sessionId} partnerName={partnerName} state={gameState.state} />;
+      case 'seabattle': return <SeaBattleGame sessionId={sessionId} partnerName={partnerName} state={gameState.state} />;
       default: return (
         <div className="text-center space-y-6 max-w-xs transition-all animate-in fade-in zoom-in duration-500 px-8">
             <div className="w-24 h-24 bg-accent/5 rounded-[2.5rem] flex items-center justify-center mx-auto border border-accent/10">
@@ -74,22 +88,35 @@ export const GameLauncher = ({ gameType, onClose, partnerName }: GameLauncherPro
   );
 };
 
-const ChessGame = ({ partnerName }: { partnerName: string }) => {
+const ChessGame = ({ sessionId, partnerName, state }: { sessionId: string, partnerName: string, state: any }) => {
+    const pieces = {
+        black: ['♜', '♞', '♝', '♛', '♚', '♝', '♞', '♜'],
+        white: ['♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖']
+    };
+
     return (
         <div className="w-full max-w-md aspect-square bg-slate-900 rounded-[3rem] overflow-hidden border-8 border-slate-800 shadow-2xl relative transition-all animate-in zoom-in duration-500">
             <div className="grid grid-cols-8 grid-rows-8 h-full gap-0.5 p-0.5 bg-slate-800">
                 {Array.from({ length: 64 }).map((_, i) => {
                     const row = Math.floor(i / 8);
                     const col = i % 8;
-                    const isWhite = (row + col) % 2 === 0;
+                    const isWhiteSquare = (row + col) % 2 === 0;
+                    
+                    let piece = null;
+                    if (row === 0) piece = pieces.black[col];
+                    if (row === 1) piece = '♟';
+                    if (row === 6) piece = '♙';
+                    if (row === 7) piece = pieces.white[col];
+
                     return (
                         <div key={i} className={cn(
                             "flex items-center justify-center text-4xl select-none transition-colors",
-                            isWhite ? 'bg-slate-200/90' : 'bg-slate-600'
+                            isWhiteSquare ? 'bg-slate-200/90' : 'bg-slate-600'
                         )}>
-                             {row === 1 && <span className="text-slate-400 drop-shadow-md">♟</span>}
-                             {row === 0 && (col === 0 || col === 7) && <span className="text-slate-400">♜</span>}
-                             {row === 6 && <span className="text-amber-600 drop-shadow-md">♙</span>}
+                             {piece && <span className={cn(
+                                 "drop-shadow-md",
+                                 row < 2 ? "text-slate-900" : "text-amber-500"
+                             )}>{piece}</span>}
                         </div>
                     );
                 })}
@@ -100,7 +127,7 @@ const ChessGame = ({ partnerName }: { partnerName: string }) => {
                         <Brain className="text-accent animate-pulse" size={40} />
                     </div>
                     <div className="space-y-2">
-                        <p className="text-lg font-black italic uppercase tracking-tighter">Ход {partnerName}...</p>
+                        <p className="text-lg font-black italic uppercase tracking-tighter text-white">Ход {partnerName}...</p>
                         <p className="text-[10px] text-text-dim uppercase font-black tracking-widest leading-normal">Твой соперник обдумывает следующую комбинацию</p>
                     </div>
                 </div>
@@ -138,26 +165,50 @@ const CheckersGame = ({ partnerName }: { partnerName: string }) => {
     );
 };
 
-const WordsGame = ({ partnerName }: { partnerName: string }) => {
-    const [words, setWords] = useState<string[]>(['АПЕЛЬСИН', 'НИТКА', 'АРБУЗ', 'ЗАБОР']);
+const WordsGame = ({ sessionId, partnerName, state }: { sessionId: string, partnerName: string, state: any }) => {
+    const [words, setWords] = useState<string[]>(state?.words || []);
     const [input, setInput] = useState('');
+    const [sending, setSending] = useState(false);
+
+    useEffect(() => {
+        if (state?.words) setWords(state.words);
+    }, [state?.words]);
+
+    const handleSendWord = async () => {
+        if (!input || sending) return;
+        setSending(true);
+        try {
+            const nextWords = [...words, input.toUpperCase()];
+            await apiFetch(`/api/games/${sessionId}/move`, {
+                method: 'POST',
+                body: JSON.stringify({ state: { ...state, words: nextWords } })
+            });
+            setInput('');
+        } catch (e) { console.error(e); } finally { setSending(false); }
+    };
 
     return (
         <div className="w-full max-w-md h-full flex flex-col p-8 space-y-8 animate-in slide-in-from-bottom duration-500">
             <div className="flex-1 space-y-4 overflow-y-auto pr-4 scroll-smooth">
+                {words.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-50">
+                        <Edit3 size={48} className="text-accent" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">Напишите первое слово, чтобы начать игру!</p>
+                    </div>
+                )}
                 {words.map((w, i) => (
                     <motion.div 
-                        initial={{ opacity: 0, x: i % 2 === 0 ? 20 : -20 }}
+                        initial={{ opacity: 0, x: i % 2 === 1 ? 20 : -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         key={i} 
                         className={cn(
                             "p-5 rounded-[2.5rem] shadow-xl border relative",
-                            i % 2 === 0 ? "bg-accent text-white border-white/10 ml-12" : "bg-bg-primary text-text-main border-slate-800 mr-12"
+                            i % 2 === 1 ? "bg-accent text-white border-white/10 ml-12" : "bg-bg-primary text-text-main border-slate-800 mr-12"
                         )}
                     >
                         <p className="font-black italic text-xl tracking-tighter leading-none">{w}</p>
-                        <div className={cn("absolute -bottom-2 text-[8px] font-black uppercase tracking-widest opacity-40 px-3", i % 2 === 0 ? "right-4" : "left-4")}>
-                            {i % 2 === 0 ? 'Вы' : partnerName}
+                        <div className={cn("absolute -bottom-2 text-[8px] font-black uppercase tracking-widest opacity-40 px-3", i % 2 === 1 ? "right-4" : "left-4 text-white")}>
+                             {i % 2 === 1 ? 'Вы' : partnerName}
                         </div>
                     </motion.div>
                 ))}
@@ -166,10 +217,49 @@ const WordsGame = ({ partnerName }: { partnerName: string }) => {
                 <input 
                     value={input} 
                     onChange={e => setInput(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleSendWord()}
                     placeholder="Ваше слово..." 
+                    disabled={sending}
                     className="flex-1 bg-transparent p-2 outline-none text-lg font-black italic uppercase text-text-main tracking-tighter"
                 />
-                <button className="bg-accent w-14 h-14 rounded-2xl text-white shadow-xl shadow-accent/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all"><ArrowRight size={28} /></button>
+                <button 
+                    onClick={handleSendWord}
+                    disabled={sending}
+                    className="bg-accent w-14 h-14 rounded-2xl text-white shadow-xl shadow-accent/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                >
+                    {sending ? <RefreshCw className="animate-spin" size={24} /> : <ArrowRight size={28} />}
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const SeaBattleGame = ({ sessionId, partnerName, state }: any) => {
+    return (
+        <div className="w-full max-w-md h-full flex flex-col p-8 space-y-6 animate-in zoom-in duration-500">
+            <h3 className="text-xl font-black italic uppercase tracking-tighter text-center text-white">Морской Бой LIVE</h3>
+            <div className="grid grid-cols-2 gap-6 flex-1">
+                <div className="space-y-4">
+                    <p className="text-[9px] font-black uppercase text-center text-emerald-400 tracking-widest">Твой флот</p>
+                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-2 border-slate-700 aspect-square rounded-xl overflow-hidden shadow-2xl">
+                        {Array.from({ length: 100 }).map((_, i) => (
+                            <div key={i} className="bg-slate-900 hover:bg-slate-800 transition-colors" />
+                        ))}
+                    </div>
+                </div>
+                <div className="space-y-4">
+                    <p className="text-[9px] font-black uppercase text-center text-rose-500 tracking-widest">Флот противника</p>
+                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-2 border-slate-700 aspect-square rounded-xl overflow-hidden shadow-2xl">
+                        {Array.from({ length: 100 }).map((_, i) => (
+                            <div key={i} className="bg-slate-900 group relative cursor-crosshair">
+                                <div className="absolute inset-0 bg-accent opacity-0 group-hover:opacity-20 transition-opacity" />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+            <div className="bg-bg-primary/50 backdrop-blur-xl p-4 rounded-3xl border border-accent/20 text-center animate-pulse">
+                 <p className="text-[10px] font-black uppercase text-accent tracking-[0.2em]">Расстановка кораблей {partnerName}...</p>
             </div>
         </div>
     );
