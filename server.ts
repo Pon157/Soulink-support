@@ -21,7 +21,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3000;
+const PORT = 3212;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
