@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight } from 'lucide-react';
+import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight, Ticket as TicketIcon } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
+import { UserAvatar } from '../ui/UserAvatar';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpandChat: (id: string) => void }) => {
-  const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation' | 'all_chats' | 'reviews' | 'broadcast' | 'sanctions' | 'tasks' | 'subordinates'>('stats');
+  const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation' | 'all_chats' | 'reviews' | 'broadcast' | 'sanctions' | 'tasks' | 'subordinates' | 'tickets'>('stats');
   const [stats, setStats] = useState<any>(null);
   const [staff, setStaff] = useState<any[]>([]);
   const [subordinates, setSubordinates] = useState<any[]>([]);
   const [tasks, setTasks] = useState<any[]>([]);
+  const [tickets, setTickets] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [allChats, setAllChats] = useState<any[]>([]);
@@ -35,9 +37,13 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
       ]);
       if (tasksRes.ok) setTasks(await tasksRes.json());
       
-      if (role === 'CURATOR') {
-          const subRes = await apiFetch('/api/staff/subordinates');
+      if (role === 'CURATOR' || role === 'OWNER') {
+          const [subRes, ticketRes] = await Promise.all([
+              apiFetch('/api/staff/subordinates'),
+              apiFetch('/api/tickets')
+          ]);
           if (subRes.ok) setSubordinates(await subRes.json());
+          if (ticketRes.ok) setTickets(await ticketRes.json());
       }
 
       if (role === 'OWNER') {
@@ -150,6 +156,7 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
     { id: 'subordinates', label: 'Подчиненные', icon: Users, ownerOnly: false, curatorOnly: true },
     { id: 'staff', label: 'Штат', icon: Users, ownerOnly: true },
     { id: 'tasks', label: 'Задания', icon: FileText, ownerOnly: false },
+    { id: 'tickets', label: 'Тикеты', icon: TicketIcon, ownerOnly: false, curatorOnly: true },
     { id: 'moderation', label: 'Жалобы', icon: ShieldAlert, ownerOnly: true },
     { id: 'all_chats', label: 'Все чаты', icon: ShieldCheck, ownerOnly: true },
     { id: 'reviews', label: 'Отзывы', icon: Star, ownerOnly: true },
@@ -254,9 +261,9 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
       {view === 'staff' && (
         <div className="space-y-3">
           {staff.map(s => (
-            <div key={s.id} className="bg-slate-900/50 border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between">
+            <div key={s.id} className="bg-bg-secondary border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <img src={s.avatar || `https://i.pravatar.cc/100?u=${s.id}`} className="w-10 h-10 rounded-xl object-cover" />
+                <UserAvatar user={s} size={40} className="shadow-lg" />
                 <div>
                   <p className="font-black text-white italic tracking-tight">{s.nickname} {s.isOnRest && <span className="text-[8px] bg-rose-500/20 text-rose-500 px-1.5 py-0.5 rounded ml-2">REST</span>}</p>
                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">@{s.username} • {s.role}</p>
@@ -292,7 +299,7 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
                       <div key={s.id} className="bg-bg-secondary border border-slate-800 p-5 rounded-[2.5rem] space-y-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <img src={s.avatar || `https://i.pravatar.cc/100?u=${s.id}`} className="w-10 h-10 rounded-2xl object-cover" />
+                                <UserAvatar user={s} size={40} className="shadow-lg" />
                                 <div>
                                     <p className="font-black text-sm italic">{s.nickname}</p>
                                     <p className="text-[8px] text-text-dim uppercase font-black tracking-[0.2em]">@{s.username}</p>
@@ -352,11 +359,11 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Поиск по никнейму..." className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main border border-slate-800/50 italic text-xs" />
           </div>
           {allChats.filter(c => c.sender.nickname.toLowerCase().includes(searchQuery.toLowerCase()) || c.receiver.nickname.toLowerCase().includes(searchQuery.toLowerCase())).map(c => (
-            <div key={c.id} onClick={() => onExpandChat(c.senderId)} className="bg-bg-secondary border border-slate-800/50 p-5 rounded-[2rem] flex items-center justify-between cursor-pointer hover:border-accent/30 transition-all">
+            <div key={c.id} onClick={() => onExpandChat(c.senderId === 'SYSTEM' ? c.receiverId : c.senderId)} className="bg-bg-secondary border border-slate-800/50 p-5 rounded-[2rem] flex items-center justify-between cursor-pointer hover:border-accent/30 transition-all">
               <div className="flex items-center gap-4 max-w-[70%]">
                 <div className="flex -space-x-3">
-                  <img src={c.sender.avatar || `https://i.pravatar.cc/100?u=1`} className="w-8 h-8 rounded-full border-2 border-bg-primary" />
-                  <img src={c.receiver.avatar || `https://i.pravatar.cc/100?u=2`} className="w-8 h-8 rounded-full border-2 border-bg-primary" />
+                  <UserAvatar user={c.sender} size={32} className="border-2 border-bg-primary" />
+                  <UserAvatar user={c.receiver} size={32} className="border-2 border-bg-primary" />
                 </div>
                 <div className="overflow-hidden">
                   <p className="text-[10px] font-black text-text-main italic truncate tracking-tight">{c.sender.nickname} <span className="text-accent">↔</span> {c.receiver.nickname}</p>
@@ -383,7 +390,7 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
                <div key={r.id} className="bg-bg-secondary border border-slate-800/50 p-6 rounded-[2.5rem] space-y-4">
                  <div className="flex justify-between items-start">
                    <div className="flex items-center gap-3">
-                     <img src={r.user.avatar || ''} className="w-8 h-8 rounded-xl object-cover" />
+                     <UserAvatar user={{ ...r.user, id: r.userId }} size={32} />
                      <div>
                        <p className="text-[10px] font-black italic text-text-main leading-none">{r.user.nickname}</p>
                        <p className="text-[8px] text-text-dim uppercase font-bold mt-1">для @{r.admin.username}</p>
@@ -439,16 +446,47 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
       )}
 
       {view === 'rules' && (
-        <div className="bg-slate-900/50 border border-slate-800 rounded-[2.5rem] p-8 space-y-6">
+        <div className="bg-bg-secondary border border-slate-800 rounded-[2.5rem] p-8 space-y-6">
           <h3 className="text-2xl font-black text-white italic tracking-tighter">Устав SoulLink</h3>
           <div className="space-y-4">
             {["Строгая анонимность", "Запрет на деанон", "Этика и поддержка", "Мгновенная реакция"].map((r, i) => (
-              <div key={i} className="flex gap-4 items-center bg-slate-800/30 p-4 rounded-2xl">
-                <span className="text-[10px] font-black text-blue-500">{i+1}</span>
-                <p className="text-sm text-slate-300 italic font-medium">{r}</p>
+              <div key={i} className="flex gap-4 items-center bg-bg-primary p-4 rounded-2xl border border-slate-800/50">
+                <span className="text-[10px] font-black text-accent">{i+1}</span>
+                <p className="text-sm text-text-dim italic font-medium">{r}</p>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {view === 'tickets' && (
+        <div className="space-y-4">
+            <div className="bg-accent/5 border border-accent/10 p-8 rounded-[3rem] text-center space-y-2 mb-6">
+                <TicketIcon size={40} className="mx-auto text-accent" />
+                <h2 className="text-xl font-black italic">Техподдержка</h2>
+                <p className="text-[10px] text-text-dim uppercase font-black tracking-widest">Обращения пользователей</p>
+            </div>
+            <div className="space-y-3">
+                {tickets.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black italic">Нет активных тикетов</p>}
+                {tickets.map(t => (
+                    <button key={t.id} onClick={() => onExpandChat(t.userId)} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-accent transition-all">
+                        <div className="flex items-center gap-4">
+                            <UserAvatar user={t.user} size={40} className="shadow-lg" />
+                            <div className="text-left">
+                                <p className="font-black italic text-sm text-text-main group-hover:text-accent transition-colors">Тикет #{t.id.slice(0,4)} • {t.user.nickname}</p>
+                                <p className={cn(
+                                    "text-[9px] font-black uppercase tracking-widest",
+                                    t.status === 'CLOSED' ? "text-text-dim" : "text-emerald-500"
+                                )}>{t.status}</p>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                             <p className="text-[9px] text-text-dim uppercase font-black mb-1">Менеджер</p>
+                             <p className="text-[10px] font-bold italic">{t.manager?.nickname || 'Не назначен'}</p>
+                        </div>
+                    </button>
+                ))}
+            </div>
         </div>
       )}
     </div>
