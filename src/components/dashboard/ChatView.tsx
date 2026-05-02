@@ -4,6 +4,8 @@ import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play,
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
+import { UserAvatar } from '../ui/UserAvatar';
+import { Trash, Edit3, Reply, MoreVertical } from 'lucide-react';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
@@ -107,6 +109,9 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [errorModal, setErrorModal] = useState<string|null>(null);
   const [reviewPhoto, setReviewPhoto] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<any>(null);
+  const [editingMessage, setEditingMessage] = useState<any>(null);
+  const [showMsgActions, setShowMsgActions] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -154,17 +159,42 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
 
   const handleSend = async (content?: string, mediaUrl?: string, mediaType?: string) => {
     if (!content?.trim() && !mediaUrl) return;
+    
+    if (editingMessage) {
+        try {
+            await apiFetch(`/api/messages/${editingMessage.id}`, {
+                method: 'PATCH',
+                body: JSON.stringify({ content })
+            });
+            setEditingMessage(null);
+            setInput('');
+            const res = await apiFetch(`/api/messages/${chatId}`);
+            setMessages(await res.json());
+        } catch (e) { console.error(e); }
+        return;
+    }
+
     try {
       const res = await apiFetch('/api/messages', {
         method: 'POST',
-        body: JSON.stringify({ receiverId: chatId, content, mediaUrl, mediaType }),
+        body: JSON.stringify({ receiverId: chatId, content, mediaUrl, mediaType, replyToId: replyTo?.id }),
       });
       const newMsg = await res.json();
       setMessages(prev => [...prev, newMsg]);
       setInput('');
+      setReplyTo(null);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleDeleteMessage = async (id: string) => {
+      try {
+          await apiFetch(`/api/messages/${id}`, { method: 'DELETE' });
+          const res = await apiFetch(`/api/messages/${chatId}`);
+          setMessages(await res.json());
+          setShowMsgActions(null);
+      } catch (e) { console.error(e); }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -267,7 +297,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
   };
 
   return (
-    <div className="flex flex-col h-full bg-bg-secondary">
+    <div className="flex flex-col h-full bg-bg-secondary relative overflow-hidden">
       <Modal isOpen={!!errorModal} onClose={() => setErrorModal(null)} title="Внимание">
         <div className="text-center space-y-6">
           <p className="text-rose-400 font-bold italic">{errorModal}</p>
@@ -281,7 +311,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
             <div className="flex flex-col items-center text-center">
               <div className="relative mb-4">
                  <div className="absolute inset-0 bg-accent blur-xl opacity-20" />
-                 <img src={partner.avatar || `https://i.pravatar.cc/150?u=${partner.id}`} className="relative w-24 h-24 rounded-3xl object-cover border-2 border-slate-800" />
+                 <UserAvatar user={partner} size={96} className="relative border-2 border-slate-800" />
               </div>
               <h4 className="text-xl font-black text-text-main italic">{partner.nickname}</h4>
               <p className="text-accent text-[10px] font-black uppercase tracking-widest mt-1">{partner.role}</p>
@@ -408,64 +438,112 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
           backgroundAttachment: 'fixed'
         } : {}}
       >
-        {messages.map((msg) => (
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            key={msg.id}
-            className={cn(
-              "max-w-[85%] p-3.5 rounded-3xl relative",
-              msg.senderId !== chatId ? "bg-accent text-white ml-auto" : "bg-bg-primary text-text-main border border-slate-800/50 mr-auto"
-            )}
-          >
-        {msg.mediaType === 'voice' ? (
-              <VoiceMessage url={msg.mediaUrl!} isOwn={msg.senderId !== chatId} />
-            ) : msg.mediaType === 'photo' ? (
-              <img src={msg.mediaUrl} className="rounded-2xl w-full cursor-zoom-in shadow-lg" onClick={() => onImageClick(msg.mediaUrl)} />
-            ) : msg.mediaType === 'video' ? (
-              <video src={msg.mediaUrl} controls className="rounded-2xl w-full shadow-lg max-h-[300px]" />
-            ) : (
-              <p className="text-sm font-medium leading-relaxed">{msg.content}</p>
-            )}
-            <div className="flex items-center justify-end gap-1.5 mt-1 opacity-60 px-1">
-              <span className="text-[9px] uppercase font-black tracking-widest">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-              {msg.senderId !== chatId && <CheckCheck size={14} className={msg.read ? "text-blue-400" : "text-white/40"} />}
-            </div>
-          </motion.div>
-        ))}
+        {messages.map((msg) => {
+          const isOwn = msg.senderId !== chatId;
+          const repliedToMsg = msg.replyToId ? messages.find(m => m.id === msg.replyToId) : null;
+
+          return (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              key={msg.id}
+              onClick={() => setShowMsgActions(showMsgActions === msg.id ? null : msg.id)}
+              className={cn(
+                "max-w-[85%] p-3.5 rounded-3xl relative group cursor-pointer transition-all",
+                isOwn ? "bg-accent text-white ml-auto" : "bg-bg-primary text-text-main border border-slate-800/50 mr-auto",
+                showMsgActions === msg.id ? "ring-2 ring-blue-500/50" : ""
+              )}
+            >
+              {showMsgActions === msg.id && (
+                  <div className={cn(
+                      "absolute -top-12 bg-bg-primary border border-slate-800 p-1 rounded-2xl flex gap-1 z-20 shadow-2xl",
+                      isOwn ? "right-0" : "left-0"
+                  )}>
+                      <button onClick={(e) => { e.stopPropagation(); setReplyTo(msg); setShowMsgActions(null); }} className="p-2 hover:bg-slate-800 rounded-xl text-text-main"><Reply size={16} /></button>
+                      {isOwn && !msg.isDeleted && <button onClick={(e) => { e.stopPropagation(); setEditingMessage(msg); setInput(msg.content); setShowMsgActions(null); }} className="p-2 hover:bg-slate-800 rounded-xl text-text-main"><Edit3 size={16} /></button>}
+                      {(isOwn || ['ADMIN', 'CURATOR', 'OWNER'].includes(userRole)) && <button onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); }} className="p-2 hover:bg-slate-800 rounded-xl text-rose-500"><Trash size={16} /></button>}
+                  </div>
+              )}
+
+              {repliedToMsg && (
+                  <div className="bg-black/10 p-2 rounded-xl mb-2 border-l-2 border-current/30 text-[10px] italic line-clamp-1 opacity-70">
+                      {repliedToMsg.content || 'Медиа'}
+                  </div>
+              )}
+
+              {msg.mediaType === 'voice' ? (
+                <VoiceMessage url={msg.mediaUrl!} isOwn={isOwn} />
+              ) : msg.mediaType === 'photo' ? (
+                <img src={msg.mediaUrl} className="rounded-2xl w-full cursor-zoom-in shadow-lg" onClick={(e) => { e.stopPropagation(); onImageClick(msg.mediaUrl); }} />
+              ) : msg.mediaType === 'video' ? (
+                <video src={msg.mediaUrl} controls className="rounded-2xl w-full shadow-lg max-h-[300px]" />
+              ) : (
+                <p className="text-sm font-medium leading-relaxed">{msg.content}</p>
+              )}
+              
+              <div className="flex items-center justify-end gap-1.5 mt-1 opacity-60 px-1">
+                {msg.isEdited && <span className="text-[8px] uppercase font-bold">ред.</span>}
+                <span className="text-[9px] uppercase font-black tracking-widest">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                {isOwn && <CheckCheck size={14} className={msg.read ? "text-blue-200" : "text-white/40"} />}
+              </div>
+            </motion.div>
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 bg-bg-primary flex items-center gap-2 border-t border-slate-800/50">
-        <label className="text-text-dim hover:text-accent p-2 cursor-pointer transition-colors">
-          {uploading ? <Loader2 className="animate-spin" size={24} /> : <Camera size={24} />}
-          <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={uploading} />
-        </label>
-        
-        <button 
-          onClick={toggleRecording}
-          className={cn(
-            "p-2 rounded-xl transition-all",
-            recording ? "bg-rose-600 text-white animate-pulse scale-110" : "text-text-dim hover:text-accent"
-          )}
-        >
-          <Mic size={24} />
-        </button>
+      <div className="p-4 bg-bg-primary border-t border-slate-800/50 space-y-3">
+        {replyTo && (
+            <div className="flex items-center justify-between bg-bg-secondary p-3 rounded-2xl border border-slate-800">
+                <div className="flex items-center gap-2 overflow-hidden">
+                    <Reply size={14} className="text-accent" />
+                    <div className="text-[10px] text-text-dim truncate italic max-w-[200px]">
+                        {replyTo.content || 'Медиа'}
+                    </div>
+                </div>
+                <button onClick={() => setReplyTo(null)} className="text-text-dim p-1"><X size={14} /></button>
+            </div>
+        )}
+        {editingMessage && (
+            <div className="flex items-center justify-between bg-bg-secondary p-3 rounded-2xl border border-accent/30">
+                <div className="flex items-center gap-2">
+                    <Edit3 size={14} className="text-accent" />
+                    <span className="text-[10px] text-accent font-black uppercase tracking-widest">Редактирование</span>
+                </div>
+                <button onClick={() => { setEditingMessage(null); setInput(''); }} className="text-text-dim p-1"><X size={14} /></button>
+            </div>
+        )}
+        <div className="flex items-center gap-2">
+            <label className="text-text-dim hover:text-accent p-2 cursor-pointer transition-colors">
+            {uploading ? <Loader2 className="animate-spin" size={24} /> : <Camera size={24} />}
+            <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={uploading} />
+            </label>
+            
+            <button 
+            onClick={toggleRecording}
+            className={cn(
+                "p-2 rounded-xl transition-all",
+                recording ? "bg-rose-600 text-white animate-pulse scale-110" : "text-text-dim hover:text-accent"
+            )}
+            >
+            <Mic size={24} />
+            </button>
 
-        <input 
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
-          placeholder={recording ? "Запись голоса..." : "Ваш ответ..."} 
-          disabled={recording}
-          className="flex-1 bg-bg-secondary rounded-3xl px-4 py-3 text-sm focus:outline-none text-text-main border border-slate-800 focus:border-accent/50 transition-all font-medium italic"
-        />
-        <button 
-          onClick={() => handleSend(input)} 
-          className="bg-accent p-3 rounded-2xl text-white shadow-lg shadow-accent/20 active:scale-90 transition-all"
-        >
-          <ArrowRight size={22} />
-        </button>
+            <input 
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend(input)}
+            placeholder={recording ? "Запись голоса..." : "Ваш ответ..."} 
+            disabled={recording}
+            className="flex-1 bg-bg-secondary rounded-3xl px-4 py-3 text-sm focus:outline-none text-text-main border border-slate-800 focus:border-accent/50 transition-all font-medium italic"
+            />
+            <button 
+            onClick={() => handleSend(input)} 
+            className="bg-accent p-3 rounded-2xl text-white shadow-lg shadow-accent/20 active:scale-90 transition-all"
+            >
+            <ArrowRight size={22} />
+            </button>
+        </div>
       </div>
     </div>
   );
