@@ -21,7 +21,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -166,6 +166,139 @@ app.post('/api/staff/create', authenticateToken, requireOwner, async (req: any, 
   }
 });
 
+// Tickets API
+app.get('/api/tickets', authenticateToken, async (req: any, res: any) => {
+    try {
+        const { role, userId } = req.user;
+        let where: any = {};
+        if (role === 'USER') {
+            where = { userId };
+        } else if (role === 'OWNER') {
+            where = {}; // Owners see all
+        } else {
+            where = { OR: [{ userId }, { managerId: userId }] };
+        }
+        
+        const tickets = await prisma.ticket.findMany({
+            where,
+            include: { user: { select: { nickname: true, avatar: true } } },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(tickets);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.post('/api/tickets', authenticateToken, async (req: any, res: any) => {
+    const { subject, message } = req.body;
+    try {
+        const ticket = await prisma.ticket.create({
+            data: {
+                subject,
+                userId: req.user.userId,
+                messages: {
+                    create: {
+                        content: message,
+                        senderId: req.user.userId
+                    }
+                }
+            }
+        });
+        res.json(ticket);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.get('/api/tickets/:id/messages', authenticateToken, async (req: any, res: any) => {
+    try {
+        const messages = await prisma.ticketMessage.findMany({
+            where: { ticketId: req.params.id },
+            orderBy: { createdAt: 'asc' }
+        });
+        res.json(messages);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.post('/api/tickets/:id/messages', authenticateToken, async (req: any, res: any) => {
+    const { content, mediaUrl, mediaType } = req.body;
+    try {
+        const ticket = await prisma.ticket.findUnique({ where: { id: req.params.id } });
+        if (!ticket) return res.status(404).json({ error: 'Not found' });
+        
+        const message = await prisma.ticketMessage.create({
+            data: {
+                ticketId: req.params.id,
+                senderId: req.user.userId,
+                content,
+                mediaUrl,
+                mediaType: mediaType || 'text'
+            }
+        });
+        
+        // Auto-assign owner if staff replies
+        if (['ADMIN', 'CURATOR', 'OWNER'].includes(req.user.role) && !ticket.managerId) {
+            await prisma.ticket.update({
+                where: { id: req.params.id },
+                data: { managerId: req.user.userId }
+            });
+        }
+
+        res.json(message);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.patch('/api/tickets/:id/status', authenticateToken, async (req: any, res: any) => {
+    const { status } = req.body;
+    try {
+        const ticket = await prisma.ticket.update({
+            where: { id: req.params.id },
+            data: { status }
+        });
+        res.json(ticket);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+// Message Management (Edit / Delete / Reply)
+app.patch('/api/messages/:id', authenticateToken, async (req: any, res: any) => {
+    const { content } = req.body;
+    try {
+        const msg = await prisma.message.findUnique({ where: { id: req.params.id } });
+        if (!msg || msg.senderId !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+        
+        const updated = await prisma.message.update({
+            where: { id: req.params.id },
+            data: { content, isEdited: true }
+        });
+        res.json(updated);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.delete('/api/messages/:id', authenticateToken, async (req: any, res: any) => {
+    try {
+        const msg = await prisma.message.findUnique({ where: { id: req.params.id } });
+        if (!msg || (msg.senderId !== req.user.userId && req.user.role === 'USER')) return res.status(403).json({ error: 'Forbidden' });
+        
+        const updated = await prisma.message.update({
+            where: { id: req.params.id },
+            data: { isDeleted: true, content: 'Сообщение удалено', mediaUrl: null }
+        });
+        res.json(updated);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+// Curator / Owner: Subordinate Chats
 app.get('/api/curator/subordinate-chats/:subId', authenticateToken, async (req: any, res: any) => {
     try {
         const sub = await prisma.user.findUnique({ where: { id: req.params.subId } });
@@ -512,7 +645,7 @@ app.get('/api/messages/:otherId', authenticateToken, async (req: any, res: any) 
 
 // 9. Send message
 app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
-  let { receiverId, content, mediaUrl, mediaType } = req.body;
+  let { receiverId, content, mediaUrl, mediaType, replyToId } = req.body;
   try {
     if (receiverId === 'SYSTEM') {
         const sys = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
@@ -526,6 +659,7 @@ app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
         content: content || '',
         mediaUrl,
         mediaType,
+        replyToId
       },
     });
 
@@ -686,17 +820,45 @@ app.get('/api/posts/:id/comments', authenticateToken, async (req: any, res: any)
 });
 
 app.post('/api/posts/:id/comments', authenticateToken, async (req: any, res: any) => {
-    const { content } = req.body;
+    const { content, replyToId } = req.body;
     try {
         const comment = await prisma.postComment.create({
             data: {
                 content,
                 userId: req.user.userId,
-                postId: req.params.id
+                postId: req.params.id,
+                replyToId
             },
             include: { user: { select: { nickname: true, avatar: true } } }
         });
         res.json(comment);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.delete('/api/posts/comments/:id', authenticateToken, async (req: any, res: any) => {
+    try {
+        const comment = await prisma.postComment.findUnique({ where: { id: req.params.id } });
+        if (!comment || (comment.userId !== req.user.userId && req.user.role === 'USER')) return res.status(403).json({ error: 'Forbidden' });
+        
+        await prisma.postComment.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.delete('/api/posts/:id', authenticateToken, async (req: any, res: any) => {
+    try {
+        const post = await prisma.post.findUnique({ 
+            where: { id: req.params.id },
+            include: { channel: true }
+        });
+        if (!post || (post.channel.ownerId !== req.user.userId && req.user.role === 'USER')) return res.status(403).json({ error: 'Forbidden' });
+        
+        await prisma.post.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Failed' });
     }
@@ -798,6 +960,37 @@ app.get('/api/reviews/all', authenticateToken, async (req: any, res: any) => {
   } catch (e) {
     res.status(500).json({ error: 'Failed' });
   }
+});
+
+app.post('/api/reviews/:id/comments', authenticateToken, async (req: any, res: any) => {
+    const { content, replyToId } = req.body;
+    try {
+        const comment = await prisma.reviewComment.create({
+            data: {
+                content,
+                userId: req.user.userId,
+                reviewId: req.params.id,
+                replyToId
+            },
+            include: { user: { select: { nickname: true, avatar: true } } }
+        });
+        res.json(comment);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.get('/api/reviews/:id/comments', authenticateToken, async (req: any, res: any) => {
+    try {
+        const comments = await prisma.reviewComment.findMany({
+            where: { reviewId: req.params.id },
+            include: { user: { select: { nickname: true, avatar: true } } },
+            orderBy: { createdAt: 'asc' }
+        });
+        res.json(comments);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
 });
 
 app.get('/api/admins', authenticateToken, async (req: any, res: any) => {
