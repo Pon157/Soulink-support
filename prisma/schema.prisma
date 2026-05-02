@@ -59,6 +59,34 @@ model User {
   createdTasks     Task[]    @relation("CreatedTasks")
   postReactions    PostReaction[]
   postComments     PostComment[]
+  reviewComments   ReviewComment[]
+  tickets          Ticket[]      @relation("UserTickets")
+  managedTickets   Ticket[]      @relation("ManagedTickets")
+}
+
+model Ticket {
+  id          String   @id @default(cuid())
+  number      Int      @default(autoincrement())
+  subject     String
+  status      String   @default("open") // open, closed, pending
+  userId      String
+  user        User     @relation("UserTickets", fields: [userId], references: [id])
+  managerId   String?
+  manager     User?    @relation("ManagedTickets", fields: [managerId], references: [id])
+  messages    TicketMessage[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model TicketMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  senderId  String
+  content   String
+  mediaUrl  String?
+  mediaType String   @default("text")
+  createdAt DateTime @default(now())
 }
 
 model Channel {
@@ -99,11 +127,14 @@ model Message {
   id         String   @id @default(cuid())
   content    String
   mediaUrl   String?
-  mediaType  String?  // photo, voice, file
+  mediaType  String?  // photo, voice, file, video
   sender     User     @relation("SentMessages", fields: [senderId], references: [id])
   senderId   String
   receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
   receiverId String
+  replyToId  String?
+  isEdited   Boolean  @default(false)
+  isDeleted  Boolean  @default(false)
   createdAt  DateTime @default(now())
   read       Boolean  @default(false)
 }
@@ -117,6 +148,18 @@ model Review {
   adminId   String
   user      User     @relation("UserReviews", fields: [userId], references: [id])
   userId    String
+  createdAt DateTime @default(now())
+  comments  ReviewComment[]
+}
+
+model ReviewComment {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  reviewId  String
+  review    Review   @relation(fields: [reviewId], references: [id])
+  replyToId String?
   createdAt DateTime @default(now())
 }
 
@@ -169,5 +212,6 @@ model PostComment {
   userId    String
   post      Post     @relation(fields: [postId], references: [id])
   postId    String
+  replyToId String?
   createdAt DateTime @default(now())
 }
