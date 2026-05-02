@@ -33,6 +33,8 @@ model User {
   role          Role      @default(USER)
   banStatus     BanStatus @default(NONE)
   warnCount     Int       @default(0)
+  banReason     String?
+  banUntil      DateTime?
   isOnRest      Boolean   @default(false)
   lastSeen      DateTime  @default(now())
   description   String?
@@ -83,6 +85,7 @@ model TicketMessage {
   ticketId  String
   ticket    Ticket   @relation(fields: [ticketId], references: [id])
   senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
   content   String
   mediaUrl  String?
   mediaType String   @default("text")
