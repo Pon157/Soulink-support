@@ -1000,12 +1000,29 @@ app.post('/api/channels/subscribe/:id', authenticateToken, async (req: any, res:
 app.post('/api/games/create', authenticateToken, async (req: any, res: any) => {
     const { type, partnerId } = req.body;
     try {
+        const partnerUser = await prisma.user.findUnique({ where: { id: partnerId } });
+        if (!partnerUser) return res.status(404).json({ error: 'User not found' });
+
+        const initialState: any = {};
+        if (type === 'words') initialState.state = { words: [], turn: partnerId };
+        else if (type === 'chess') initialState.state = { fen: 'start', turn: 'white' };
+        else if (type === 'seabattle' || type === 'checkers') {
+            initialState.state = { 
+                turn: 'white',
+                players: [
+                    { id: req.user.userId, nickname: req.user.nickname, ships: [], shots: [], ready: false },
+                    { id: partnerId, nickname: partnerUser.nickname, ships: [], shots: [], ready: false }
+                ]
+            };
+        }
+
         const session = await prisma.gameSession.create({
             data: {
                 type,
                 players: { connect: [{ id: req.user.userId }, { id: partnerId }] },
-                state: type === 'words' ? { words: [], turn: partnerId } : type === 'chess' ? { fen: 'start', turn: 'white' } : {}
-            }
+                state: initialState.state
+            },
+            include: { players: { select: { id: true, nickname: true, avatar: true } } }
         });
 
         // Send invite message
