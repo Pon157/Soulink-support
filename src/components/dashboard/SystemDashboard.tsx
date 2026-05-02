@@ -6,11 +6,13 @@ import { UserAvatar } from '../ui/UserAvatar';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
-export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpandChat: (id: string) => void }) => {
+export const SystemDashboard = ({ role, onExpandChat, userId: currentUserId }: { role: string, onExpandChat: (id: string) => void, userId: string }) => {
   const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation' | 'all_chats' | 'reviews' | 'broadcast' | 'sanctions' | 'tasks' | 'subordinates' | 'tickets'>('stats');
   const [stats, setStats] = useState<any>(null);
   const [staff, setStaff] = useState<any[]>([]);
   const [subordinates, setSubordinates] = useState<any[]>([]);
+  const [subordinateMessages, setSubordinateMessages] = useState<any[]>([]);
+  const [monitoringSubId, setMonitoringSubId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<any[]>([]);
   const [tickets, setTickets] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
@@ -98,7 +100,15 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
               body: JSON.stringify({ status })
           });
           fetchData();
-          alert('Статус обновлен');
+          alert('Статус изменен');
+      } catch (e) { console.error(e); }
+  };
+
+  const startMonitoring = async (subId: string) => {
+      setMonitoringSubId(subId);
+      try {
+          const res = await apiFetch(`/api/curator/subordinate-chats/${subId}`);
+          if (res.ok) setSubordinateMessages(await res.json());
       } catch (e) { console.error(e); }
   };
 
@@ -308,7 +318,7 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
                             <button onClick={() => setShowAddTask(s)} className="p-3 bg-accent/10 text-accent rounded-xl hover:bg-accent hover:text-white transition-all"><Plus size={18} /></button>
                           </div>
                           <div className="pt-4 border-t border-slate-800/50 flex gap-4">
-                             <button onClick={() => onExpandChat(s.id)} className="flex-1 py-3 bg-bg-primary rounded-2xl text-[9px] font-black uppercase tracking-widest border border-slate-800 hover:border-accent/50 transition-all">Мониторинг чатов</button>
+                             <button onClick={() => startMonitoring(s.id)} className="flex-1 py-3 bg-bg-primary rounded-2xl text-[9px] font-black uppercase tracking-widest border border-slate-800 hover:border-accent/50 transition-all">Мониторинг чатов</button>
                              <div className="bg-bg-primary px-4 py-3 rounded-2xl flex items-center gap-2">
                                 <span className="text-[11px] font-black italic">{s.stats?.averageRating?.toFixed(1) || 0}</span>
                                 <Star size={10} className="text-amber-500" fill="currentColor" />
@@ -344,7 +354,7 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
                                   <span>Дедлайн: {new Date(t.deadline).toLocaleDateString()}</span>
                               </div>
                           )}
-                          {t.assigneeId === (stats as any)?.id && t.status !== 'completed' && (
+                          {t.assigneeId === currentUserId && t.status !== 'completed' && (
                               <button onClick={() => handleUpdateTaskStatus(t.id, 'completed')} className="w-full py-4 bg-emerald-600 rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">Завершить задание</button>
                           )}
                       </div>
@@ -489,6 +499,25 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
             </div>
         </div>
       )}
+
+      <Modal isOpen={!!monitoringSubId} onClose={() => setMonitoringSubId(null)} title="Архив сообщений подчиненного">
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+              {subordinateMessages.length === 0 && <p className="text-center py-12 text-text-dim italic text-xs">Сообщений пока нет...</p>}
+              {subordinateMessages.map((m, i) => (
+                  <div key={i} className="p-4 bg-bg-secondary rounded-2xl border border-slate-800/50">
+                      <div className="flex justify-between items-center mb-2">
+                        <div className="flex -space-x-2">
+                            <UserAvatar user={m.sender} size={24} className="border border-bg-primary" />
+                            <UserAvatar user={m.receiver} size={24} className="border border-bg-primary" />
+                        </div>
+                        <span className="text-[8px] text-text-dim uppercase font-black">{new Date(m.createdAt).toLocaleString()}</span>
+                      </div>
+                      <p className="text-[10px] font-bold text-accent mb-1">{m.sender.nickname} <span className="text-white">→</span> {m.receiver.nickname}</p>
+                      <p className="text-xs text-text-main italic">{m.content || (m.mediaType === 'voice' ? '🎤 Голосовое' : '🖼 Медиа')}</p>
+                  </div>
+              ))}
+          </div>
+      </Modal>
     </div>
   );
 };
