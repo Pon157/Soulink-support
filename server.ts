@@ -89,19 +89,6 @@ app.get('/api/staff/subordinates', authenticateToken, async (req: any, res: any)
     }
 });
 
-app.post('/api/staff/assign', authenticateToken, requireOwner, async (req: any, res: any) => {
-    const { subordinateId, managerId } = req.body;
-    try {
-        const user = await prisma.user.update({
-            where: { id: subordinateId },
-            data: { managedById: managerId }
-        });
-        res.json(user);
-    } catch (e) {
-        res.status(500).json({ error: 'Failed' });
-    }
-});
-
 app.get('/api/tasks', authenticateToken, async (req: any, res: any) => {
     try {
         const tasks = await prisma.task.findMany({
@@ -610,7 +597,15 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
 
     // Add Tickets
     const tickets = await prisma.ticket.findMany({
-        where: req.user.role === 'USER' ? { userId, status: 'open' } : { managerId: userId, status: 'open' },
+        where: req.user.role === 'USER' 
+            ? { userId, status: 'open' } 
+            : { 
+                OR: [
+                    { managerId: userId },
+                    { managerId: null }
+                ],
+                status: 'open'
+            },
         include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 }, user: true },
         orderBy: { updatedAt: 'desc' }
     });
@@ -829,10 +824,17 @@ app.get('/api/channels', authenticateToken, async (req: any, res: any) => {
     const channels = await prisma.channel.findMany({
       include: { 
         owner: { select: { nickname: true, avatar: true } },
-        _count: { select: { subscribers: true, posts: true } }
+        _count: { select: { subscribers: true, posts: true } },
+        subscribers: { where: { userId: req.user.userId } }
       }
     });
-    res.json(channels);
+
+    const results = channels.map(ch => ({
+        ...ch,
+        isSubscribed: ch.subscribers.length > 0
+    }));
+
+    res.json(results);
   } catch (e) {
     res.status(500).json({ error: 'Failed' });
   }
@@ -994,6 +996,60 @@ app.post('/api/channels/subscribe/:id', authenticateToken, async (req: any, res:
   }
 });
 
+// --- GAME SESSION API ---
+app.post('/api/games/create', authenticateToken, async (req: any, res: any) => {
+    const { type, partnerId } = req.body;
+    try {
+        const session = await prisma.gameSession.create({
+            data: {
+                type,
+                players: { connect: [{ id: req.user.userId }, { id: partnerId }] },
+                state: type === 'words' ? { words: [], turn: partnerId } : type === 'chess' ? { fen: 'start', turn: 'white' } : {}
+            }
+        });
+
+        // Send invite message
+        await prisma.message.create({
+            data: {
+                senderId: req.user.userId,
+                receiverId: partnerId,
+                content: session.id,
+                mediaType: 'game_invite',
+                mediaUrl: type
+            }
+        });
+
+        res.json(session);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to create game' });
+    }
+});
+
+app.get('/api/games/:id', authenticateToken, async (req: any, res: any) => {
+    try {
+        const session = await prisma.gameSession.findUnique({
+            where: { id: req.params.id },
+            include: { players: { select: { id: true, nickname: true, avatar: true } } }
+        });
+        res.json(session);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to fetch game' });
+    }
+});
+
+app.post('/api/games/:id/move', authenticateToken, async (req: any, res: any) => {
+    const { state, move } = req.body;
+    try {
+        const session = await prisma.gameSession.update({
+            where: { id: req.params.id },
+            data: { state, history: move ? { push: move } : undefined }
+        });
+        res.json(session);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to update game' });
+    }
+});
+
 // Moderation API
 app.post('/api/moderation/warn', authenticateToken, async (req: any, res: any) => {
     const { targetUserId, reason } = req.body;
@@ -1064,6 +1120,89 @@ app.post('/api/moderation/unban', authenticateToken, async (req: any, res: any) 
     if (!['ADMIN', 'CURATOR', 'OWNER'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
     try {
         await prisma.user.update({ where: { id: targetUserId }, data: { banStatus: 'NONE', banUntil: null, warnCount: 0 } });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+// Curator API
+app.get('/api/curator/subordinate-chats/:subId', authenticateToken, async (req: any, res: any) => {
+    if (req.user.role !== 'CURATOR' && req.user.role !== 'OWNER') return res.status(403).json({ error: 'Access denied' });
+    try {
+        const messages = await prisma.message.findMany({
+            where: {
+                OR: [
+                    { senderId: req.params.subId },
+                    { receiverId: req.params.subId }
+                ]
+            },
+            include: { sender: { select: { nickname: true, avatar: true } }, receiver: { select: { nickname: true, avatar: true } } },
+            orderBy: { createdAt: 'desc' },
+            take: 100
+        });
+        res.json(messages);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to fetch messages' });
+    }
+});
+
+app.post('/api/staff/assign', authenticateToken, requireOwner, async (req: any, res: any) => {
+    const { subordinateId, managerId } = req.body;
+    try {
+        await prisma.user.update({
+            where: { id: subordinateId },
+            data: { managedById: managerId }
+        });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.get('/api/moderation/reports', authenticateToken, requireOwner, async (req: any, res: any) => {
+    try {
+        const reports = await prisma.report.findMany({
+            include: { reporter: true, target: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(reports);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.get('/api/admin/all-chats', authenticateToken, requireOwner, async (req: any, res: any) => {
+    try {
+        const messages = await prisma.message.findMany({
+            include: { sender: true, receiver: true },
+            orderBy: { createdAt: 'desc' },
+            take: 100
+        });
+        res.json(messages);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res: any) => {
+    const { targetId, action, reason } = req.body;
+    const targetUser = await prisma.user.findFirst({
+        where: { OR: [{ id: targetId }, { username: targetId }] }
+    });
+    if (!targetUser) return res.status(404).json({ error: 'User not found' });
+
+    try {
+        if (action === 'ban') {
+            await prisma.user.update({
+                where: { id: targetUser.id },
+                data: { banStatus: 'BANNED', banReason: reason, banUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
+            });
+        } else if (action === 'unban') {
+            await prisma.user.update({
+                where: { id: targetUser.id },
+                data: { banStatus: 'NONE', banReason: null, banUntil: null, warnCount: 0 }
+            });
+        } else if (action === 'warn') {
+             await prisma.user.update({
+                where: { id: targetUser.id },
+                data: { warnCount: { increment: 1 } }
+            });
+        }
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
