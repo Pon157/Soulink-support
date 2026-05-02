@@ -77,6 +77,11 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
     const [posts, setPosts] = useState<any[]>([]);
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [showPostModal, setShowPostModal] = useState(false);
+    const [showEditChannelModal, setShowEditChannelModal] = useState(false);
+    const [editedChannel, setEditedChannel] = useState({ name: channel.name, description: channel.description, avatar: channel.avatar, banner: channel.banner });
+    const [selectedPostForComments, setSelectedPostForComments] = useState<any>(null);
+    const [comments, setComments] = useState<any[]>([]);
+    const [newComment, setNewComment] = useState('');
     const [newPost, setNewPost] = useState({ content: '', mediaUrl: '' });
     const [uploading, setUploading] = useState(false);
 
@@ -87,6 +92,14 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
             const res = await apiFetch(`/api/posts?channelId=${channel.id}`);
             const data = await res.json();
             setPosts(data);
+        } catch (e) { console.error(e); }
+    };
+
+    const fetchComments = async (postId: string) => {
+        try {
+            const res = await apiFetch(`/api/posts/${postId}/comments`);
+            const data = await res.json();
+            setComments(data);
         } catch (e) { console.error(e); }
     };
 
@@ -108,14 +121,47 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
         } catch (e) { console.error(e); }
     };
 
-    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleToggleLike = async (postId: string) => {
+        try {
+            await apiFetch(`/api/posts/${postId}/react`, { method: 'POST' });
+            fetchPosts();
+        } catch (e) { console.error(e); }
+    };
+
+    const handleSendComment = async () => {
+        if (!newComment || !selectedPostForComments) return;
+        try {
+            await apiFetch(`/api/posts/${selectedPostForComments.id}/comments`, {
+                method: 'POST',
+                body: JSON.stringify({ content: newComment })
+            });
+            setNewComment('');
+            fetchComments(selectedPostForComments.id);
+            fetchPosts(); // Refresh counts
+        } catch (e) { console.error(e); }
+    };
+
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
         const file = e.target.files?.[0];
         if (!file) return;
         setUploading(true);
         try {
             const url = await uploadFile(file);
-            setNewPost(p => ({ ...p, mediaUrl: url }));
+            if (field === 'post') setNewPost(p => ({ ...p, mediaUrl: url }));
+            else setEditedChannel(c => ({ ...c, [field]: url }));
         } finally { setUploading(false); }
+    };
+
+    const handleUpdateChannel = async () => {
+        try {
+            await apiFetch(`/api/channels/${channel.id}`, {
+                method: 'POST',
+                body: JSON.stringify(editedChannel)
+            });
+            setShowEditChannelModal(false);
+            onUpdate();
+            onBack(); // Go back to list as data changed
+        } catch (e) { console.error(e); }
     };
 
     const handleSubscribe = async () => {
@@ -133,8 +179,12 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
                 <img src={channel.banner || 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070&auto=format&fit=crop'} className="w-full h-full object-cover brightness-50" />
                 <div className="absolute inset-0 bg-gradient-to-t from-bg-primary to-transparent" />
                 
-                <button onClick={onBack} className="absolute top-6 left-6 p-3 bg-bg-primary/50 backdrop-blur-md rounded-2xl text-text-main"><ArrowLeft size={24} /></button>
-                <button className="absolute top-6 right-6 p-3 bg-bg-primary/50 backdrop-blur-md rounded-2xl text-text-main"><MoreHorizontal size={24} /></button>
+                <button onClick={onBack} className="absolute top-6 left-6 p-3 bg-bg-primary/50 backdrop-blur-md rounded-2xl text-text-main z-10"><ArrowLeft size={24} /></button>
+                {isOwner && (
+                    <button onClick={() => setShowEditChannelModal(true)} className="absolute top-6 right-6 p-3 bg-bg-primary/50 backdrop-blur-md rounded-2xl text-text-main z-10">
+                        <MoreHorizontal size={24} />
+                    </button>
+                )}
 
                 <div className="absolute bottom-0 left-0 right-0 p-8 flex items-end justify-between">
                     <div className="flex items-center gap-6">
@@ -166,12 +216,75 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
                         <label className="flex-1 flex items-center justify-center gap-2 p-3 bg-bg-primary border border-slate-800 rounded-2xl cursor-pointer hover:border-accent transition-all">
                             <ImageIcon size={18} className={newPost.mediaUrl ? "text-accent" : "text-text-dim"} />
                             <span className="text-[10px] font-black uppercase tracking-widest">{newPost.mediaUrl ? 'Фото готово' : 'Добавить фото'}</span>
-                            <input type="file" hidden accept="image/*" onChange={handleFile} />
+                            <input type="file" hidden accept="image/*" onChange={(e) => handleFile(e, 'post')} />
                         </label>
                         {uploading && <Loader2 size={20} className="animate-spin text-accent" />}
                     </div>
                     <button onClick={handleCreatePost} disabled={!newPost.content || uploading} className="w-full bg-accent text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest disabled:opacity-50">Опубликовать</button>
                  </div>
+            </Modal>
+
+            <Modal isOpen={!!selectedPostForComments} onClose={() => setSelectedPostForComments(null)} title="Комментарии">
+                <div className="flex flex-col h-[60vh]">
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                        {comments.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black tracking-widest italic">Пока нет комментариев</p>}
+                        {comments.map(c => (
+                            <div key={c.id} className="bg-bg-primary p-4 rounded-2xl border border-slate-800/50">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <img src={c.user.avatar || `https://i.pravatar.cc/150?u=${c.userId}`} className="w-6 h-6 rounded-lg object-cover" />
+                                    <span className="text-[10px] font-black italic tracking-tight">{c.user.nickname}</span>
+                                    <span className="text-[8px] text-text-dim ml-auto">{new Date(c.createdAt).toLocaleTimeString()}</span>
+                                </div>
+                                <p className="text-xs text-text-dim italic">{c.content}</p>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="pt-4 flex gap-2">
+                        <input 
+                            value={newComment}
+                            onChange={e => setNewComment(e.target.value)}
+                            placeholder="Ваш комментарий..."
+                            className="flex-1 bg-bg-primary p-3 rounded-2xl outline-none text-text-main border border-slate-800 text-xs italic"
+                            onKeyDown={e => e.key === 'Enter' && handleSendComment()}
+                        />
+                        <button onClick={handleSendComment} className="bg-accent text-white px-4 rounded-2xl text-[10px] font-black uppercase tracking-widest">Отп.</button>
+                    </div>
+                </div>
+            </Modal>
+
+            <Modal isOpen={showEditChannelModal} onClose={() => setShowEditChannelModal(false)} title="Настройки канала">
+                <div className="space-y-4">
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-text-dim px-2">Название</p>
+                        <input 
+                            value={editedChannel.name}
+                            onChange={e => setEditedChannel({...editedChannel, name: e.target.value})}
+                            className="w-full bg-bg-primary p-4 rounded-2xl outline-none text-text-main border border-slate-800 text-sm font-black italic"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-text-dim px-2">Описание</p>
+                        <textarea 
+                            value={editedChannel.description || ''}
+                            onChange={e => setEditedChannel({...editedChannel, description: e.target.value})}
+                            className="w-full bg-bg-primary p-4 rounded-2xl outline-none text-text-main border border-slate-800 text-xs italic min-h-[80px]"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <label className="flex flex-col items-center justify-center gap-2 p-4 bg-bg-primary border border-slate-800 rounded-2xl cursor-pointer hover:border-accent transition-all relative overflow-hidden">
+                            {editedChannel.avatar ? <img src={editedChannel.avatar} className="absolute inset-0 w-full h-full object-cover opacity-20" /> : <Users size={20} className="text-text-dim" />}
+                            <span className="text-[8px] font-black uppercase tracking-widest relative z-10 text-center">Изменить аватар</span>
+                            <input type="file" hidden accept="image/*" onChange={(e) => handleFile(e, 'avatar')} />
+                        </label>
+                        <label className="flex flex-col items-center justify-center gap-2 p-4 bg-bg-primary border border-slate-800 rounded-2xl cursor-pointer hover:border-accent transition-all relative overflow-hidden">
+                            {editedChannel.banner ? <img src={editedChannel.banner} className="absolute inset-0 w-full h-full object-cover opacity-20" /> : <ImageIcon size={20} className="text-text-dim" />}
+                            <span className="text-[8px] font-black uppercase tracking-widest relative z-10 text-center">Изменить баннер</span>
+                            <input type="file" hidden accept="image/*" onChange={(e) => handleFile(e, 'banner')} />
+                        </label>
+                    </div>
+                    {uploading && <div className="flex justify-center"><Loader2 size={24} className="animate-spin text-accent" /></div>}
+                    <button onClick={handleUpdateChannel} disabled={uploading} className="w-full bg-accent text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest">Сохранить</button>
+                </div>
             </Modal>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-6">
@@ -187,16 +300,22 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
                             {post.mediaUrl && <img src={post.mediaUrl} className="rounded-3xl w-full border border-slate-800" />}
                             <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
                                 <div className="flex gap-4">
-                                    <button className="flex items-center gap-2 text-text-dim hover:text-rose-400 transition-colors">
-                                        <Heart size={18} />
-                                        <span className="text-[10px] font-black uppercase">124</span>
+                                    <button 
+                                        onClick={() => handleToggleLike(post.id)}
+                                        className={cn("flex items-center gap-2 transition-colors", post.reactions?.length > 0 ? "text-rose-500" : "text-text-dim hover:text-rose-400")}
+                                    >
+                                        <Heart size={18} fill={post.reactions?.length > 0 ? "currentColor" : "none"} />
+                                        <span className="text-[10px] font-black uppercase">{post._count?.reactions || 0}</span>
                                     </button>
-                                    <button className="flex items-center gap-2 text-text-dim hover:text-accent transition-colors">
+                                    <button 
+                                        onClick={() => { setSelectedPostForComments(post); fetchComments(post.id); }}
+                                        className="flex items-center gap-2 text-text-dim hover:text-accent transition-colors"
+                                    >
                                         <MessageSquare size={18} />
-                                        <span className="text-[10px] font-black uppercase">24</span>
+                                        <span className="text-[10px] font-black uppercase">{post._count?.comments || 0}</span>
                                     </button>
                                 </div>
-                                <span className="text-[9px] font-black text-text-dim uppercase tracking-widest">{new Date(post.createdAt).toLocaleDateString()}</span>
+                                <span className="text-[9px] font-black text-text-dim uppercase tracking-widest">{new Date(post.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(post.createdAt).toLocaleDateString()}</span>
                             </div>
                         </div>
                     ))}
