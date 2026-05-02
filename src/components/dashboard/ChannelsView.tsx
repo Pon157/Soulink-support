@@ -195,32 +195,34 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
 
     return (
         <div className="flex-1 flex flex-col h-full bg-bg-primary overflow-hidden">
-            <div className="relative h-64 flex-shrink-0">
+            <div className="relative h-56 md:h-64 flex-shrink-0 shrink-0">
                 <img src={channel.banner || 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=2070&auto=format&fit=crop'} className="w-full h-full object-cover brightness-50" />
                 <div className="absolute inset-0 bg-gradient-to-t from-bg-primary to-transparent" />
                 
-                <button onClick={onBack} className="absolute top-6 left-6 p-3 bg-bg-primary/50 backdrop-blur-md rounded-2xl text-text-main z-10"><ArrowLeft size={24} /></button>
+                <button onClick={onBack} className="absolute top-4 left-4 md:top-6 md:left-6 p-2 md:p-3 bg-bg-primary/50 backdrop-blur-md rounded-2xl text-text-main z-10"><ArrowLeft size={24} /></button>
                 {isOwner && (
-                    <button onClick={() => setShowEditChannelModal(true)} className="absolute top-6 right-6 p-3 bg-bg-primary/50 backdrop-blur-md rounded-2xl text-text-main z-10">
+                    <button onClick={() => setShowEditChannelModal(true)} className="absolute top-4 right-4 md:top-6 md:right-6 p-2 md:p-3 bg-bg-primary/50 backdrop-blur-md rounded-2xl text-text-main z-10">
                         <MoreHorizontal size={24} />
                     </button>
                 )}
 
-                <div className="absolute bottom-0 left-0 right-0 p-8 flex items-end justify-between">
-                    <button onClick={() => onProfileClick(channel.ownerId)} className="flex items-center gap-6 hover:opacity-80 transition-opacity">
-                        <UserAvatar user={{ ...channel, id: channel.id }} size={80} className="border-4 border-bg-primary" />
-                        <div className="text-left">
-                            <h3 className="text-3xl font-black italic tracking-tighter text-white">{channel.name}</h3>
-                            <p className="text-accent text-[10px] font-black uppercase tracking-widest mt-1">@{channel.owner?.nickname || 'admin'}</p>
+                <div className="absolute bottom-0 left-0 right-0 p-4 md:p-8 flex items-end justify-between gap-4">
+                    <button onClick={() => onProfileClick(channel.ownerId)} className="flex items-center gap-3 md:gap-6 hover:opacity-80 transition-opacity min-w-0">
+                        <UserAvatar user={{ ...channel, id: channel.id }} size={56} className="md:w-20 md:h-20 border-4 border-bg-primary shrink-0" />
+                        <div className="text-left truncate">
+                            <h3 className="text-xl md:text-3xl font-black italic tracking-tighter text-white truncate">{channel.name}</h3>
+                            <p className="text-accent text-[9px] md:text-[10px] font-black uppercase tracking-widest mt-0.5 truncate">@{channel.owner?.nickname || 'admin'}</p>
                         </div>
                     </button>
-                    {isOwner ? (
-                        <button onClick={() => setShowPostModal(true)} className="bg-accent text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl shadow-accent/20 active:scale-95 transition-all">
-                             <Plus size={28} />
-                        </button>
-                    ) : (
-                        !isSubscribed && <button onClick={handleSubscribe} className="bg-accent text-white px-8 py-4 rounded-[2rem] font-black uppercase text-[10px] tracking-widest shadow-xl shadow-accent/20 active:scale-95 transition-all">Подписаться</button>
-                    )}
+                    <div className="shrink-0 mb-1">
+                        {isOwner ? (
+                            <button onClick={() => setShowPostModal(true)} className="bg-accent text-white w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-xl shadow-accent/20 active:scale-95 transition-all">
+                                 <Plus size={28} />
+                            </button>
+                        ) : (
+                            !isSubscribed && <button onClick={handleSubscribe} className="bg-accent text-white px-4 md:px-8 py-3 md:py-4 rounded-[2rem] font-black uppercase text-[9px] md:text-[10px] tracking-widest shadow-xl shadow-accent/20 active:scale-95 transition-all whitespace-nowrap">Подписаться</button>
+                        )}
+                    </div>
                 </div>
             </div>
 
