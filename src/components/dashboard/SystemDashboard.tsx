@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight, Ticket as TicketIcon } from 'lucide-react';
+import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight, Ticket as TicketIcon, ArrowLeft } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
 import { UserAvatar } from '../ui/UserAvatar';
+import { ChatView } from './ChatView';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
-export const SystemDashboard = ({ role, onExpandChat, userId: currentUserId }: { role: string, onExpandChat: (id: string) => void, userId: string }) => {
+export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandChat: (id: string) => void }) => {
+  const role = user.role;
+  const currentUserId = user.id;
   const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation' | 'all_chats' | 'reviews' | 'broadcast' | 'sanctions' | 'tasks' | 'subordinates' | 'tickets'>('stats');
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [staff, setStaff] = useState<any[]>([]);
   const [subordinates, setSubordinates] = useState<any[]>([]);
@@ -470,33 +474,54 @@ export const SystemDashboard = ({ role, onExpandChat, userId: currentUserId }: {
       )}
 
       {view === 'tickets' && (
-        <div className="space-y-4">
-            <div className="bg-accent/5 border border-accent/10 p-8 rounded-[3rem] text-center space-y-2 mb-6">
-                <TicketIcon size={40} className="mx-auto text-accent" />
-                <h2 className="text-xl font-black italic">Техподдержка</h2>
-                <p className="text-[10px] text-text-dim uppercase font-black tracking-widest">Обращения пользователей</p>
-            </div>
-            <div className="space-y-3">
-                {tickets.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black italic">Нет активных тикетов</p>}
-                {tickets.map(t => (
-                    <button key={t.id} onClick={() => onExpandChat(`TICKET_${t.id}`)} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-accent transition-all">
-                        <div className="flex items-center gap-4">
-                            <UserAvatar user={t.user} size={40} className="shadow-lg" />
-                            <div className="text-left">
-                                <p className="font-black italic text-sm text-text-main group-hover:text-accent transition-colors">Тикет #{t.id.slice(0,4)} • {t.user.nickname}</p>
-                                <p className={cn(
-                                    "text-[9px] font-black uppercase tracking-widest",
-                                    t.status === 'CLOSED' ? "text-text-dim" : "text-emerald-500"
-                                )}>{t.status}</p>
-                            </div>
-                        </div>
-                        <div className="text-right">
-                             <p className="text-[9px] text-text-dim uppercase font-black mb-1">Менеджер</p>
-                             <p className="text-[10px] font-bold italic">{t.manager?.nickname || 'Не назначен'}</p>
-                        </div>
-                    </button>
-                ))}
-            </div>
+        <div className="h-full flex flex-col">
+            {activeChatId ? (
+                <div className="flex-1 flex flex-col -m-6 h-[calc(100%+3rem)]">
+                    <div className="p-4 bg-bg-secondary border-b border-slate-800 flex items-center justify-between">
+                         <button onClick={() => setActiveChatId(null)} className="flex items-center gap-2 text-accent font-black uppercase text-[10px] tracking-widest px-4 py-2 hover:bg-bg-primary rounded-2xl transition-all">
+                             <ArrowLeft size={16} /> Назад к списку
+                         </button>
+                         <p className="text-[10px] font-black uppercase tracking-widest text-text-dim">Работа с тикетом</p>
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                        <ChatView 
+                            chatId={activeChatId} 
+                            onBack={() => setActiveChatId(null)} 
+                            onImageClick={() => {}} 
+                            currentUser={user} 
+                        />
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    <div className="bg-accent/5 border border-accent/10 p-8 rounded-[3rem] text-center space-y-2 mb-6">
+                        <TicketIcon size={40} className="mx-auto text-accent" />
+                        <h2 className="text-xl font-black italic">Техподдержка</h2>
+                        <p className="text-[10px] text-text-dim uppercase font-black tracking-widest mt-1">Обращения пользователей</p>
+                    </div>
+                    <div className="space-y-3">
+                        {tickets.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black italic">Нет активных тикетов</p>}
+                        {tickets.map(t => (
+                            <button key={t.id} onClick={() => setActiveChatId(`TICKET_${t.id}`)} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-accent transition-all">
+                                <div className="flex items-center gap-4 text-left">
+                                    <UserAvatar user={t.user} size={40} className="shadow-lg" />
+                                    <div>
+                                        <p className="font-black italic text-sm text-text-main group-hover:text-accent transition-colors">Тикет #{t.id.slice(0,4)} • {t.user.nickname}</p>
+                                        <p className={cn(
+                                            "text-[9px] font-black uppercase tracking-widest",
+                                            t.status === 'CLOSED' ? "text-text-dim" : "text-emerald-500"
+                                        )}>{t.status}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                     <p className="text-[9px] text-text-dim uppercase font-black mb-1">Менеджер</p>
+                                     <p className="text-[10px] font-bold italic">{t.manager?.nickname || 'Не назначен'}</p>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
       )}
 
