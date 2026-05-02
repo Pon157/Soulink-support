@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video, Shield, Image as ImageIcon, Gamepad2 } from 'lucide-react';
+import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video, Shield, Image as ImageIcon, Gamepad2, Hash } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
@@ -449,58 +449,67 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {chatId === 'SYSTEM' && (
+          {chatId !== 'SYSTEM' && !chatId.startsWith('TICKET_') && (
               <button 
                 onClick={() => setShowGameMenu(true)} 
-                className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl hover:bg-indigo-500/20 transition-all"
+                className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl hover:bg-indigo-500/20 transition-all focus:scale-110 active:scale-95 shadow-lg shadow-indigo-500/10"
+                title="Играть"
               >
                   <Gamepad2 size={20} />
               </button>
           )}
-          {chatId === 'SYSTEM' && <button onClick={() => setShowTicketModal(true)} className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl hover:bg-emerald-500/20 transition-all font-black text-[10px] uppercase tracking-widest px-4">Тикет</button>}
-          {userRole === 'USER' && chatId !== 'SYSTEM' && <button onClick={() => setShowRating(true)} className="p-3 bg-accent/10 text-accent rounded-2xl hover:bg-accent/20 transition-all"><Star size={20} /></button>}
+          {chatId === 'SYSTEM' && <button onClick={() => setShowTicketModal(true)} className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl hover:bg-emerald-500/20 transition-all font-black text-[10px] uppercase tracking-widest px-4 shadow-lg shadow-emerald-500/10 active:scale-95">Тикет</button>}
+          {userRole === 'USER' && !chatId.startsWith('TICKET_') && chatId !== 'SYSTEM' && (
+            <button onClick={() => setShowRating(true)} className="p-3 bg-accent/10 text-accent rounded-2xl hover:bg-accent/20 transition-all shadow-lg shadow-accent/10 active:scale-95">
+                <Star size={20} />
+            </button>
+          )}
         </div>
       </header>
 
       <Modal isOpen={showTicketModal} onClose={() => setShowTicketModal(false)} title="Создать обращение">
           <div className="space-y-4">
-              <p className="text-xs text-text-dim italic">Опишите вашу проблему, и технический специалист SoulLink поможет вам в ближайшее время.</p>
-              <input 
-                value={ticketSubject}
-                onChange={e => setTicketSubject(e.target.value)}
-                placeholder="Тема обращения (например: Ошибка оплаты)"
-                className="w-full bg-bg-primary p-4 rounded-2xl outline-none text-text-main border border-slate-800 text-xs italic"
-              />
-              <textarea 
-                value={ticketMessage}
-                onChange={e => setTicketMessage(e.target.value)}
-                placeholder="Подробное описание..."
-                className="w-full bg-bg-primary p-4 rounded-2xl outline-none text-text-main border border-slate-800 text-xs italic min-h-[150px]"
-              />
+              <p className="text-xs text-text-dim italic text-center">Опишите вашу проблему, и технический специалист SoulLink поможет вам в ближайшее время.</p>
+              <div className="bg-bg-primary p-6 rounded-[2.5rem] border border-slate-800 space-y-4">
+                  <input 
+                    value={ticketSubject}
+                    onChange={e => setTicketSubject(e.target.value)}
+                    placeholder="Тема обращения..."
+                    className="w-full bg-transparent outline-none text-text-main text-sm font-black italic border-b border-slate-800 pb-2 focus:border-accent transition-all"
+                  />
+                  <textarea 
+                    value={ticketMessage}
+                    onChange={e => setTicketMessage(e.target.value)}
+                    placeholder="Подробности..."
+                    className="w-full bg-transparent outline-none text-text-main text-sm font-black italic min-h-[150px] resize-none"
+                  />
+              </div>
               <button 
                 onClick={handleCreateTicket}
-                className="w-full bg-accent text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-accent/20"
+                className="w-full bg-accent text-white py-5 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-xl shadow-accent/20 active:scale-95 transition-all"
               >
-                Создать тикет
+                Отправить запрос
               </button>
           </div>
       </Modal>
 
       <Modal isOpen={showGameMenu} onClose={() => setShowGameMenu(false)} title="Игровой центр">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
               {[
-                  { id: 'chess', label: 'Шахматы', icon: '♟' },
-                  { id: 'words', label: 'Слова', icon: '📝' },
-                  { id: 'checkers', label: 'Шашки', icon: '⚪' },
-                  { id: 'seabattle', label: 'Морской бой', icon: '🚢' }
+                  { id: 'chess', label: 'Шахматы', icon: <Hash size={24} />, color: 'bg-amber-500' },
+                  { id: 'words', label: 'Слова', icon: <Edit3 size={24} />, color: 'bg-emerald-500' },
+                  { id: 'checkers', label: 'Шашки', icon: <Shield size={24} />, color: 'bg-indigo-500' },
+                  { id: 'seabattle', label: 'Морской бой', icon: <Video size={24} />, color: 'bg-rose-500' }
               ].map(game => (
                   <button 
                     key={game.id}
                     onClick={() => { setActiveGame(game.id); setShowGameMenu(false); }}
-                    className="p-6 bg-bg-primary border border-slate-800 rounded-[2rem] hover:border-indigo-500 transition-all flex flex-col items-center gap-3"
+                    className="p-8 bg-bg-primary border border-slate-800 rounded-[3rem] hover:border-accent transition-all flex flex-col items-center gap-4 group"
                   >
-                      <span className="text-3xl">{game.icon}</span>
-                      <span className="text-[9px] font-black uppercase tracking-widest">{game.label}</span>
+                      <div className={cn("w-16 h-16 rounded-[2rem] flex items-center justify-center text-white shadow-xl transition-transform group-hover:scale-110", game.color)}>
+                          {game.icon}
+                      </div>
+                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">{game.label}</span>
                   </button>
               ))}
           </div>
