@@ -96,7 +96,9 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
   );
 };
 
-export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, userRole: string, wallpaper?: string }) => {
+export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, currentUser: any, wallpaper?: string }) => {
+  const userRole = currentUser.role;
+  const currentUserId = currentUser.id;
   const [messages, setMessages] = useState<any[]>([]);
   const [partner, setPartner] = useState<any>(null);
   const [input, setInput] = useState('');
@@ -532,6 +534,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
             gameType={activeGame.type} 
             sessionId={activeGame.sessionId}
             partnerName={partner?.nickname || 'Админ'} 
+            currentUserId={currentUserId}
             onClose={() => setActiveGame(null)} 
           />
       )}
