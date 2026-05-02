@@ -58,6 +58,13 @@ const authenticateToken = (req: any, res: any, next: any) => {
   jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
     if (err) return res.sendStatus(403);
     req.user = user;
+    
+    // Update lastSeen asynchronously to not block request
+    prisma.user.update({
+        where: { id: user.userId },
+        data: { lastSeen: new Date() }
+    }).catch(e => console.error('LastSeen update fail', e));
+
     next();
   });
 };
@@ -70,6 +77,75 @@ const requireOwner = (req: any, res: any, next: any) => {
 // --- API ROUTES ---
 
 // Staff Management
+app.get('/api/staff/subordinates', authenticateToken, async (req: any, res: any) => {
+    try {
+        const subordinates = await prisma.user.findMany({
+            where: { managedById: req.user.userId },
+            include: { stats: true }
+        });
+        res.json(subordinates);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.post('/api/staff/assign', authenticateToken, requireOwner, async (req: any, res: any) => {
+    const { subordinateId, managerId } = req.body;
+    try {
+        const user = await prisma.user.update({
+            where: { id: subordinateId },
+            data: { managedById: managerId }
+        });
+        res.json(user);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.get('/api/tasks', authenticateToken, async (req: any, res: any) => {
+    try {
+        const tasks = await prisma.task.findMany({
+            where: { OR: [{ assigneeId: req.user.userId }, { creatorId: req.user.userId }] },
+            include: { creator: true, assignee: true },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(tasks);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.post('/api/tasks', authenticateToken, async (req: any, res: any) => {
+    const { title, description, assigneeId, deadline } = req.body;
+    try {
+        const task = await prisma.task.create({
+            data: {
+                title,
+                description,
+                assigneeId,
+                creatorId: req.user.userId,
+                deadline: deadline ? new Date(deadline) : null
+            }
+        });
+        res.json(task);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.post('/api/tasks/:id/status', authenticateToken, async (req: any, res: any) => {
+    const { status } = req.body;
+    try {
+        const task = await prisma.task.update({
+            where: { id: req.params.id },
+            data: { status }
+        });
+        res.json(task);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
 app.post('/api/staff/create', authenticateToken, requireOwner, async (req: any, res: any) => {
   const { username, password, nickname, role } = req.body;
   try {
@@ -88,6 +164,27 @@ app.post('/api/staff/create', authenticateToken, requireOwner, async (req: any, 
     console.error('Staff creation error:', error);
     res.status(500).json({ error: 'Failed to create staff' });
   }
+});
+
+app.get('/api/curator/subordinate-chats/:subId', authenticateToken, async (req: any, res: any) => {
+    try {
+        const sub = await prisma.user.findUnique({ where: { id: req.params.subId } });
+        if (!sub || (sub.managedById !== req.user.userId && req.user.role !== 'OWNER')) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+        
+        const messages = await prisma.message.findMany({
+            where: { OR: [{ senderId: sub.id }, { receiverId: sub.id }] },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                sender: { select: { nickname: true, avatar: true } },
+                receiver: { select: { nickname: true, avatar: true } }
+            }
+        });
+        res.json(messages);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
 });
 
 // Moderation Actions
@@ -348,7 +445,7 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
 
     const partners = await prisma.user.findMany({
       where: { id: { in: chatPartnersIds } },
-      select: { id: true, nickname: true, avatar: true }
+      select: { id: true, nickname: true, avatar: true, isOnRest: true }
     });
 
     const chats = partners.map(partner => {
@@ -360,6 +457,7 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
         lastMsg: lastMsg?.content || (lastMsg?.mediaType === 'voice' ? 'Голосовое сообщение' : 'Медиа'),
         time: lastMsg?.createdAt || new Date(),
         unread: messages.filter(m => m.receiverId === userId && m.senderId === partner.id && !m.read).length,
+        isOnRest: (partner as any).isOnRest
       };
     });
 
@@ -539,12 +637,69 @@ app.get('/api/posts', authenticateToken, async (req: any, res: any) => {
   try {
     const posts = await prisma.post.findMany({
       where: channelId ? { channelId: String(channelId) } : {},
+      include: {
+        _count: { select: { reactions: true, comments: true } },
+        reactions: { where: { userId: req.user.userId } }
+      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(posts);
   } catch (e) {
     res.status(500).json({ error: 'Failed' });
   }
+});
+
+app.post('/api/posts/:id/react', authenticateToken, async (req: any, res: any) => {
+    try {
+        const reaction = await prisma.postReaction.upsert({
+            where: {
+                userId_postId_type: {
+                    userId: req.user.userId,
+                    postId: req.params.id,
+                    type: 'like'
+                }
+            },
+            update: {},
+            create: {
+                userId: req.user.userId,
+                postId: req.params.id,
+                type: 'like'
+            }
+        });
+        res.json(reaction);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.get('/api/posts/:id/comments', authenticateToken, async (req: any, res: any) => {
+    try {
+        const comments = await prisma.postComment.findMany({
+            where: { postId: req.params.id },
+            include: { user: { select: { nickname: true, avatar: true } } },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(comments);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
+app.post('/api/posts/:id/comments', authenticateToken, async (req: any, res: any) => {
+    const { content } = req.body;
+    try {
+        const comment = await prisma.postComment.create({
+            data: {
+                content,
+                userId: req.user.userId,
+                postId: req.params.id
+            },
+            include: { user: { select: { nickname: true, avatar: true } } }
+        });
+        res.json(comment);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
 });
 
 app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
@@ -565,6 +720,22 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
   }
 });
 
+app.post('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
+    const { name, description, avatar, banner } = req.body;
+    try {
+        const channel = await prisma.channel.findUnique({ where: { id: req.params.id } });
+        if (!channel || channel.ownerId !== req.user.userId) return res.status(403).json({ error: 'Forbidden' });
+        
+        const updated = await prisma.channel.update({
+            where: { id: req.params.id },
+            data: { name, description, avatar, banner }
+        });
+        res.json(updated);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed' });
+    }
+});
+
 app.post('/api/channels/subscribe/:id', authenticateToken, async (req: any, res: any) => {
   try {
     const sub = await prisma.subscription.create({
@@ -583,20 +754,30 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
     const systemUser = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
     if (!systemUser) return res.status(500).json({ error: 'System user not initialized' });
 
-    const users = await prisma.user.findMany({ select: { id: true } });
-    const tasks = users.map(u => 
-      prisma.message.create({
-        data: {
-          senderId: systemUser.id,
-          receiverId: u.id,
-          content: `[РАССЫЛКА: ${title}]\n${content}`,
-          mediaType: 'text'
-        }
-      })
-    );
-    await Promise.all(tasks);
-    res.json({ success: true });
+    const users = await prisma.user.findMany({ 
+        where: { username: { not: 'SYSTEM' } },
+        select: { id: true } 
+    });
+    
+    // Batch processing to prevent timeout
+    const batchSize = 100;
+    for (let i = 0; i < users.length; i += batchSize) {
+        const batch = users.slice(i, i + batchSize);
+        await Promise.all(batch.map(u => 
+            prisma.message.create({
+                data: {
+                    senderId: systemUser.id,
+                    receiverId: u.id,
+                    content: `[РАССЫЛКА: ${title}]\n${content}`,
+                    mediaType: 'text'
+                }
+            })
+        ));
+    }
+    
+    res.json({ success: true, processed: users.length });
   } catch (e) {
+    console.error('Broadcast failed:', e);
     res.status(500).json({ error: 'Failed to broadcast' });
   }
 });
@@ -619,10 +800,15 @@ app.get('/api/reviews/all', authenticateToken, async (req: any, res: any) => {
   }
 });
 
-app.get('/api/admins', authenticateToken, async (req, res) => {
+app.get('/api/admins', authenticateToken, async (req: any, res: any) => {
   try {
     const admins = await prisma.user.findMany({
-      where: { role: 'ADMIN' },
+      where: { 
+          role: { in: ['ADMIN', 'CURATOR', 'OWNER'] }, 
+          isOnRest: false,
+          banStatus: 'NONE',
+          username: { not: 'SYSTEM' }
+      },
       include: { stats: true },
     });
     res.json(admins);
