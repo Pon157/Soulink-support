@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video, Shield, Image as ImageIcon } from 'lucide-react';
+import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video, Shield, Image as ImageIcon, Gamepad2 } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
 import { UserAvatar } from '../ui/UserAvatar';
+import { GameLauncher } from '../games/GameLauncher';
 import { Trash, Edit3, Reply, MoreVertical } from 'lucide-react';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
@@ -101,6 +102,11 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
   const [input, setInput] = useState('');
   const [showRating, setShowRating] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showGameMenu, setShowGameMenu] = useState(false);
+  const [activeGame, setActiveGame] = useState<any>(null);
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [ticketSubject, setTicketSubject] = useState('');
+  const [ticketMessage, setTicketMessage] = useState('');
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [loading, setLoading] = useState(true);
@@ -227,8 +233,9 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
           // Improved recorder setup
-          let mimeType = 'audio/webm';
-          if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/ogg';
+          let mimeType = 'audio/webm;codecs=opus';
+          if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/webm';
+          if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/ogg;codecs=opus';
           if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/mp4';
           
           const recorder = new MediaRecorder(stream, { mimeType });
@@ -294,6 +301,23 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleCreateTicket = async () => {
+      if (!ticketSubject || !ticketMessage) return;
+      try {
+          await apiFetch('/api/tickets', {
+              method: 'POST',
+              body: JSON.stringify({ subject: ticketSubject, message: ticketMessage })
+          });
+          setShowTicketModal(false);
+          setTicketSubject('');
+          setTicketMessage('');
+          const res = await apiFetch(`/api/messages/${chatId}`);
+          setMessages(await res.json());
+      } catch (e) {
+          setErrorModal('Ошибка создания тикета');
+      }
   };
 
   return (
@@ -425,9 +449,70 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {userRole === 'USER' && <button onClick={() => setShowRating(true)} className="p-3 bg-accent/10 text-accent rounded-2xl hover:bg-accent/20 transition-all"><Star size={20} /></button>}
+          {chatId === 'SYSTEM' && (
+              <button 
+                onClick={() => setShowGameMenu(true)} 
+                className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl hover:bg-indigo-500/20 transition-all"
+              >
+                  <Gamepad2 size={20} />
+              </button>
+          )}
+          {chatId === 'SYSTEM' && <button onClick={() => setShowTicketModal(true)} className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl hover:bg-emerald-500/20 transition-all font-black text-[10px] uppercase tracking-widest px-4">Тикет</button>}
+          {userRole === 'USER' && chatId !== 'SYSTEM' && <button onClick={() => setShowRating(true)} className="p-3 bg-accent/10 text-accent rounded-2xl hover:bg-accent/20 transition-all"><Star size={20} /></button>}
         </div>
       </header>
+
+      <Modal isOpen={showTicketModal} onClose={() => setShowTicketModal(false)} title="Создать обращение">
+          <div className="space-y-4">
+              <p className="text-xs text-text-dim italic">Опишите вашу проблему, и технический специалист SoulLink поможет вам в ближайшее время.</p>
+              <input 
+                value={ticketSubject}
+                onChange={e => setTicketSubject(e.target.value)}
+                placeholder="Тема обращения (например: Ошибка оплаты)"
+                className="w-full bg-bg-primary p-4 rounded-2xl outline-none text-text-main border border-slate-800 text-xs italic"
+              />
+              <textarea 
+                value={ticketMessage}
+                onChange={e => setTicketMessage(e.target.value)}
+                placeholder="Подробное описание..."
+                className="w-full bg-bg-primary p-4 rounded-2xl outline-none text-text-main border border-slate-800 text-xs italic min-h-[150px]"
+              />
+              <button 
+                onClick={handleCreateTicket}
+                className="w-full bg-accent text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-accent/20"
+              >
+                Создать тикет
+              </button>
+          </div>
+      </Modal>
+
+      <Modal isOpen={showGameMenu} onClose={() => setShowGameMenu(false)} title="Игровой центр">
+          <div className="grid grid-cols-2 gap-3">
+              {[
+                  { id: 'chess', label: 'Шахматы', icon: '♟' },
+                  { id: 'words', label: 'Слова', icon: '📝' },
+                  { id: 'checkers', label: 'Шашки', icon: '⚪' },
+                  { id: 'seabattle', label: 'Морской бой', icon: '🚢' }
+              ].map(game => (
+                  <button 
+                    key={game.id}
+                    onClick={() => { setActiveGame(game.id); setShowGameMenu(false); }}
+                    className="p-6 bg-bg-primary border border-slate-800 rounded-[2rem] hover:border-indigo-500 transition-all flex flex-col items-center gap-3"
+                  >
+                      <span className="text-3xl">{game.icon}</span>
+                      <span className="text-[9px] font-black uppercase tracking-widest">{game.label}</span>
+                  </button>
+              ))}
+          </div>
+      </Modal>
+
+      {activeGame && (
+          <GameLauncher 
+            gameType={activeGame} 
+            partnerName={partner?.nickname || 'Админ'} 
+            onClose={() => setActiveGame(null)} 
+          />
+      )}
 
       <div 
         className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
