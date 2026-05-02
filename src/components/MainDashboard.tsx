@@ -71,18 +71,19 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
   } : {};
 
   return (
-    <div className="flex flex-col h-screen bg-bg-primary text-text-main overflow-hidden" style={mainStyle}>
-      <div className="h-1 bg-gradient-to-r from-accent via-indigo-500 to-emerald-500 w-full" />
+    <div className="flex justify-center h-screen bg-black overflow-hidden">
+      <div className="flex flex-col w-full h-full bg-bg-primary text-text-main overflow-hidden dashboard-container relative" style={mainStyle}>
+        <div className="h-1 bg-gradient-to-r from-accent via-indigo-500 to-emerald-500 w-full shrink-0" />
 
-      <AnimatePresence mode="wait">
-        <motion.div 
-          key={activeTab}
-          initial={{ opacity: 0, x: 10 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -10 }}
-          transition={{ duration: 0.3, ease: 'circOut' }}
-          className="flex-1 flex flex-col overflow-hidden"
-        >
+        <AnimatePresence mode="wait">
+          <motion.div 
+            key={activeTab}
+            initial={{ opacity: 0, x: 10 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -10 }}
+            transition={{ duration: 0.3, ease: 'circOut' }}
+            className="flex-1 flex flex-col overflow-hidden dashboard-tab-content"
+          >
           {activeTab === 'chats' && (
              <ChatList onSelectChat={(id) => setSelectedChat(id)} user={user} />
           )}
@@ -93,7 +94,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
              <ChannelsView user={user} onImageClick={setPreviewImage} onProfileClick={setSelectedProfile} />
           )}
           {activeTab === 'system' && (user.role !== 'USER') && (
-            <SystemDashboard role={user.role} onExpandChat={setSelectedChat} />
+            <SystemDashboard role={user.role} onExpandChat={setSelectedChat} userId={user.id} />
           )}
           {activeTab === 'settings' && (
             <SettingsView user={user} setUser={setUser} onLogout={onLogout} />
@@ -143,6 +144,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
         onClose={() => setSelectedProfile(null)} 
         onChat={(id) => { setSelectedChat(id); setActiveTab('chats'); }}
       />
+      </div>
     </div>
   );
 };
