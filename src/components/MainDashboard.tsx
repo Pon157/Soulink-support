@@ -12,6 +12,8 @@ import { ChatView } from './dashboard/ChatView';
 import { SystemDashboard } from './dashboard/SystemDashboard';
 import { ChannelsView } from './dashboard/ChannelsView';
 import { ReviewsView } from './dashboard/ReviewsView';
+import { UserProfileModal } from './ui/UserProfileModal';
+import { UserAvatar } from './ui/UserAvatar';
 
 // --- TYPES ---
 type Role = 'USER' | 'ADMIN' | 'CURATOR' | 'OWNER';
@@ -34,6 +36,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
   const [user, setUser] = useState<User>(initialUser);
   const [activeTab, setActiveTab] = useState('chats');
   const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const [totalUnread, setTotalUnread] = useState(0);
@@ -81,13 +84,13 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
           className="flex-1 flex flex-col overflow-hidden"
         >
           {activeTab === 'chats' && (
-             <ChatList onSelectChat={(id) => setSelectedChat(id)} />
+             <ChatList onSelectChat={(id) => setSelectedChat(id)} user={user} />
           )}
           {activeTab === 'reviews' && (
-             <ReviewsView />
+             <ReviewsView onImageClick={setPreviewImage} onProfileClick={setSelectedProfile} />
           )}
           {activeTab === 'channels' && (
-             <ChannelsView user={user} />
+             <ChannelsView user={user} onImageClick={setPreviewImage} onProfileClick={setSelectedProfile} />
           )}
           {activeTab === 'system' && (user.role !== 'USER') && (
             <SystemDashboard role={user.role} onExpandChat={setSelectedChat} />
@@ -134,12 +137,18 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
           <button className="absolute top-8 right-8 text-white/50 hover:text-white transition-colors"><X size={32} /></button>
         </div>
       )}
+
+      <UserProfileModal 
+        userId={selectedProfile} 
+        onClose={() => setSelectedProfile(null)} 
+        onChat={(id) => { setSelectedChat(id); setActiveTab('chats'); }}
+      />
     </div>
   );
 };
 
 // --- CHATLIST COMPONENT ---
-const ChatList = ({ onSelectChat }: { onSelectChat: (id: string) => void }) => {
+const ChatList = ({ onSelectChat, user }: { onSelectChat: (id: string) => void, user: User }) => {
   const [chats, setChats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdmins, setShowAdmins] = useState(false);
@@ -192,7 +201,7 @@ const ChatList = ({ onSelectChat }: { onSelectChat: (id: string) => void }) => {
             <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2">
               {admins.map(admin => (
                 <button key={admin.id} onClick={() => { onSelectChat(admin.id); setShowAdmins(false); }} className="w-full flex items-center p-4 bg-bg-primary rounded-2xl hover:border-accent border border-transparent transition-all">
-                  <img src={admin.avatar || `https://i.pravatar.cc/150?u=${admin.id}`} className="w-10 h-10 rounded-xl object-cover" />
+                  <UserAvatar user={admin} size={40} className="shadow-sm" />
                   <div className="ml-3 text-left">
                     <p className="text-text-main font-bold leading-none">{admin.nickname}</p>
                     <p className="text-[9px] text-text-dim uppercase font-black tracking-widest mt-1">Рейтинг: {admin.averageRating?.toFixed(1) || '0.0'}</p>
@@ -234,28 +243,28 @@ const ChatList = ({ onSelectChat }: { onSelectChat: (id: string) => void }) => {
         })()}
       </div>
 
-      <div className="px-3">
-        {chats.filter(c => c.id !== 'SYSTEM').map((chat) => (
-          <button key={chat.id} onClick={() => onSelectChat(chat.id)} className="w-full flex items-center p-4 mb-2 rounded-[2.5rem] bg-bg-secondary/40 border border-slate-800/10 hover:border-accent/30 transition-all">
-            <div className="relative">
-              <img src={chat.avatar || `https://i.pravatar.cc/150?u=${chat.id}`} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-800/50" />
-              {chat.unread > 0 && (
-                <div className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full border-2 border-bg-primary flex items-center justify-center text-[10px] text-white font-black">{chat.unread}</div>
-              )}
-              {chat.isOnRest && (
-                <div className="absolute -bottom-1 -right-1 bg-rose-500 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded border border-bg-primary">Rest</div>
-              )}
-            </div>
-            <div className="ml-4 flex-1 text-left">
-              <div className="flex justify-between items-center">
-                <span className={cn("font-bold italic tracking-tight", chat.unread > 0 ? "text-text-main" : "text-text-dim")}>{chat.name}</span>
-                <span className="text-[9px] text-text-dim uppercase font-black tracking-widest">{new Date(chat.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <div className="px-3">
+                {chats.filter(c => c.id !== 'SYSTEM').map((chat) => (
+                  <button key={chat.id} onClick={() => onSelectChat(chat.id)} className="w-full flex items-center p-4 mb-2 rounded-[2.5rem] bg-bg-secondary/40 border border-slate-800/10 hover:border-accent/30 transition-all">
+                    <div className="relative">
+                      <UserAvatar user={chat} size={56} className="ring-2 ring-slate-800/50" />
+                      {chat.unread > 0 && (
+                        <div className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full border-2 border-bg-primary flex items-center justify-center text-[10px] text-white font-black">{chat.unread}</div>
+                      )}
+                      {chat.isOnRest && (
+                        <div className="absolute -bottom-1 -right-1 bg-rose-500 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded border border-bg-primary">Rest</div>
+                      )}
+                    </div>
+                    <div className="ml-4 flex-1 text-left">
+                      <div className="flex justify-between items-center">
+                        <span className={cn("font-bold italic tracking-tight", chat.unread > 0 ? "text-text-main" : "text-text-dim")}>{chat.name}</span>
+                        <span className="text-[9px] text-text-dim uppercase font-black tracking-widest">{new Date(chat.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className={cn("text-xs truncate mt-1 italic", chat.unread > 0 ? "text-text-main font-bold" : "text-text-dim")}>{chat.lastMsg || 'Нет сообщений'}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
-              <p className={cn("text-xs truncate mt-1 italic", chat.unread > 0 ? "text-text-main font-bold" : "text-text-dim")}>{chat.lastMsg || 'Нет сообщений'}</p>
-            </div>
-          </button>
-        ))}
-      </div>
     </div>
   );
 };
