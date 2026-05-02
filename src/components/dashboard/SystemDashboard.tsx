@@ -479,7 +479,7 @@ export const SystemDashboard = ({ role, onExpandChat, userId: currentUserId }: {
             <div className="space-y-3">
                 {tickets.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black italic">Нет активных тикетов</p>}
                 {tickets.map(t => (
-                    <button key={t.id} onClick={() => onExpandChat(t.userId)} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-accent transition-all">
+                    <button key={t.id} onClick={() => onExpandChat(`TICKET_${t.id}`)} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2.5rem] flex items-center justify-between group hover:border-accent transition-all">
                         <div className="flex items-center gap-4">
                             <UserAvatar user={t.user} size={40} className="shadow-lg" />
                             <div className="text-left">
