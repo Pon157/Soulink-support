@@ -65,6 +65,9 @@ model User {
   tickets          Ticket[]      @relation("UserTickets")
   managedTickets   Ticket[]      @relation("ManagedTickets")
   games            GameSession[] @relation("GamePlayers")
+  
+  // Исправление: добавлена обратная связь для сообщений в тикетах
+  ticketMessages   TicketMessage[] @relation("TicketSender")
 }
 
 model GameSession {
@@ -98,7 +101,8 @@ model TicketMessage {
   ticketId  String
   ticket    Ticket   @relation(fields: [ticketId], references: [id])
   senderId  String
-  sender    User     @relation(fields: [senderId], references: [id])
+  // Использование именованной связи для точности
+  sender    User     @relation("TicketSender", fields: [senderId], references: [id])
   content   String
   mediaUrl  String?
   mediaType String   @default("text")
