@@ -6,14 +6,19 @@ import { Modal } from '../ui/Modal';
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpandChat: (id: string) => void }) => {
-  const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation' | 'all_chats' | 'reviews' | 'broadcast' | 'sanctions'>('stats');
+  const [view, setView] = useState<'stats' | 'staff' | 'rules' | 'moderation' | 'all_chats' | 'reviews' | 'broadcast' | 'sanctions' | 'tasks' | 'subordinates'>('stats');
   const [stats, setStats] = useState<any>(null);
   const [staff, setStaff] = useState<any[]>([]);
+  const [subordinates, setSubordinates] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [allChats, setAllChats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddStaff, setShowAddStaff] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState<any>(null); // { subordinateId, managerId }
+  const [showAddTask, setShowAddTask] = useState<any>(null); // assignee object
+  const [newTask, setNewTask] = useState({ title: '', description: '', deadline: '' });
   const [newStaff, setNewStaff] = useState({ nickname: '', username: '', password: '', role: 'ADMIN' });
   const [searchQuery, setSearchQuery] = useState('');
   const [adminFilter, setAdminFilter] = useState('');
@@ -24,6 +29,16 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
     try {
       const statsRes = await apiFetch('/api/stats/system');
       setStats(await statsRes.json());
+
+      const [tasksRes] = await Promise.all([
+          apiFetch('/api/tasks')
+      ]);
+      if (tasksRes.ok) setTasks(await tasksRes.json());
+      
+      if (role === 'CURATOR') {
+          const subRes = await apiFetch('/api/staff/subordinates');
+          if (subRes.ok) setSubordinates(await subRes.json());
+      }
 
       if (role === 'OWNER') {
         const [staffRes, reportsRes, revRes, chatsRes] = await Promise.all([
@@ -42,6 +57,43 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAssignSubordinate = async (subordinateId: string, managerId: string) => {
+    try {
+        await apiFetch('/api/staff/assign', {
+            method: 'POST',
+            body: JSON.stringify({ subordinateId, managerId })
+        });
+        setShowAssignModal(null);
+        fetchData();
+    } catch (e) { console.error(e); }
+  };
+
+  const handleCreateTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showAddTask) return;
+    try {
+        await apiFetch('/api/tasks', {
+            method: 'POST',
+            body: JSON.stringify({ ...newTask, assigneeId: showAddTask.id })
+        });
+        setShowAddTask(null);
+        setNewTask({ title: '', description: '', deadline: '' });
+        fetchData();
+        alert('Задание выдано');
+    } catch (e) { console.error(e); }
+  };
+
+  const handleUpdateTaskStatus = async (taskId: string, status: string) => {
+      try {
+          await apiFetch(`/api/tasks/${taskId}/status`, {
+              method: 'POST',
+              body: JSON.stringify({ status })
+          });
+          fetchData();
+          alert('Статус обновлен');
+      } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
@@ -95,14 +147,16 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
 
   const tabs = [
     { id: 'stats', label: 'Данные', icon: BarChart3, ownerOnly: false },
+    { id: 'subordinates', label: 'Подчиненные', icon: Users, ownerOnly: false, curatorOnly: true },
     { id: 'staff', label: 'Штат', icon: Users, ownerOnly: true },
+    { id: 'tasks', label: 'Задания', icon: FileText, ownerOnly: false },
     { id: 'moderation', label: 'Жалобы', icon: ShieldAlert, ownerOnly: true },
     { id: 'all_chats', label: 'Все чаты', icon: ShieldCheck, ownerOnly: true },
     { id: 'reviews', label: 'Отзывы', icon: Star, ownerOnly: true },
     { id: 'broadcast', label: 'Рассылка', icon: Mail, ownerOnly: true },
     { id: 'sanctions', label: 'Санкции', icon: Lock, ownerOnly: true },
     { id: 'rules', label: 'Устав', icon: FileText, ownerOnly: false },
-  ].filter(t => !t.ownerOnly || role === 'OWNER');
+  ].filter(t => (!t.ownerOnly || role === 'OWNER') && (!t.curatorOnly || role === 'CURATOR' || role === 'OWNER'));
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 bg-bg-primary p-6">
@@ -117,6 +171,26 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
           </select>
           <button type="submit" className="w-full bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Зачислить</button>
         </form>
+      </Modal>
+
+      <Modal isOpen={!!showAddTask} onClose={() => setShowAddTask(null)} title={`Задание для ${showAddTask?.nickname}`}>
+          <form onSubmit={handleCreateTask} className="space-y-4">
+              <input required value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} placeholder="Заголовок" className="w-full bg-bg-secondary p-4 rounded-2xl outline-none" />
+              <textarea required value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} placeholder="Описание задания..." className="w-full bg-bg-secondary p-4 rounded-2xl outline-none min-h-[100px]" />
+              <input type="date" value={newTask.deadline} onChange={e => setNewTask({...newTask, deadline: e.target.value})} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none" />
+              <button type="submit" className="w-full bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Выдать задание</button>
+          </form>
+      </Modal>
+
+      <Modal isOpen={!!showAssignModal} onClose={() => setShowAssignModal(null)} title="Назначить куратора">
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {staff.filter(s => s.role === 'CURATOR').map(c => (
+                  <button key={c.id} onClick={() => handleAssignSubordinate(showAssignModal.id, c.id)} className="w-full p-4 bg-bg-secondary rounded-2xl text-left hover:bg-slate-800 transition-colors">
+                      <p className="font-black italic text-sm">{c.nickname}</p>
+                      <p className="text-[10px] text-text-dim uppercase font-black">@{c.username}</p>
+                  </button>
+              ))}
+          </div>
       </Modal>
 
       <header className="flex items-center justify-between mb-8">
@@ -184,20 +258,92 @@ export const SystemDashboard = ({ role, onExpandChat }: { role: string, onExpand
               <div className="flex items-center gap-4">
                 <img src={s.avatar || `https://i.pravatar.cc/100?u=${s.id}`} className="w-10 h-10 rounded-xl object-cover" />
                 <div>
-                  <p className="font-black text-white italic tracking-tight">{s.nickname}</p>
+                  <p className="font-black text-white italic tracking-tight">{s.nickname} {s.isOnRest && <span className="text-[8px] bg-rose-500/20 text-rose-500 px-1.5 py-0.5 rounded ml-2">REST</span>}</p>
                   <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">@{s.username} • {s.role}</p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="flex items-center gap-1 text-amber-500 justify-end">
-                  <span className="text-[11px] font-black italic">{s.stats?.averageRating?.toFixed(1) || 0}</span>
-                  <Star size={10} fill="currentColor" />
-                </div>
-                <p className="text-[8px] text-slate-600 font-black uppercase mt-0.5">{s.stats?.messagesSent || 0} СOOБЩ.</p>
+              <div className="flex items-center gap-4">
+                  {role === 'OWNER' && s.role === 'ADMIN' && (
+                      <button onClick={() => setShowAssignModal(s)} className="text-[8px] font-black uppercase text-accent border border-accent/30 px-3 py-2 rounded-xl hover:bg-accent hover:text-white transition-all">Куратор</button>
+                  )}
+                  <div className="text-right">
+                    <div className="flex items-center gap-1 text-amber-500 justify-end">
+                      <span className="text-[11px] font-black italic">{s.stats?.averageRating?.toFixed(1) || 0}</span>
+                      <Star size={10} fill="currentColor" />
+                    </div>
+                    <p className="text-[8px] text-slate-600 font-black uppercase mt-0.5">{s.stats?.messagesSent || 0} СOOБЩ.</p>
+                  </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {view === 'subordinates' && (
+          <div className="space-y-4">
+              <div className="bg-accent/5 border border-accent/10 p-8 rounded-[3rem] text-center space-y-2 mb-6">
+                  <Users size={40} className="mx-auto text-accent" />
+                  <h2 className="text-xl font-black italic">Ваш отряд</h2>
+                  <p className="text-[10px] text-text-dim uppercase font-black tracking-widest">Управление новенькими админами</p>
+              </div>
+              <div className="space-y-3">
+                  {subordinates.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black italic">Нет назначенных подчиненных</p>}
+                  {subordinates.map(s => (
+                      <div key={s.id} className="bg-bg-secondary border border-slate-800 p-5 rounded-[2.5rem] space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <img src={s.avatar || `https://i.pravatar.cc/100?u=${s.id}`} className="w-10 h-10 rounded-2xl object-cover" />
+                                <div>
+                                    <p className="font-black text-sm italic">{s.nickname}</p>
+                                    <p className="text-[8px] text-text-dim uppercase font-black tracking-[0.2em]">@{s.username}</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowAddTask(s)} className="p-3 bg-accent/10 text-accent rounded-xl hover:bg-accent hover:text-white transition-all"><Plus size={18} /></button>
+                          </div>
+                          <div className="pt-4 border-t border-slate-800/50 flex gap-4">
+                             <button onClick={() => onExpandChat(s.id)} className="flex-1 py-3 bg-bg-primary rounded-2xl text-[9px] font-black uppercase tracking-widest border border-slate-800 hover:border-accent/50 transition-all">Мониторинг чатов</button>
+                             <div className="bg-bg-primary px-4 py-3 rounded-2xl flex items-center gap-2">
+                                <span className="text-[11px] font-black italic">{s.stats?.averageRating?.toFixed(1) || 0}</span>
+                                <Star size={10} className="text-amber-500" fill="currentColor" />
+                             </div>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
+
+      {view === 'tasks' && (
+          <div className="space-y-4">
+              <div className="space-y-3">
+                  {tasks.length === 0 && <p className="text-center text-text-dim py-24 text-[10px] uppercase font-black italic tracking-widest">Заданий пока нет</p>}
+                  {tasks.map(t => (
+                      <div key={t.id} className="bg-bg-secondary border border-slate-800 p-6 rounded-[2.5rem] space-y-4">
+                          <div className="flex justify-between items-start">
+                              <div>
+                                  <h4 className="font-black italic text-lg tracking-tight">{t.title}</h4>
+                                  <p className="text-[9px] font-black text-accent uppercase tracking-widest">от {t.creator?.nickname} → кому {t.assignee?.nickname}</p>
+                              </div>
+                              <div className={cn(
+                                  "px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest",
+                                  t.status === 'completed' ? "bg-emerald-500/10 text-emerald-500" : "bg-amber-500/10 text-amber-500"
+                              )}>
+                                  {t.status === 'completed' ? 'Выполнено' : 'В работе'}
+                              </div>
+                          </div>
+                          <p className="text-xs text-text-dim italic leading-relaxed">{t.description}</p>
+                          {t.deadline && (
+                              <div className="flex items-center gap-2 text-[9px] font-black text-rose-500 uppercase">
+                                  <span>Дедлайн: {new Date(t.deadline).toLocaleDateString()}</span>
+                              </div>
+                          )}
+                          {t.assigneeId === (stats as any)?.id && t.status !== 'completed' && (
+                              <button onClick={() => handleUpdateTaskStatus(t.id, 'completed')} className="w-full py-4 bg-emerald-600 rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">Завершить задание</button>
+                          )}
+                      </div>
+                  ))}
+              </div>
+          </div>
       )}
 
       {view === 'all_chats' && (
