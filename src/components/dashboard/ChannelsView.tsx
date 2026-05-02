@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, ChevronRight, Plus, MessageSquare, ImageIcon, ArrowLeft, Heart, Share2, MoreHorizontal, Shield, Loader2 } from 'lucide-react';
+import { Users, ChevronRight, Plus, MessageSquare, ImageIcon, ArrowLeft, Heart, Share2, MoreHorizontal, Shield, Loader2, Trash, Edit3, Reply, X } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
+import { UserAvatar } from '../ui/UserAvatar';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
-export const ChannelsView = ({ user }: { user: any }) => {
+export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any, onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
   const [channels, setChannels] = useState<any[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -29,7 +30,7 @@ export const ChannelsView = ({ user }: { user: any }) => {
   }, []);
 
   if (selectedChannel) {
-    return <ChannelDetail channel={selectedChannel} onBack={() => setSelectedChannel(null)} user={user} onUpdate={fetchChannels} />;
+    return <ChannelDetail channel={selectedChannel} onBack={() => setSelectedChannel(null)} user={user} onUpdate={fetchChannels} onImageClick={onImageClick} onProfileClick={onProfileClick} />;
   }
 
   return (
@@ -55,7 +56,7 @@ export const ChannelsView = ({ user }: { user: any }) => {
                 >
                     <div className="flex items-center gap-4">
                         <div className="relative">
-                            <img src={ch.avatar || 'https://cdn-icons-png.flaticon.com/512/4712/4712139.png'} className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-800" />
+                            <UserAvatar user={{ ...ch, id: ch.id }} size={56} className="ring-2 ring-slate-800" />
                             <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-accent rounded-full border-2 border-bg-secondary flex items-center justify-center text-[10px] text-white">
                                 <Plus size={10} strokeWidth={4} />
                             </div>
@@ -73,7 +74,7 @@ export const ChannelsView = ({ user }: { user: any }) => {
   );
 };
 
-const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBack: () => void, user: any, onUpdate: () => void }) => {
+const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfileClick }: { channel: any, onBack: () => void, user: any, onUpdate: () => void, onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
     const [posts, setPosts] = useState<any[]>([]);
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [showPostModal, setShowPostModal] = useState(false);
@@ -82,6 +83,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
     const [selectedPostForComments, setSelectedPostForComments] = useState<any>(null);
     const [comments, setComments] = useState<any[]>([]);
     const [newComment, setNewComment] = useState('');
+    const [replyingToComment, setReplyingToComment] = useState<any>(null);
     const [newPost, setNewPost] = useState({ content: '', mediaUrl: '' });
     const [uploading, setUploading] = useState(false);
 
@@ -133,13 +135,31 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
         try {
             await apiFetch(`/api/posts/${selectedPostForComments.id}/comments`, {
                 method: 'POST',
-                body: JSON.stringify({ content: newComment })
+                body: JSON.stringify({ content: newComment, replyToId: replyingToComment?.id })
             });
             setNewComment('');
+            setReplyingToComment(null);
             fetchComments(selectedPostForComments.id);
             fetchPosts(); // Refresh counts
         } catch (e) { console.error(e); }
     };
+
+    const handleDeletePost = async (id: string) => {
+        if (!confirm('Удалить этот пост?')) return;
+        try {
+            await apiFetch(`/api/posts/${id}`, { method: 'DELETE' });
+            fetchPosts();
+            onUpdate();
+        } catch (e) { console.error(e); }
+    };
+    
+    const handleDeleteComment = async (id: string) => {
+        try {
+            await apiFetch(`/api/posts/comments/${id}`, { method: 'DELETE' });
+            fetchComments(selectedPostForComments.id);
+            fetchPosts();
+        } catch (e) { console.error(e); }
+    }
 
     const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
         const file = e.target.files?.[0];
@@ -187,13 +207,13 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
                 )}
 
                 <div className="absolute bottom-0 left-0 right-0 p-8 flex items-end justify-between">
-                    <div className="flex items-center gap-6">
-                        <img src={channel.avatar || 'https://cdn-icons-png.flaticon.com/512/4712/4712139.png'} className="w-20 h-20 rounded-[2rem] border-4 border-bg-primary object-cover" />
-                        <div>
+                    <button onClick={() => onProfileClick(channel.ownerId)} className="flex items-center gap-6 hover:opacity-80 transition-opacity">
+                        <UserAvatar user={{ ...channel, id: channel.id }} size={80} className="border-4 border-bg-primary" />
+                        <div className="text-left">
                             <h3 className="text-3xl font-black italic tracking-tighter text-white">{channel.name}</h3>
                             <p className="text-accent text-[10px] font-black uppercase tracking-widest mt-1">@{channel.owner?.nickname || 'admin'}</p>
                         </div>
-                    </div>
+                    </button>
                     {isOwner ? (
                         <button onClick={() => setShowPostModal(true)} className="bg-accent text-white w-14 h-14 rounded-2xl flex items-center justify-center shadow-xl shadow-accent/20 active:scale-95 transition-all">
                              <Plus size={28} />
@@ -229,17 +249,28 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2">
                         {comments.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black tracking-widest italic">Пока нет комментариев</p>}
                         {comments.map(c => (
-                            <div key={c.id} className="bg-bg-primary p-4 rounded-2xl border border-slate-800/50">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <img src={c.user.avatar || `https://i.pravatar.cc/150?u=${c.userId}`} className="w-6 h-6 rounded-lg object-cover" />
+                            <div key={c.id} className="bg-bg-primary p-4 rounded-2xl border border-slate-800/50 group relative">
+                                <button onClick={() => onProfileClick(c.userId)} className="flex items-center gap-2 mb-2 hover:opacity-70 transition-opacity">
+                                    <UserAvatar user={{ ...c.user, id: c.userId }} size={24} className="rounded-lg" />
                                     <span className="text-[10px] font-black italic tracking-tight">{c.user.nickname}</span>
+                                    {c.replyToId && <span className="text-[8px] bg-accent/20 text-accent px-1.5 py-0.5 rounded uppercase">ответ</span>}
                                     <span className="text-[8px] text-text-dim ml-auto">{new Date(c.createdAt).toLocaleTimeString()}</span>
+                                </button>
+                                <p className="text-xs text-text-dim italic leading-relaxed">{c.content}</p>
+                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => setReplyingToComment(c)} className="p-1 hover:text-accent"><Reply size={12} /></button>
+                                    {(c.userId === user.id || isOwner) && <button onClick={() => handleDeleteComment(c.id)} className="p-1 hover:text-rose-500"><Trash size={12} /></button>}
                                 </div>
-                                <p className="text-xs text-text-dim italic">{c.content}</p>
                             </div>
                         ))}
                     </div>
-                    <div className="pt-4 flex gap-2">
+                    {replyingToComment && (
+                        <div className="bg-bg-secondary p-2 flex items-center justify-between border-l-2 border-accent text-[10px] text-text-dim rounded-t-xl">
+                            <span>В ответ {replyingToComment.user.nickname}</span>
+                            <button onClick={() => setReplyingToComment(null)}><X size={12} /></button>
+                        </div>
+                    )}
+                    <div className="pt-2 flex gap-2">
                         <input 
                             value={newComment}
                             onChange={e => setNewComment(e.target.value)}
@@ -292,12 +323,15 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate }: { channel: any, onBa
                     <p className="text-sm italic text-text-dim italic leading-relaxed">{channel.description || 'Обзоры, новости и полезные советы от администрации SoulLink.'}</p>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 pb-12">
                     <h4 className="text-xs font-black uppercase tracking-[0.3em] text-text-dim px-2">Последние посты</h4>
                     {posts.map(post => (
-                        <div key={post.id} className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50 space-y-4">
-                            <p className="text-sm font-medium italic text-text-main leading-relaxed">{post.content}</p>
-                            {post.mediaUrl && <img src={post.mediaUrl} className="rounded-3xl w-full border border-slate-800" />}
+                        <div key={post.id} className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50 space-y-4 group">
+                            <div className="flex justify-between items-start">
+                                <p className="text-sm font-medium italic text-text-main leading-relaxed">{post.content}</p>
+                                {isOwner && <button onClick={() => handleDeletePost(post.id)} className="p-2 text-text-dim hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash size={18} /></button>}
+                            </div>
+                            {post.mediaUrl && <img src={post.mediaUrl} className="rounded-3xl w-full border border-slate-800 cursor-zoom-in" onClick={() => onImageClick(post.mediaUrl)} />}
                             <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
                                 <div className="flex gap-4">
                                     <button 
