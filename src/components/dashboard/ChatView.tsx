@@ -196,8 +196,12 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
     } else {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          // Force mime type to ensure it's playable in most browsers
-          const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+          // Improved recorder setup
+          let mimeType = 'audio/webm';
+          if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/ogg';
+          if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/mp4';
+          
+          const recorder = new MediaRecorder(stream, { mimeType });
           const chunks: Blob[] = [];
           
           recorder.ondataavailable = (e) => {
@@ -205,14 +209,14 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
           };
           
           recorder.onstop = async () => {
-            const blob = new Blob(chunks, { type: 'audio/webm' });
+            const blob = new Blob(chunks, { type: mimeType });
             stream.getTracks().forEach(track => track.stop());
             setRecording(false);
             setMediaRecorder(null);
 
-            if (blob.size < 500) return; // Ignore very short clicks
+            if (blob.size < 1000) return; // 1KB minimum
             
-            const file = new File([blob], 'voice.webm', { type: 'audio/webm' });
+            const file = new File([blob], `voice.${mimeType.split('/')[1].split(';')[0]}`, { type: mimeType });
             setUploading(true);
             try {
               const url = await uploadFile(file);
@@ -368,8 +372,24 @@ export const ChatView = ({ chatId, onBack, onImageClick, userRole, wallpaper }: 
                 </div>
             ) : (
                 <div className="flex items-center gap-1.5 mt-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
-                    <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">в сети</span>
+                    {partner?.isOnRest ? (
+                        <>
+                            <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                            <span className="text-[9px] text-rose-400 font-black uppercase tracking-widest italic">На отдыхе</span>
+                        </>
+                    ) : (
+                        partner?.lastSeen && (Date.now() - new Date(partner.lastSeen).getTime() < 120000) ? (
+                            <>
+                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse" />
+                                <span className="text-[9px] text-emerald-400 font-black uppercase tracking-widest">в сети</span>
+                            </>
+                        ) : (
+                            <>
+                                <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
+                                <span className="text-[9px] text-text-dim font-black uppercase tracking-widest">был {partner?.lastSeen ? new Date(partner.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'давно'}</span>
+                            </>
+                        )
+                    )}
                 </div>
             )}
           </div>
