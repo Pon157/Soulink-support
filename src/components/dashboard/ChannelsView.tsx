@@ -76,7 +76,12 @@ export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any
 
 const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfileClick }: { channel: any, onBack: () => void, user: any, onUpdate: () => void, onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
     const [posts, setPosts] = useState<any[]>([]);
-    const [isSubscribed, setIsSubscribed] = useState(false);
+    const [isSubscribed, setIsSubscribed] = useState(channel.isSubscribed || false);
+
+    useEffect(() => {
+        setIsSubscribed(channel.isSubscribed || false);
+    }, [channel.id, channel.isSubscribed]);
+
     const [showPostModal, setShowPostModal] = useState(false);
     const [showEditChannelModal, setShowEditChannelModal] = useState(false);
     const [editedChannel, setEditedChannel] = useState({ name: channel.name, description: channel.description, avatar: channel.avatar, banner: channel.banner });
@@ -186,8 +191,9 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
 
     const handleSubscribe = async () => {
         try {
-            await apiFetch(`/api/channels/subscribe/${channel.id}`, { method: 'POST' });
-            setIsSubscribed(true);
+            const res = await apiFetch(`/api/channels/subscribe/${channel.id}`, { method: 'POST' });
+            const data = await res.json();
+            setIsSubscribed(!data.unsubscribed);
         } catch (e) {
             console.error(e);
         }
@@ -206,21 +212,29 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                     </button>
                 )}
 
-                <div className="absolute bottom-0 left-0 right-0 p-4 md:p-8 flex items-end justify-between gap-4">
-                    <button onClick={() => onProfileClick(channel.ownerId)} className="flex items-center gap-3 md:gap-6 hover:opacity-80 transition-opacity min-w-0">
-                        <UserAvatar user={{ ...channel, id: channel.id }} size={56} className="md:w-20 md:h-20 border-4 border-bg-primary shrink-0" />
+                <div className="absolute bottom-0 left-0 right-0 p-4 md:p-8 flex flex-wrap items-end justify-between gap-4 bg-gradient-to-t from-bg-primary/90 to-transparent">
+                    <button onClick={() => onProfileClick(channel.ownerId)} className="flex items-center gap-3 md:gap-6 hover:opacity-80 transition-opacity min-w-0 max-w-full">
+                        <UserAvatar user={{ ...channel, id: channel.id }} size={48} className="md:w-20 md:h-20 border-2 md:border-4 border-bg-primary shrink-0" />
                         <div className="text-left truncate">
-                            <h3 className="text-xl md:text-3xl font-black italic tracking-tighter text-white truncate">{channel.name}</h3>
-                            <p className="text-accent text-[9px] md:text-[10px] font-black uppercase tracking-widest mt-0.5 truncate">@{channel.owner?.nickname || 'admin'}</p>
+                            <h3 className="text-lg md:text-3xl font-black italic tracking-tighter text-white truncate drop-shadow-lg">{channel.name}</h3>
+                            <p className="text-accent text-[8px] md:text-[10px] font-black uppercase tracking-widest mt-0.5 truncate bg-black/20 px-1 border-l border-accent w-fit">{channel.owner?.nickname || 'admin'}</p>
                         </div>
                     </button>
-                    <div className="shrink-0 mb-1">
+                    <div className="shrink-0 mb-1 ml-auto">
                         {isOwner ? (
-                            <button onClick={() => setShowPostModal(true)} className="bg-accent text-white w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-xl shadow-accent/20 active:scale-95 transition-all">
-                                 <Plus size={28} />
+                            <button onClick={() => setShowPostModal(true)} className="bg-accent text-white w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-xl shadow-accent/20 active:scale-95 transition-all">
+                                 <Plus size={24} className="md:w-7 md:h-7" />
                             </button>
                         ) : (
-                            !isSubscribed && <button onClick={handleSubscribe} className="bg-accent text-white px-4 md:px-8 py-3 md:py-4 rounded-[2rem] font-black uppercase text-[9px] md:text-[10px] tracking-widest shadow-xl shadow-accent/20 active:scale-95 transition-all whitespace-nowrap">Подписаться</button>
+                            <button 
+                                onClick={handleSubscribe} 
+                                className={cn(
+                                    "px-4 md:px-8 py-2.5 md:py-4 rounded-[2rem] font-black uppercase text-[8px] md:text-[10px] tracking-widest shadow-xl transition-all active:scale-95 whitespace-nowrap",
+                                    isSubscribed ? "bg-bg-secondary text-text-dim border border-slate-700" : "bg-accent text-white shadow-accent/20"
+                                )}
+                            >
+                                {isSubscribed ? 'Вы подписаны' : 'Подписаться'}
+                            </button>
                         )}
                     </div>
                 </div>
