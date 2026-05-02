@@ -242,6 +242,9 @@ const ChatList = ({ onSelectChat }: { onSelectChat: (id: string) => void }) => {
               {chat.unread > 0 && (
                 <div className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full border-2 border-bg-primary flex items-center justify-center text-[10px] text-white font-black">{chat.unread}</div>
               )}
+              {chat.isOnRest && (
+                <div className="absolute -bottom-1 -right-1 bg-rose-500 text-white text-[7px] font-black uppercase px-1 py-0.5 rounded border border-bg-primary">Rest</div>
+              )}
             </div>
             <div className="ml-4 flex-1 text-left">
               <div className="flex justify-between items-center">
