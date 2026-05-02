@@ -94,7 +94,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
              <ChannelsView user={user} onImageClick={setPreviewImage} onProfileClick={setSelectedProfile} />
           )}
           {activeTab === 'system' && (user.role !== 'USER') && (
-            <SystemDashboard role={user.role} onExpandChat={setSelectedChat} userId={user.id} />
+            <SystemDashboard user={user} onExpandChat={setSelectedChat} />
           )}
           {activeTab === 'settings' && (
             <SettingsView user={user} setUser={setUser} onLogout={onLogout} />
@@ -117,7 +117,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
               chatId={selectedChat} 
               onBack={() => setSelectedChat(null)} 
               onImageClick={(url) => setPreviewImage(url)} 
-              userRole={user.role}
+              currentUser={user}
               wallpaper={user.wallpaper}
             />
           </motion.div>
