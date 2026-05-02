@@ -21,33 +21,33 @@ enum BanStatus {
 }
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  username       String    @unique
-  nickname       String
-  password       String
-  avatar         String?
-  banner         String?
-  wallpaper      String?
-  theme          String    @default("dark")
-  role           Role      @default(USER)
-  banStatus      BanStatus @default(NONE)
-  warnCount      Int       @default(0)
-  banReason      String?
-  banUntil       DateTime?
-  isOnRest       Boolean   @default(false)
-  lastSeen       DateTime  @default(now())
-  description    String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  nickname      String
+  password      String
+  avatar        String?
+  banner        String?
+  wallpaper     String?
+  theme         String    @default("dark")
+  role          Role      @default(USER)
+  banStatus     BanStatus @default(NONE)
+  warnCount     Int       @default(0)
+  banReason     String?
+  banUntil      DateTime?
+  isOnRest      Boolean   @default(false)
+  lastSeen      DateTime  @default(now())
+  description   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Relationships
-  managedBy      User?     @relation("AdminSupervisor", fields: [managedById], references: [id])
-  managedById    String?
-  subordinates   User[]    @relation("AdminSupervisor")
+  managedBy     User?     @relation("AdminSupervisor", fields: [managedById], references: [id])
+  managedById   String?
+  subordinates  User[]    @relation("AdminSupervisor")
 
-  channel        Channel?  @relation("AdminChannel")
-  subscriptions  Subscription[]
+  channel       Channel?  @relation("AdminChannel")
+  subscriptions Subscription[]
   
   // Chats
   sentMessages     Message[] @relation("SentMessages")
@@ -64,9 +64,19 @@ model User {
   reviewComments   ReviewComment[]
   tickets          Ticket[]      @relation("UserTickets")
   managedTickets   Ticket[]      @relation("ManagedTickets")
-  
-  // ВОТ ИСПРАВЛЕНИЕ: Добавлено обратное поле для TicketMessage
-  ticketMessages   TicketMessage[] @relation("TicketMessageSender")
+  games            GameSession[] @relation("GamePlayers")
+}
+
+model GameSession {
+  id        String   @id @default(cuid())
+  type      String   // chess, checkers, words, seabattle
+  status    String   @default("active") // active, finished
+  players   User[]   @relation("GamePlayers")
+  state     Json?    // Current game state (board state, turn, etc.)
+  history   Json?    // Game history/moves
+  winnerId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Ticket {
@@ -88,8 +98,7 @@ model TicketMessage {
   ticketId  String
   ticket    Ticket   @relation(fields: [ticketId], references: [id])
   senderId  String
-  // Добавлено имя связи "TicketMessageSender", чтобы User точно знал, куда ссылаться
-  sender    User     @relation("TicketMessageSender", fields: [senderId], references: [id])
+  sender    User     @relation(fields: [senderId], references: [id])
   content   String
   mediaUrl  String?
   mediaType String   @default("text")
