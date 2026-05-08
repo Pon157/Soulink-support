@@ -104,7 +104,11 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     }, [state?.fen]);
 
     function onDrop(sourceSquare: string, targetSquare: string) {
-        const myColor = state.players?.[0]?.id === currentUserId ? 'w' : 'b';
+        if (!state?.players) return false;
+        const myPlayerIndex = state.players.findIndex((p: any) => p.id === currentUserId);
+        if (myPlayerIndex === -1) return false;
+        const myColor = myPlayerIndex === 0 ? 'w' : 'b';
+        
         if (game.turn() !== myColor) return false;
 
         try {
@@ -128,12 +132,15 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         } catch (e) { return false; }
     }
 
-    const myColor = state.players?.[0]?.id === currentUserId ? 'w' : 'b';
+    const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
+    const myColor = myPlayerIndex === 0 ? 'w' : 'b';
     const isCurrentTurnMe = game.turn() === myColor;
     
+    const ChessboardAny = Chessboard as any;
+
     return (
         <div className="w-full max-w-md aspect-square bg-slate-900 rounded-[3rem] overflow-hidden border-8 border-slate-800 shadow-2xl relative transition-all animate-in zoom-in duration-500 p-2">
-            <Chessboard 
+            <ChessboardAny 
                 position={game.fen()} 
                 onPieceDrop={onDrop} 
                 boardOrientation={partnerName === state.players?.[0]?.nickname ? 'black' : 'white'}
@@ -174,7 +181,8 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
     const [selected, setSelected] = useState<number | null>(null);
     const [board, setBoard] = useState<any[]>(state?.board || []);
 
-    const myIndex = state.players?.[0]?.id === currentUserId ? 0 : 1;
+    const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
+    const myIndex = myPlayerIndex === -1 ? 0 : myPlayerIndex;
     const isMyTurn = state.turn === (myIndex === 0 ? 'white' : 'black');
     const myColor = myIndex === 0 ? 'white' : 'black';
 
@@ -427,7 +435,8 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
 };
 
 const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) => {
-    const myIndex = state.players?.[0]?.id === currentUserId ? 0 : 1;
+    const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
+    const myIndex = myPlayerIndex === -1 ? 0 : myPlayerIndex;
     const oppIndex = 1 - myIndex;
 
     const [ships, setShips] = useState<number[]>(state?.players?.[myIndex]?.ships || []);
@@ -468,8 +477,12 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
     };
 
     const updateState = async (myData: any, isMove = false, keepTurn = false) => {
-        const newState = { ...state };
-        newState.players[myIndex] = { ...newState.players[myIndex], ...myData };
+        const newState = { 
+            ...state,
+            players: state.players.map((p: any, idx: number) => 
+                idx === myIndex ? { ...p, ...myData } : p
+            )
+        };
         if (isMove && !keepTurn) {
             newState.turn = myIndex === 0 ? 'black' : 'white';
         }
@@ -519,7 +532,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                             </div>
                         ))}
                         {!ready && (
-                            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-6 opacity-0 hover:opacity-100 transition-opacity">
+                            <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-6 opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
                                 <p className="text-[10px] font-black uppercase text-white tracking-widest text-center">Нажимайте для расстановки</p>
                             </div>
                         )}
