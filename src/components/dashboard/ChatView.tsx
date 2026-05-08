@@ -6,7 +6,8 @@ import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
 import { UserAvatar } from '../ui/UserAvatar';
 import { GameLauncher } from '../games/GameLauncher';
-import { Trash, Edit3, Reply, MoreVertical } from 'lucide-react';
+import { DrawingCanvas } from './DrawingCanvas';
+import { Trash, Edit3, Reply, MoreVertical, PenTool } from 'lucide-react';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
@@ -105,6 +106,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
   const [showRating, setShowRating] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showGameMenu, setShowGameMenu] = useState(false);
+  const [showDrawing, setShowDrawing] = useState(false);
   const [activeGame, setActiveGame] = useState<any>(null);
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [ticketSubject, setTicketSubject] = useState('');
@@ -223,6 +225,21 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
       await handleSend('', url, type);
     } catch (error) {
       setErrorModal('Ошибка при загрузке.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDrawingSave = async (dataUrl: string) => {
+    setUploading(true);
+    setShowDrawing(false);
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const file = new File([blob], 'drawing.png', { type: 'image/png' });
+      const url = await uploadFile(file);
+      await handleSend('', url, 'photo');
+    } catch (e) {
+      setErrorModal('Не удалось отправить рисунок');
     } finally {
       setUploading(false);
     }
@@ -395,7 +412,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
           <div className="flex items-center gap-4">
               <label className="flex-1 flex items-center justify-center gap-2 p-3 bg-slate-800 border border-slate-700 rounded-2xl cursor-pointer hover:border-accent transition-all">
                   <ImageIcon size={18} className={reviewPhoto ? "text-accent" : "text-text-dim"} />
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white">{reviewPhoto ? 'Заменено' : 'Прикрепить фото'}</span>
+                  <span className="text-[11px] font-black uppercase tracking-widest text-white">{reviewPhoto ? 'Заменено' : 'Прикрепить фото'}</span>
                   <input type="file" hidden accept="image/*" onChange={handleReviewPhoto} />
               </label>
               {reviewPhoto && (
@@ -412,6 +429,10 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
             {uploading ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'Отправить отзыв'}
           </button>
         </div>
+      </Modal>
+
+      <Modal isOpen={showDrawing} onClose={() => setShowDrawing(false)} title="Нарисовать граффити">
+        <DrawingCanvas onSave={handleDrawingSave} onCancel={() => setShowDrawing(false)} />
       </Modal>
 
       <header className="p-4 flex items-center justify-between border-b border-slate-800/50 bg-bg-primary/95 backdrop-blur-md">
@@ -656,6 +677,14 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
               {uploading ? <Loader2 className="animate-spin" size={24} /> : <Camera size={24} />}
               <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileChange} disabled={uploading} />
               </label>
+
+              <button 
+                onClick={() => setShowDrawing(true)}
+                className="text-text-dim hover:text-accent p-2 transition-colors"
+                title="Нарисовать"
+              >
+                <PenTool size={24} />
+              </button>
               
               {!chatId.startsWith('TICKET_') && !['ADMIN', 'CURATOR', 'OWNER'].includes(userRole) && (
                   <button 
