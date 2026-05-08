@@ -21,7 +21,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -1004,8 +1004,24 @@ app.post('/api/games/create', authenticateToken, async (req: any, res: any) => {
         if (!partnerUser) return res.status(404).json({ error: 'User not found' });
 
         const initialState: any = {};
-        if (type === 'words') initialState.state = { words: [], turn: partnerId };
-        else if (type === 'chess') initialState.state = { fen: 'start', turn: 'white' };
+        if (type === 'words') {
+             initialState.state = { 
+                 words: [], 
+                 turn: partnerId,
+                 players: [
+                    { id: req.user.userId, nickname: req.user.nickname },
+                    { id: partnerId, nickname: partnerUser.nickname }
+                 ]
+             };
+        }
+        else if (type === 'chess') initialState.state = { 
+            fen: 'start', 
+            turn: 'white',
+            players: [
+                { id: req.user.userId, nickname: req.user.nickname },
+                { id: partnerId, nickname: partnerUser.nickname }
+            ]
+        };
         else if (type === 'seabattle' || type === 'checkers') {
             initialState.state = { 
                 turn: 'white',
