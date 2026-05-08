@@ -635,7 +635,14 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
         type: 'system'
     };
 
-    res.json([techChat, ...ticketChats, ...chats]);
+    const allChats = [techChat, ...ticketChats, ...chats];
+    allChats.sort((a: any, b: any) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        return new Date(b.time).getTime() - new Date(a.time).getTime();
+    });
+
+    res.json(allChats);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch chats' });
   }
