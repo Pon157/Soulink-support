@@ -327,6 +327,7 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     
     // Check if it's current user's turn
     const isMyTurn = state?.turn === currentUserId; 
+    const partner = state?.players?.find((p: any) => p.id !== currentUserId);
 
     useEffect(() => {
         if (state?.words) {
@@ -362,7 +363,7 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                     state: { 
                         ...state, 
                         words: nextWords,
-                        turn: partnerName 
+                        turn: partner?.id || '' 
                     } 
                 })
             });
@@ -583,3 +584,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
         </div>
     );
 };
+
+export const ArrowIconCustom = ({ size }: { size: number }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+);
