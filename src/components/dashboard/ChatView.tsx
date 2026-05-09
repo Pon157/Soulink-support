@@ -471,25 +471,26 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 md:gap-2">
           {chatId !== 'SYSTEM' && !chatId.startsWith('TICKET_') && (
               <button 
                 onClick={() => setShowGameMenu(true)} 
-                className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl hover:bg-indigo-500/20 transition-all focus:scale-110 active:scale-95 shadow-lg shadow-indigo-500/10"
+                className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl hover:bg-indigo-500/20 transition-all focus:scale-110 active:scale-95 shadow-lg shadow-indigo-500/10 flex items-center gap-2 group"
                 title="Игры"
               >
                   <Gamepad2 size={20} />
+                  <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Игры</span>
               </button>
           )}
           {chatId === 'SYSTEM' && <button onClick={() => setShowTicketModal(true)} className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl hover:bg-emerald-500/20 transition-all font-black text-[10px] uppercase tracking-widest px-4 shadow-lg shadow-emerald-500/10 active:scale-95">Тикет</button>}
           {(userRole === 'USER' || userRole === 'OWNER') && !chatId.startsWith('TICKET_') && chatId !== 'SYSTEM' && (
             <button 
               onClick={() => setShowRating(true)} 
-              className="p-3 bg-amber-500 text-white rounded-2xl hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center gap-2 group"
+              className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl hover:bg-amber-500/20 transition-all shadow-lg shadow-amber-500/10 active:scale-95 flex items-center gap-2 group"
               title="Написать отзыв"
             >
-                <Star size={20} fill="white" className="group-hover:rotate-12 transition-transform" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Отзыв</span>
+                <Star size={20} className="group-hover:rotate-12 transition-transform" />
+                <span className="text-[10px] font-black uppercase tracking-widest hidden sm:block">Отзыв</span>
             </button>
           )}
         </div>
