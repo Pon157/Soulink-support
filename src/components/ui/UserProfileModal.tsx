@@ -89,9 +89,9 @@ export const UserProfileModal = ({ userId, onClose, onChat }: UserProfileModalPr
               </div>
               {profile.lastSeen && (
                 <div className="flex items-center gap-3 px-4 py-3 bg-bg-secondary rounded-2xl border border-slate-800/30">
-                    <div className={cn("w-2 h-2 rounded-full", Date.now() - new Date(profile.lastSeen).getTime() < 120000 ? "bg-emerald-500 shadow-emerald-500/20" : "bg-slate-600")} />
+                    <div className={cn("w-2 h-2 rounded-full", Date.now() - new Date(profile.lastSeen).getTime() < 360000 ? "bg-emerald-500 shadow-emerald-500/20" : "bg-slate-600")} />
                     <p className="text-[10px] font-bold text-text-dim uppercase tracking-wider">
-                        {Date.now() - new Date(profile.lastSeen).getTime() < 120000 ? 'Онлайн' : `Был в сети ${new Date(profile.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
+                        {Date.now() - new Date(profile.lastSeen).getTime() < 360000 ? 'Онлайн' : `Был в сети ${new Date(profile.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`}
                     </p>
                 </div>
               )}
