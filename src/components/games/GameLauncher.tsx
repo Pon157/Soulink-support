@@ -20,8 +20,45 @@ interface GameLauncherProps {
 export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, currentUserId }: GameLauncherProps) => {
   const [loading, setLoading] = useState(true);
   const [gameState, setGameState] = useState<any>(null);
-
   const [showChat, setShowChat] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [messages, setMessages] = useState<any[]>([]);
+  const [lastMessageId, setLastMessageId] = useState<string | null>(null);
+
+  const partnerId = gameState?.players?.find((p: any) => p?.id !== currentUserId)?.id;
+
+  const fetchMessages = useCallback(async () => {
+    if (!partnerId) return;
+    try {
+      const res = await apiFetch(`/api/messages/${partnerId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setMessages(data);
+        if (data.length > 0) {
+          const latest = data[data.length - 1];
+          if (latest.id !== lastMessageId) {
+            if (!showChat && latest.senderId !== currentUserId) {
+              setUnreadCount(prev => prev + 1);
+            }
+            setLastMessageId(latest.id);
+          }
+        }
+      }
+    } catch (e) {}
+  }, [partnerId, lastMessageId, showChat, currentUserId]);
+
+  useEffect(() => {
+    if (showChat) setUnreadCount(0);
+  }, [showChat]);
+
+  useEffect(() => {
+    if (partnerId) {
+      fetchMessages();
+      const interval = setInterval(fetchMessages, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [partnerId, fetchMessages]);
 
   useEffect(() => {
     const fetchGame = async () => {
@@ -57,7 +94,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
             </div>
             <div className="space-y-2">
                 <h3 className="text-xl font-black italic uppercase tracking-tighter">В разработке</h3>
-                <p className="text-[10px] text-text-dim uppercase font-black tracking-widest leading-relaxed">Разработчики SoulLink трудятся над {gameType === 'seabattle' ? 'Морским Боем' : 'этой игрой'}. Скоро здесь будет жарко!</p>
+                <p className="text-[10px] text-text-dim uppercase font-black tracking-widest leading-relaxed">Разработчики SoulLink трудятся над этим разделом. Скоро здесь будет жарко!</p>
             </div>
             <button onClick={onClose} className="w-full py-4 bg-bg-primary border border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-accent transition-all">Закрыть</button>
         </div>
@@ -66,7 +103,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/95 backdrop-blur-3xl flex flex-col md:flex-row p-4 md:p-6 lg:p-8 animate-in fade-in duration-300 gap-4 md:gap-6 overflow-hidden">
+    <div className="fixed inset-0 z-[120] bg-bg-primary/95 backdrop-blur-3xl flex flex-col md:flex-row p-4 md:p-6 lg:p-8 animate-in fade-in duration-300 gap-4 md:gap-6 overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center relative">
         <header className="flex items-center justify-between mb-4 md:mb-8 w-full max-w-4xl">
             <div className="flex items-center gap-3 md:gap-6">
@@ -75,7 +112,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
                 <Gamepad2 className="relative" size={24} />
             </div>
             <div>
-                <h2 className="text-xl md:text-3xl font-black italic text-white uppercase tracking-tighter leading-none">
+                <h2 className="text-xl md:text-3xl font-black italic text-text-main uppercase tracking-tighter leading-none">
                 {gameType === 'chess' ? 'Шахматный Мастер' : gameType === 'words' ? 'Битва Слов' : gameType === 'checkers' ? 'Ударные Шашки' : 'SoulБитва'}
                 </h2>
                 <div className="flex items-center gap-2 mt-1 md:mt-2">
@@ -88,15 +125,15 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
                 <button 
                     onClick={() => setShowChat(!showChat)}
                     className={cn(
-                        "p-3 md:p-4 rounded-xl md:rounded-2xl transition-all active:scale-95 flex items-center gap-2 font-black text-[9px] md:text-[10px] uppercase tracking-widest",
-                        showChat ? "bg-accent text-white" : "bg-white/5 text-white/50 hover:bg-white/10"
+                        "p-3 md:p-4 rounded-xl md:rounded-2xl transition-all active:scale-95 flex items-center gap-2 font-black text-[9px] md:text-[10px] uppercase tracking-widest relative",
+                        showChat ? "bg-accent text-white" : "bg-bg-secondary text-text-dim hover:text-text-main"
                     )}
                 >
                     <MessageSquare size={18} />
                     <span className="hidden sm:inline">{showChat ? 'Скрыть чат' : 'Чат игры'}</span>
-                    {!showChat && unreadCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[8px] flex items-center justify-center border-2 border-black animate-pulse">{unreadCount}</span>}
+                    {!showChat && unreadCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 text-white rounded-full text-[10px] flex items-center justify-center border-2 border-bg-primary animate-bounce shadow-lg font-black">{unreadCount}</span>}
                 </button>
-                <button onClick={onClose} className="p-3 md:p-4 bg-white/5 rounded-xl md:rounded-[1.5rem] text-white/50 hover:bg-white/10 hover:text-white transition-all active:scale-90"><X size={24} /></button>
+                <button onClick={onClose} className="p-3 md:p-4 bg-bg-secondary rounded-xl md:rounded-[1.5rem] text-text-dim hover:text-text-main transition-all active:scale-90"><X size={24} /></button>
             </div>
         </header>
 
@@ -107,56 +144,26 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
 
       {showChat && (
           <div className="absolute right-4 bottom-4 top-20 md:relative md:inset-auto w-[calc(100%-2rem)] md:w-[400px] h-[calc(100%-6rem)] md:h-full bg-bg-primary/95 md:bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl z-[100]">
-              <ChatInGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} gameState={gameState} showChat={showChat} />
+              <ChatInGame 
+                sessionId={sessionId} 
+                partnerName={partnerName} 
+                currentUserId={currentUserId} 
+                gameState={gameState} 
+                messages={messages}
+                onRefresh={fetchMessages}
+              />
           </div>
       )}
     </div>
   );
 };
 
-const ChatInGame = ({ sessionId, partnerName, currentUserId, gameState }: any) => {
-    const [messages, setMessages] = useState<any[]>([]);
+const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh }: any) => {
     const [input, setInput] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
 
-    const [unreadCount, setUnreadCount] = useState(0);
-    const [lastMessageId, setLastMessageId] = useState<string | null>(null);
-
     const partner = gameState?.players?.find((p: any) => p?.id !== currentUserId);
     const chatId = partner?.id;
-
-    const fetchMessages = async () => {
-        if (!chatId || !sessionId) return;
-        try {
-            const res = await apiFetch(`/api/messages/${chatId}`);
-            if (!res.ok) return;
-            const data = await res.json();
-            if (Array.isArray(data)) {
-                setMessages(data);
-                
-                // Track unread messages
-                if (data.length > 0) {
-                    const latest = data[data.length - 1];
-                    if (latest.id !== lastMessageId) {
-                        if (!showChat && latest.senderId !== currentUserId) {
-                            setUnreadCount(prev => prev + 1);
-                        }
-                        setLastMessageId(latest.id);
-                    }
-                }
-            }
-        } catch (e) { }
-    };
-
-    useEffect(() => {
-        if (showChat) setUnreadCount(0);
-    }, [showChat]);
-
-    useEffect(() => {
-        fetchMessages();
-        const interval = setInterval(fetchMessages, 3000);
-        return () => clearInterval(interval);
-    }, [chatId]);
 
     useEffect(() => {
         scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -170,7 +177,7 @@ const ChatInGame = ({ sessionId, partnerName, currentUserId, gameState }: any) =
                 body: JSON.stringify({ receiverId: chatId, content: input })
             });
             setInput('');
-            fetchMessages();
+            onRefresh();
         } catch (e) { console.error(e); }
     };
 
@@ -182,17 +189,17 @@ const ChatInGame = ({ sessionId, partnerName, currentUserId, gameState }: any) =
                         <MessageSquare size={20} />
                     </div>
                     <div>
-                        <p className="text-xs font-black text-white uppercase tracking-widest leading-none">{partnerName}</p>
+                        <p className="text-xs font-black text-text-main uppercase tracking-widest leading-none">{partnerName}</p>
                         <p className="text-[8px] text-accent font-bold uppercase mt-1">Чат игры</p>
                     </div>
                 </div>
             </div>
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {messages.map((msg, i) => (
+                {messages.map((msg: any, i: number) => (
                     <div key={i} className={cn("flex flex-col", msg.senderId === currentUserId ? "items-end" : "items-start")}>
                         <div className={cn(
                             "max-w-[85%] p-4 rounded-2xl text-[13px] font-medium leading-relaxed shadow-lg",
-                            msg.senderId === currentUserId ? "bg-accent text-white rounded-tr-none" : "bg-white/10 text-text-main border border-white/5 rounded-tl-none"
+                            msg.senderId === currentUserId ? "bg-accent text-white rounded-tr-none" : "bg-bg-primary text-text-main border border-white/5 rounded-tl-none"
                         )}>
                             {msg.content}
                         </div>
@@ -200,13 +207,13 @@ const ChatInGame = ({ sessionId, partnerName, currentUserId, gameState }: any) =
                 ))}
                 <div ref={scrollRef} />
             </div>
-            <div className="p-6 bg-black/40 border-t border-white/5 flex gap-2">
+            <div className="p-6 bg-bg-secondary/50 border-t border-white/5 flex gap-2">
                 <input 
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSend()}
                     placeholder="Напишите..."
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-accent/40 transition-all"
+                    className="flex-1 bg-bg-primary border border-white/10 rounded-xl px-4 py-3 text-sm text-text-main placeholder-text-dim outline-none focus:border-accent/40 transition-all"
                 />
                 <button 
                     onClick={handleSend}
@@ -221,11 +228,9 @@ const ChatInGame = ({ sessionId, partnerName, currentUserId, gameState }: any) =
 
 const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId: string, partnerName: string, currentUserId: string, state: any }) => {
     const [game, setGame] = useState(new Chess(state?.fen === 'start' ? undefined : state?.fen));
-    const [moveFrom, setMoveFrom] = useState('');
+    const [moveFrom, setMoveFrom] = useState<string | null>(null);
     const [optionSquares, setOptionSquares] = useState({});
     const [isProcessing, setIsProcessing] = useState(false);
-
-    // Keep track of the last processed FEN to avoid unnecessary resets
     const [lastReceivedFen, setLastReceivedFen] = useState(state?.fen);
 
     useEffect(() => {
@@ -235,92 +240,14 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 setGame(newGame);
                 setLastReceivedFen(state.fen);
                 setOptionSquares({});
-                setMoveFrom('');
+                setMoveFrom(null);
             } catch (e) { console.error(e); }
         }
     }, [state?.fen, isProcessing]);
 
-    function onSquareClick(square: string) {
-        if (!state?.players || game.isGameOver()) return;
-        const myPlayerIndex = state.players.findIndex((p: any) => p.id === currentUserId);
-        const myColor = myPlayerIndex === 0 ? 'w' : 'b';
-        if (game.turn() !== myColor) return;
-
-        // selection logic
-        if (moveFrom === "") {
-            const hasMoves = getMoveOptions(square);
-            if (hasMoves) setMoveFrom(square);
-            return;
-        }
-
-        // move logic
-        const result = makeMove({
-            from: moveFrom,
-            to: square,
-            promotion: "q",
-        });
-
-        if (!result) {
-            const hasMoves = getMoveOptions(square);
-            setMoveFrom(hasMoves ? square : "");
-            return;
-        }
-
-        setMoveFrom("");
-        setOptionSquares({});
-    }
-
-    function getMoveOptions(square: string) {
-        const piece = game.get(square as any);
-        if (!piece || piece.color !== (state.players.findIndex((p: any) => p.id === currentUserId) === 0 ? 'w' : 'b')) {
-            setOptionSquares({});
-            return false;
-        }
-
-        const moves = game.moves({
-            square: square as any,
-            verbose: true,
-        });
-        if (moves.length === 0) {
-            setOptionSquares({});
-            return false;
-        }
-
-        const newSquares: any = {};
-        moves.forEach((move) => {
-            newSquares[move.to] = {
-                background:
-                    game.get(move.to as any) && game.get(move.to as any)?.color !== game.get(square as any)?.color
-                        ? "radial-gradient(circle, rgba(239, 68, 68, .6) 85%, transparent 85%)"
-                        : "radial-gradient(circle, rgba(16, 185, 129, .6) 25%, transparent 25%)",
-                borderRadius: "50%",
-            };
-        });
-        newSquares[square] = {
-            background: "rgba(99, 102, 241, 0.4)", // Indigo highlight for selected
-            borderRadius: "4px"
-        };
-        setOptionSquares(newSquares);
-        return true;
-    }
-
-    function makeMove(move: any) {
-        if (isProcessing) return null;
-        try {
-            const gameCopy = new Chess(game.fen());
-            const result = gameCopy.move(move);
-            if (result) {
-                // Optimistic update
-                setGame(gameCopy);
-                setLastReceivedFen(gameCopy.fen());
-                
-                // Do network call in background
-                syncMove(gameCopy.fen(), result);
-                return result;
-            }
-        } catch (e) { return null; }
-        return null;
-    }
+    const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
+    const myColor = myPlayerIndex === 0 ? 'w' : 'b';
+    const isCurrentTurnMe = game.turn() === myColor;
 
     async function syncMove(fen: string, result: any) {
         setIsProcessing(true);
@@ -332,65 +259,117 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                     move: { from: result.from, to: result.to, piece: result.piece, san: result.san }
                 })
             });
-        } finally {
+        } catch (e) { console.error(e); }
+        finally {
             setTimeout(() => setIsProcessing(false), 500);
         }
     }
 
+    function makeMove(move: any) {
+        if (isProcessing) return null;
+        try {
+            const gameCopy = new Chess(game.fen());
+            const result = gameCopy.move(move);
+            if (result) {
+                setGame(gameCopy);
+                setLastReceivedFen(gameCopy.fen());
+                syncMove(gameCopy.fen(), result);
+                return result;
+            }
+        } catch (e) { return null; }
+        return null;
+    }
+
+    const onSquareClick = (square: string) => {
+        if (!isCurrentTurnMe) return;
+
+        if (moveFrom === square) {
+            setMoveFrom(null);
+            setOptionSquares({});
+            return;
+        }
+
+        if (!moveFrom) {
+            const piece = game.get(square as any);
+            if (!piece || piece.color !== myColor) return;
+
+            const moves = game.moves({ square: square as any, verbose: true });
+            if (moves.length === 0) return;
+
+            setMoveFrom(square);
+            const newSquares: any = {};
+            moves.map((move) => {
+                newSquares[move.to] = {
+                    background: "radial-gradient(circle, rgba(var(--accent-rgb), 0.4) 20%, transparent 25%)",
+                    borderRadius: "50%",
+                };
+                return move;
+            });
+            newSquares[square] = { background: "rgba(255, 255, 0, 0.4)" };
+            setOptionSquares(newSquares);
+            return;
+        }
+
+        const move = makeMove({ from: moveFrom, to: square, promotion: "q" });
+        if (move === null) {
+            const piece = game.get(square as any);
+            if (piece && piece.color === myColor) {
+               setMoveFrom(null);
+               onSquareClick(square);
+            } else {
+               setMoveFrom(null);
+               setOptionSquares({});
+            }
+            return;
+        }
+
+        setMoveFrom(null);
+        setOptionSquares({});
+    };
+
     function onDrop(sourceSquare: string, targetSquare: string) {
-        if (!state?.players || game.isGameOver()) return false;
-        const myPlayerIndex = state.players.findIndex((p: any) => p.id === currentUserId);
-        const myColor = myPlayerIndex === 0 ? 'w' : 'b';
-        if (game.turn() !== myColor) return false;
-
-        const move = makeMove({
-            from: sourceSquare,
-            to: targetSquare,
-            promotion: "q",
-        });
-
+        if (!isCurrentTurnMe) return false;
+        const move = makeMove({ from: sourceSquare, to: targetSquare, promotion: "q" });
+        if (move) {
+            setMoveFrom(null);
+            setOptionSquares({});
+        }
         return move !== null;
     }
 
-    const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
-    const myColor = myPlayerIndex === 0 ? 'w' : 'b';
-    const isCurrentTurnMe = game.turn() === myColor;
-    
     const ChessboardAny = Chessboard as any;
 
     return (
-        <div className="w-full max-w-md aspect-square bg-slate-900 rounded-[3rem] overflow-hidden border-8 border-slate-800 shadow-2xl relative transition-all animate-in zoom-in duration-500 p-2">
+        <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative transition-all animate-in zoom-in duration-500 p-1 md:p-3">
             <ChessboardAny 
                 position={game.fen()} 
                 onPieceDrop={onDrop} 
                 onSquareClick={onSquareClick}
-                customSquareStyles={{
-                    ...optionSquares,
-                }}
+                animationDuration={200}
+                customSquareStyles={optionSquares}
                 boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
                 customDarkSquareStyle={{ backgroundColor: '#1e293b' }}
                 customLightSquareStyle={{ backgroundColor: '#cbd5e1' }}
+                customBoardStyle={{ borderRadius: '1.5rem', overflow: 'hidden' }}
             />
-            
             {game.isGameOver() && (
-                <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-8 text-center space-y-4 backdrop-blur-md z-30">
+                <div className="absolute inset-0 bg-bg-primary/90 flex flex-col items-center justify-center p-8 text-center space-y-4 backdrop-blur-md z-30">
                     <Trophy className="text-amber-500 animate-bounce" size={64} />
-                    <h2 className="text-2xl font-black italic uppercase tracking-tighter text-white">Игра окончена!</h2>
+                    <h2 className="text-2xl font-black italic uppercase tracking-tighter text-text-main">Игра окончена!</h2>
                     <p className="text-text-dim font-bold uppercase text-[10px] tracking-widest">
                         {game.isCheckmate() ? 'Мат!' : game.isDraw() ? 'Ничья' : 'Сдался'}
                     </p>
                 </div>
             )}
-
             {!isCurrentTurnMe && !game.isGameOver() && (
                 <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
-                    <div className="bg-bg-primary/95 backdrop-blur-md p-6 rounded-[2.5rem] border border-accent/30 text-center space-y-2 shadow-2xl max-w-xs transform -rotate-1 pointer-events-auto">
+                    <div className="bg-bg-primary/95 backdrop-blur-md p-6 rounded-[2.5rem] border border-accent/20 text-center space-y-2 shadow-2xl max-w-xs pointer-events-auto transform -rotate-1">
                         <div className="flex items-center gap-4">
                             <div className="w-10 h-10 bg-accent/20 rounded-full flex items-center justify-center">
                                 <Brain className="text-accent animate-pulse" size={20} />
                             </div>
                             <div className="text-left">
-                                <p className="text-sm font-black italic uppercase tracking-tighter text-white">Ход {partnerName}...</p>
+                                <p className="text-sm font-black italic uppercase tracking-tighter text-text-main">Ход {partnerName}...</p>
                                 <p className="text-[8px] text-text-dim uppercase font-black tracking-widest leading-none">Соперник обдумывает ход</p>
                             </div>
                         </div>
@@ -511,15 +490,23 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
             const fromCol = selected % 8;
             const toRow = Math.floor(index / 8);
             const toCol = index % 8;
-
-            const rowDiff = toRow - fromRow;
             const colDiff = Math.abs(toCol - fromCol);
 
             let capturedIndex = null;
-            if (colDiff === 2) {
-                const midRow = fromRow + rowDiff / 2;
-                const midCol = fromCol + (index % 8 - fromCol) / 2;
-                capturedIndex = midRow * 8 + midCol;
+            if (colDiff >= 2) {
+                const dr = toRow > fromRow ? 1 : -1;
+                const dc = toCol > fromCol ? 1 : -1;
+                let r = fromRow + dr;
+                let c = fromCol + dc;
+                while (r !== toRow && c !== toCol) {
+                    const midIdx = r * 8 + c;
+                    if (board[midIdx]) {
+                        capturedIndex = midIdx;
+                        break;
+                    }
+                    r += dr;
+                    c += dc;
+                }
             }
 
             const newBoard = [...board];
@@ -571,10 +558,10 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                     onClick={() => handleSquareClick(displayIdx)}
                     className={cn(
                         "flex items-center justify-center relative backdrop-blur-sm transition-all h-full aspect-square",
-                        !isBlackSquare ? 'bg-slate-300' : 'bg-slate-700',
-                        isMyTurn && pieceAtDisplay?.color === myColor && "cursor-pointer hover:bg-slate-600",
+                        !isBlackSquare ? 'bg-slate-200' : 'bg-slate-800',
+                        isMyTurn && pieceAtDisplay?.color === myColor && "cursor-pointer hover:bg-slate-700",
                         selected === displayIdx && "ring-4 ring-accent ring-inset z-10",
-                        isValidMove && "bg-accent/30 cursor-pointer"
+                        isValidMove && "bg-accent/20 cursor-pointer"
                     )}
                 >
                     {pieceAtDisplay && (
@@ -582,14 +569,14 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                             layoutId={`checkers-piece-${displayIdx}`}
                             initial={false}
                             className={cn(
-                                "w-10 h-10 md:w-12 md:h-12 rounded-full shadow-2xl border-2 flex items-center justify-center",
-                                pieceAtDisplay.color === 'white' ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'
+                                "w-9 h-9 md:w-12 md:h-12 rounded-full shadow-lg border-2 flex items-center justify-center",
+                                pieceAtDisplay.color === 'white' ? 'bg-slate-50 border-slate-300' : 'bg-slate-900 border-slate-800'
                             )}
                         >
-                            {pieceAtDisplay.king && <Shield className={pieceAtDisplay.color === 'white' ? 'text-slate-400' : 'text-slate-600'} size={16} />}
+                            {pieceAtDisplay.king && <Shield className={pieceAtDisplay.color === 'white' ? 'text-slate-300' : 'text-slate-600'} size={14} />}
                         </motion.div>
                     )}
-                    {isValidMove && <div className="absolute w-3 h-3 bg-accent rounded-full animate-pulse" />}
+                    {isValidMove && <div className="absolute w-2 h-2 md:w-3 md:h-3 bg-accent rounded-full animate-pulse shadow-[0_0_10px_rgba(var(--accent-rgb),0.5)]" />}
                 </div>
             );
         });
@@ -873,16 +860,15 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
     const isMyTurn = ready && opponentReady && state?.turn === (myIndex === 0 ? 'white' : 'black') && !state?.winner;
     const winnerId = state?.winner;
     const isWin = winnerId === currentUserId;
-    const isLoss = winnerId && winnerId !== currentUserId;
 
     return (
-        <div className="w-full h-full flex flex-col p-4 md:p-8 space-y-4 md:space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative">
+        <div className="w-full h-full flex flex-col p-2 md:p-8 space-y-4 md:space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative items-center">
             {winnerId && (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-xl z-[60] flex flex-col items-center justify-center p-8 text-center space-y-4 animate-in fade-in zoom-in">
+                <div className="absolute inset-0 bg-bg-primary/95 backdrop-blur-xl z-[60] flex flex-col items-center justify-center p-8 text-center space-y-4 animate-in fade-in zoom-in">
                     <div className={cn("p-8 rounded-[3rem] shadow-2xl", isWin ? "bg-emerald-500/20 border-emerald-500" : "bg-rose-500/20 border-rose-500")}>
                         <Trophy size={64} className={isWin ? "text-emerald-500 animate-bounce" : "text-slate-500"} />
                     </div>
-                    <h2 className="text-4xl font-black italic uppercase tracking-tighter text-white">
+                    <h2 className="text-4xl font-black italic uppercase tracking-tighter text-text-main">
                         {isWin ? 'ПОБЕДА!' : 'ПОРАЖЕНИЕ'}
                     </h2>
                     <p className="text-[10px] font-black uppercase text-text-dim tracking-widest max-w-xs leading-relaxed">
@@ -891,11 +877,11 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                 </div>
             )}
             
-            <div className="flex flex-col md:flex-row gap-4 md:gap-8 justify-center items-center scale-[0.65] sm:scale-75 md:scale-90 lg:scale-100 transform origin-top transition-transform">
-                <div className="space-y-4 scale-[0.7] sm:scale-[0.8] md:scale-100 transform origin-center">
+            <div className="flex flex-col md:flex-row gap-6 md:gap-12 justify-center items-center scale-[0.65] sm:scale-75 md:scale-90 lg:scale-100 transform origin-top transition-transform h-min">
+                <div className="space-y-3 transform origin-center">
                     <div className="flex items-center justify-between px-2">
                         <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">Мои Воды</p>
-                        <span className="text-[10px] font-black italic text-white/40">{ships.length}/20</span>
+                        <span className="text-[10px] font-black italic text-text-main/40">{ships.length}/20</span>
                     </div>
                     <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-4 border-slate-700 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => (
@@ -903,13 +889,13 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                                 key={i} 
                                 onClick={() => handleCellClick(i)}
                                 className={cn(
-                                    "bg-slate-900 transition-colors relative",
-                                    ships.includes(i) ? "bg-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.5)]" : "",
+                                    "bg-slate-900 transition-colors relative h-full w-full",
+                                    ships.includes(i) ? "bg-emerald-500 shadow-[inset_0_0_10px_rgba(16,185,129,0.5)]" : "",
                                     !ready && "hover:bg-slate-800 cursor-pointer"
                                 )} 
                             >
                                 {opponentShots.includes(i) && (
-                                    <div className={cn("absolute inset-0 flex items-center justify-center font-bold text-xs", ships.includes(i) ? "text-rose-500" : "text-white/20")}>
+                                    <div className={cn("absolute inset-0 flex items-center justify-center font-bold text-[10px]", ships.includes(i) ? "text-rose-500" : "text-white/20")}>
                                         {ships.includes(i) ? '💥' : '•'}
                                     </div>
                                 )}
@@ -918,10 +904,10 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                     </div>
                 </div>
 
-                <div className="space-y-4 scale-[0.7] sm:scale-[0.8] md:scale-100 transform origin-center">
+                <div className="space-y-3 transform origin-center">
                     <div className="flex items-center justify-between px-2">
                         <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Вражеский Флот</p>
-                        <span className="text-[10px] font-black italic text-white/40">{shots.filter(s => state?.players?.[oppIndex]?.ships?.includes(s)).length}/20</span>
+                        <span className="text-[10px] font-black italic text-text-main/40">{shots.filter(s => state?.players?.[oppIndex]?.ships?.includes(s)).length}/20</span>
                     </div>
                     <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-4 border-slate-700 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => {
@@ -933,21 +919,21 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                                     key={i} 
                                     onClick={() => handleShoot(i)}
                                     className={cn(
-                                        "bg-slate-900 group relative",
+                                        "bg-slate-900 group relative h-full w-full",
                                         isMyTurn && !shots.includes(i) && "cursor-crosshair hover:bg-slate-800"
                                     )}
                                 >
                                     {isMyTurn && !shots.includes(i) && <div className="absolute inset-0 bg-accent opacity-0 group-hover:opacity-20 transition-opacity" />}
-                                    {isHit && <div className="absolute inset-0 flex items-center justify-center text-rose-500 font-bold text-xs">💥</div>}
-                                    {isMiss && <div className="absolute inset-0 flex items-center justify-center text-white/20 font-bold text-xs">•</div>}
+                                    {isHit && <div className="absolute inset-0 flex items-center justify-center text-rose-500 font-bold text-[10px]">💥</div>}
+                                    {isMiss && <div className="absolute inset-0 flex items-center justify-center text-white/20 font-bold text-[10px]">•</div>}
                                 </div>
                             );
                         })}
                         {!opponentReady && (
-                            <div className="absolute inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center p-8">
+                            <div className="absolute inset-0 bg-bg-primary/60 backdrop-blur-md flex items-center justify-center p-8">
                                 <div className="text-center space-y-2">
                                     <RefreshCw className="animate-spin text-accent mx-auto" size={24} />
-                                    <p className="text-[9px] font-black uppercase text-white tracking-widest">Противник расставляет силы...</p>
+                                    <p className="text-[9px] font-black uppercase text-text-main tracking-widest">Противник расставляет силы...</p>
                                 </div>
                             </div>
                         )}
@@ -955,17 +941,17 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                 </div>
             </div>
 
-            <div className="flex flex-col items-center gap-4 mt-4">
+            <div className="flex flex-col items-center gap-4 mt-2 mb-8 md:mb-0 scale-90 sm:scale-100">
                 {!ready && (
-                    <div className="flex flex-col items-center gap-6 w-full">
-                        <div className="flex flex-wrap justify-center gap-4 p-4 bg-slate-800 border border-slate-700 rounded-3xl shadow-xl">
+                    <div className="flex flex-col items-center gap-4 w-full">
+                        <div className="flex flex-wrap justify-center gap-2 md:gap-4 p-4 bg-bg-secondary border border-white/5 rounded-3xl shadow-xl max-w-full">
                            {[4, 3, 2, 1].map(size => (
                                <button 
                                  key={size}
                                  onClick={() => setShipToPlace(size)}
                                  className={cn(
-                                     "px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all relative flex items-center gap-2",
-                                     shipToPlace === size ? "bg-accent text-white shadow-lg" : "bg-white/5 text-white/50 hover:bg-white/10"
+                                     "px-3 md:px-5 py-2 md:py-3 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all relative flex items-center gap-2",
+                                     shipToPlace === size ? "bg-accent text-white shadow-lg" : "bg-bg-primary text-text-dim hover:text-text-main"
                                  )}
                                >
                                    <div className="flex gap-0.5">
@@ -974,25 +960,26 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                                    {size}x 
                                    <span className={cn(
                                        "text-[8px] font-black",
-                                       shipCounts[size as keyof typeof shipCounts] >= SHIP_LIMITS[size as keyof typeof SHIP_LIMITS] ? "text-emerald-400" : "text-white/30"
+                                       shipCounts[size as keyof typeof shipCounts] >= SHIP_LIMITS[size as keyof typeof SHIP_LIMITS] ? "text-emerald-400" : "text-text-dim"
                                    )}>
                                        {shipCounts[size as keyof typeof shipCounts]}/{SHIP_LIMITS[size as keyof typeof SHIP_LIMITS]}
                                    </span>
-                               </button>
+                                </button>
                            ))}
-                           <div className="w-px h-8 bg-slate-700 mx-2" />
+                           <div className="hidden md:block w-px h-8 bg-white/5 mx-2" />
                            <button 
                              onClick={() => setOrientation(prev => prev === 'h' ? 'v' : 'h')}
-                             className="px-5 py-3 bg-indigo-500/20 text-indigo-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/30 transition-all flex items-center gap-2"
+                             className="px-3 md:px-5 py-2 md:py-3 bg-indigo-500/10 text-indigo-500 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/20 transition-all flex items-center gap-2"
                            >
-                               {orientation === 'h' ? <div className="w-4 h-1 bg-current rounded-full" /> : <div className="w-1 h-4 bg-current rounded-full" />}
-                               {orientation === 'h' ? 'Горизонтально' : 'Вертикально'}
+                                {orientation === 'h' ? <div className="w-3 md:w-4 h-1 bg-current rounded-full" /> : <div className="w-1 h-3 md:w-4 bg-current rounded-full" />}
+                                <span className="hidden sm:inline">{orientation === 'h' ? 'Горизонтально' : 'Вертикально'}</span>
+                                <span className="sm:hidden">{orientation === 'h' ? 'Гор.' : 'Верт.'}</span>
                            </button>
                            <button 
                              onClick={() => { setShips([]); setShipCounts({ 4: 0, 3: 0, 2: 0, 1: 0 }); setShipToPlace(4); }}
-                             className="px-5 py-3 bg-rose-500/20 text-rose-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/30 transition-all"
+                             className="px-3 md:px-5 py-2 md:py-3 bg-rose-500/10 text-rose-500 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/20 transition-all"
                            >
-                               Сбросить всё
+                                Сбросить
                            </button>
                         </div>
                         <button 
