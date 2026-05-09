@@ -482,7 +482,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
               </button>
           )}
           {chatId === 'SYSTEM' && <button onClick={() => setShowTicketModal(true)} className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl hover:bg-emerald-500/20 transition-all font-black text-[10px] uppercase tracking-widest px-4 shadow-lg shadow-emerald-500/10 active:scale-95">Тикет</button>}
-          {userRole === 'USER' && (partner?.role === 'ADMIN' || partner?.role === 'CURATOR' || partner?.role === 'OWNER') && !chatId.startsWith('TICKET_') && (
+          {userRole === 'USER' && !chatId.startsWith('TICKET_') && chatId !== 'SYSTEM' && (
             <button 
               onClick={() => setShowRating(true)} 
               className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl hover:bg-amber-500/20 transition-all shadow-lg shadow-amber-500/10 active:scale-95"
