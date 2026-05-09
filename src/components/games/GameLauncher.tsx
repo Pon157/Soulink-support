@@ -106,29 +106,35 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
 
       {showChat && (
           <div className="w-full md:w-[400px] h-full bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[3rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl">
-              <ChatInGame chatId={sessionId.replace('game_', '')} partnerName={partnerName} currentUserId={currentUserId} />
+              <ChatInGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} gameState={gameState} />
           </div>
       )}
     </div>
   );
 };
 
-const ChatInGame = ({ chatId, partnerName, currentUserId }: any) => {
+const ChatInGame = ({ sessionId, partnerName, currentUserId, gameState }: any) => {
     const [messages, setMessages] = useState<any[]>([]);
     const [input, setInput] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    const partner = gameState?.players?.find((p: any) => p.id !== currentUserId);
+    const chatId = partner?.id;
+
     const fetchMessages = async () => {
+        if (!chatId) return;
         try {
-            const res = await apiFetch(`/api/chats/${chatId}/messages`);
+            const res = await apiFetch(`/api/messages/${chatId}`);
             const data = await res.json();
-            setMessages(data);
-        } catch (e) { console.error(e); }
+            if (Array.isArray(data)) {
+                setMessages(data);
+            }
+        } catch (e) { }
     };
 
     useEffect(() => {
         fetchMessages();
-        const interval = setInterval(fetchMessages, 2000);
+        const interval = setInterval(fetchMessages, 3000);
         return () => clearInterval(interval);
     }, [chatId]);
 
@@ -137,11 +143,11 @@ const ChatInGame = ({ chatId, partnerName, currentUserId }: any) => {
     }, [messages]);
 
     const handleSend = async () => {
-        if (!input.trim()) return;
+        if (!input.trim() || !chatId) return;
         try {
-            await apiFetch(`/api/messages/send`, {
+            await apiFetch(`/api/messages`, {
                 method: 'POST',
-                body: JSON.stringify({ chatId, text: input })
+                body: JSON.stringify({ receiverId: chatId, content: input })
             });
             setInput('');
             fetchMessages();
@@ -149,7 +155,7 @@ const ChatInGame = ({ chatId, partnerName, currentUserId }: any) => {
     };
 
     return (
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col h-full bg-bg-secondary/30">
             <div className="p-6 border-b border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-accent/20 text-accent rounded-xl flex items-center justify-center">
@@ -157,7 +163,7 @@ const ChatInGame = ({ chatId, partnerName, currentUserId }: any) => {
                     </div>
                     <div>
                         <p className="text-xs font-black text-white uppercase tracking-widest leading-none">{partnerName}</p>
-                        <p className="text-[8px] text-accent font-bold uppercase mt-1">Чат активен</p>
+                        <p className="text-[8px] text-accent font-bold uppercase mt-1">Чат игры</p>
                     </div>
                 </div>
             </div>
@@ -165,26 +171,26 @@ const ChatInGame = ({ chatId, partnerName, currentUserId }: any) => {
                 {messages.map((msg, i) => (
                     <div key={i} className={cn("flex flex-col", msg.senderId === currentUserId ? "items-end" : "items-start")}>
                         <div className={cn(
-                            "max-w-[80%] p-4 rounded-2xl text-[13px] font-medium leading-relaxed",
-                            msg.senderId === currentUserId ? "bg-accent text-white" : "bg-white/5 text-text-main border border-white/5"
+                            "max-w-[85%] p-4 rounded-2xl text-[13px] font-medium leading-relaxed shadow-lg",
+                            msg.senderId === currentUserId ? "bg-accent text-white rounded-tr-none" : "bg-white/10 text-text-main border border-white/5 rounded-tl-none"
                         )}>
-                            {msg.text}
+                            {msg.content}
                         </div>
                     </div>
                 ))}
                 <div ref={scrollRef} />
             </div>
-            <div className="p-6 bg-black/20 border-t border-white/5 flex gap-2">
+            <div className="p-6 bg-black/40 border-t border-white/5 flex gap-2">
                 <input 
                     value={input}
                     onChange={e => setInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    placeholder="Написать..."
+                    placeholder="Напишите..."
                     className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-accent/40 transition-all"
                 />
                 <button 
                     onClick={handleSend}
-                    className="p-3 bg-accent text-white rounded-xl shadow-lg shadow-accent/20 active:scale-90 transition-all flex items-center justify-center"
+                    className="w-12 h-12 bg-accent text-white rounded-xl shadow-lg shadow-accent/20 active:scale-95 transition-all flex items-center justify-center"
                 >
                     <ArrowRight size={20} />
                 </button>
@@ -200,7 +206,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const [optionSquares, setOptionSquares] = useState({});
 
     useEffect(() => {
-        if (state?.fen) {
+        if (state?.fen && state.fen !== game.fen()) {
             try {
                 const newGame = new Chess(state.fen === 'start' ? undefined : state.fen);
                 setGame(newGame);
@@ -253,8 +259,8 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             newSquares[move.to] = {
                 background:
                     game.get(move.to as any) && game.get(move.to as any)?.color !== game.get(square as any)?.color
-                        ? "radial-gradient(circle, rgba(0,0,0,.1) 85%, transparent 85%)"
-                        : "radial-gradient(circle, rgba(0,0,0,.1) 20%, transparent 20%)",
+                        ? "radial-gradient(circle, rgba(239, 68, 68, .6) 85%, transparent 85%)"
+                        : "radial-gradient(circle, rgba(16, 185, 129, .6) 25%, transparent 25%)",
                 borderRadius: "50%",
             };
         });
@@ -462,41 +468,47 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
     };
 
     const memoBoard = useMemo(() => {
-        return board.map((piece, i) => {
-            const row = Math.floor(i / 8);
-            const col = i % 8;
+        const boardToRender = [...board];
+        const isFlipped = myIndex === 1;
+
+        return boardToRender.map((piece, i) => {
+            const displayIdx = isFlipped ? 63 - i : i;
+            const pieceAtDisplay = board[displayIdx];
+
+            const row = Math.floor(displayIdx / 8);
+            const col = displayIdx % 8;
             const isBlackSquare = (row + col) % 2 === 1;
-            const isValidMove = validMoves.includes(i);
+            const isValidMove = validMoves.includes(displayIdx);
 
             return (
                 <div 
-                    key={i} 
-                    onClick={() => handleSquareClick(i)}
+                    key={displayIdx} 
+                    onClick={() => handleSquareClick(displayIdx)}
                     className={cn(
                         "flex items-center justify-center relative backdrop-blur-sm transition-all h-full aspect-square",
                         !isBlackSquare ? 'bg-slate-300' : 'bg-slate-700',
-                        isMyTurn && piece?.color === myColor && "cursor-pointer hover:bg-slate-600",
-                        selected === i && "ring-4 ring-accent ring-inset z-10",
+                        isMyTurn && pieceAtDisplay?.color === myColor && "cursor-pointer hover:bg-slate-600",
+                        selected === displayIdx && "ring-4 ring-accent ring-inset z-10",
                         isValidMove && "bg-accent/30 cursor-pointer"
                     )}
                 >
-                    {piece && (
+                    {pieceAtDisplay && (
                         <motion.div 
-                            layoutId={`checkers-piece-${i}`}
+                            layoutId={`checkers-piece-${displayIdx}`}
                             initial={false}
                             className={cn(
                                 "w-10 h-10 md:w-12 md:h-12 rounded-full shadow-2xl border-2 flex items-center justify-center",
-                                piece.color === 'white' ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'
+                                pieceAtDisplay.color === 'white' ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'
                             )}
                         >
-                            {piece.king && <Shield className={piece.color === 'white' ? 'text-slate-400' : 'text-slate-600'} size={16} />}
+                            {pieceAtDisplay.king && <Shield className={pieceAtDisplay.color === 'white' ? 'text-slate-400' : 'text-slate-600'} size={16} />}
                         </motion.div>
                     )}
                     {isValidMove && <div className="absolute w-3 h-3 bg-accent rounded-full animate-pulse" />}
                 </div>
             );
         });
-    }, [board, selected, isMyTurn, myColor, validMoves]);
+    }, [board, selected, isMyTurn, myColor, validMoves, myIndex]);
 
     return (
         <div className="w-full max-w-md aspect-square bg-slate-900 rounded-[3rem] border-8 border-slate-800 shadow-2xl relative overflow-hidden">
@@ -733,7 +745,10 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
         if (state?.players) {
             const p = state.players[myIndex];
             const op = state.players[oppIndex];
-            setShips(p.ships || []);
+            // Only update local ships from server if we are already ready OR if the server has something we don't
+            if (p.ready || (p.ships?.length > 0 && ships.length === 0)) {
+                setShips(p.ships || []);
+            }
             setShots(p.shots || []);
             setOpponentShots(op.shots || []);
             setReady(p.ready || false);
@@ -755,7 +770,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                                 onClick={() => handleCellClick(i)}
                                 className={cn(
                                     "bg-slate-900 transition-colors relative",
-                                    ships.includes(i) ? "bg-emerald-500/40" : "",
+                                    ships.includes(i) ? "bg-emerald-500 shadow-[inset_0_0_15px_rgba(16,185,129,0.5)]" : "",
                                     !ready && "hover:bg-slate-800 cursor-pointer"
                                 )} 
                             >
