@@ -21,7 +21,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -59,11 +59,17 @@ const authenticateToken = (req: any, res: any, next: any) => {
     if (err) return res.sendStatus(403);
     req.user = user;
     
-    // Update lastSeen asynchronously to not block request
-    prisma.user.update({
-        where: { id: user.userId },
-        data: { lastSeen: new Date() }
-    }).catch(e => console.error('LastSeen update fail', e));
+    // Update lastSeen at most once every 5 minutes to reduce DB load
+    const lastUpdate = (global as any).lastSeenUpdates?.[user.userId] || 0;
+    const now = Date.now();
+    if (now - lastUpdate > 5 * 60 * 1000) {
+        if (!(global as any).lastSeenUpdates) (global as any).lastSeenUpdates = {};
+        (global as any).lastSeenUpdates[user.userId] = now;
+        prisma.user.update({
+            where: { id: user.userId },
+            data: { lastSeen: new Date() }
+        }).catch(e => console.error('LastSeen update fail', e));
+    }
 
     next();
   });
