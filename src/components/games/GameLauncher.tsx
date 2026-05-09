@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Trophy, MessageSquare, Gamepad2, Swords, Brain, Hash, Edit3, Shield, Video, Timer, RefreshCw, Star, Trash, Reply, Camera, Mic, ArrowRight, Loader2, Play } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Modal } from '../ui/Modal';
@@ -196,6 +196,9 @@ const ChatInGame = ({ chatId, partnerName, currentUserId }: any) => {
 const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId: string, partnerName: string, currentUserId: string, state: any }) => {
     const [game, setGame] = useState(new Chess(state?.fen === 'start' ? undefined : state?.fen));
 
+    const [moveFrom, setMoveFrom] = useState('');
+    const [optionSquares, setOptionSquares] = useState({});
+
     useEffect(() => {
         if (state?.fen) {
             try {
@@ -205,33 +208,91 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         }
     }, [state?.fen]);
 
-    function onDrop(sourceSquare: string, targetSquare: string) {
-        if (!state?.players) return false;
+    function onSquareClick(square: string) {
+        if (!state?.players || game.isGameOver()) return;
         const myPlayerIndex = state.players.findIndex((p: any) => p.id === currentUserId);
-        if (myPlayerIndex === -1) return false;
         const myColor = myPlayerIndex === 0 ? 'w' : 'b';
-        
-        if (game.turn() !== myColor) return false;
+        if (game.turn() !== myColor) return;
 
+        // from square
+        if (!moveFrom) {
+            const hasMove = getMoveOptions(square);
+            if (hasMove) setMoveFrom(square);
+            return;
+        }
+
+        // to square
+        const move = makeMove({
+            from: moveFrom,
+            to: square,
+            promotion: "q",
+        });
+
+        if (!move) {
+            const hasMove = getMoveOptions(square);
+            setMoveFrom(hasMove ? square : "");
+            return;
+        }
+
+        setMoveFrom("");
+        setOptionSquares({});
+    }
+
+    function getMoveOptions(square: string) {
+        const moves = game.moves({
+            square: square as any,
+            verbose: true,
+        });
+        if (moves.length === 0) {
+            setOptionSquares({});
+            return false;
+        }
+
+        const newSquares: any = {};
+        moves.forEach((move) => {
+            newSquares[move.to] = {
+                background:
+                    game.get(move.to as any) && game.get(move.to as any)?.color !== game.get(square as any)?.color
+                        ? "radial-gradient(circle, rgba(0,0,0,.1) 85%, transparent 85%)"
+                        : "radial-gradient(circle, rgba(0,0,0,.1) 20%, transparent 20%)",
+                borderRadius: "50%",
+            };
+        });
+        newSquares[square] = {
+            background: "rgba(255, 255, 0, 0.4)",
+        };
+        setOptionSquares(newSquares);
+        return true;
+    }
+
+    function makeMove(move: any) {
         try {
-            const move = game.move({
-                from: sourceSquare,
-                to: targetSquare,
-                promotion: "q",
-            });
+            const gameCopy = new Chess(game.fen());
+            const result = gameCopy.move(move);
+            if (result) {
+                setGame(gameCopy);
+                apiFetch(`/api/games/${sessionId}/move`, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        state: { ...state, fen: gameCopy.fen(), turn: gameCopy.turn() === 'w' ? 'white' : 'black' },
+                        move: { from: move.from, to: move.to, piece: result.piece, san: result.san }
+                    })
+                });
+            }
+            return result;
+        } catch (e) { return null; }
+    }
 
-            if (move === null) return false;
+    function onDrop(sourceSquare: string, targetSquare: string) {
+        const move = makeMove({
+            from: sourceSquare,
+            to: targetSquare,
+            promotion: "q",
+        });
 
-            apiFetch(`/api/games/${sessionId}/move`, {
-                method: 'POST',
-                body: JSON.stringify({ 
-                    state: { ...state, fen: game.fen(), turn: game.turn() === 'w' ? 'white' : 'black' },
-                    move: { from: sourceSquare, to: targetSquare, piece: move.piece, san: move.san }
-                })
-            });
-
-            return true;
-        } catch (e) { return false; }
+        if (move === null) return false;
+        setOptionSquares({});
+        return true;
     }
 
     const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
@@ -245,7 +306,11 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             <ChessboardAny 
                 position={game.fen()} 
                 onPieceDrop={onDrop} 
-                boardOrientation={partnerName === state.players?.[0]?.nickname ? 'black' : 'white'}
+                onSquareClick={onSquareClick}
+                customSquareStyles={{
+                    ...optionSquares,
+                }}
+                boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
                 customDarkSquareStyle={{ backgroundColor: '#1e293b' }}
                 customLightSquareStyle={{ backgroundColor: '#cbd5e1' }}
             />
@@ -306,6 +371,35 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
         }
     }, [state?.board]);
 
+    const getValidMoves = useCallback((idx: number) => {
+        if (!board[idx] || board[idx].color !== myColor) return [];
+        const moves = [];
+        const fromRow = Math.floor(idx / 8);
+        const fromCol = idx % 8;
+
+        const directions = board[idx].king ? [[1,1], [1,-1], [-1,1], [-1,-1]] : (myColor === 'white' ? [[-1,1], [-1,-1]] : [[1,1], [1,-1]]);
+        
+        for (const [dr, dc] of directions) {
+            // Normal move
+            const nr = fromRow + dr;
+            const nc = fromCol + dc;
+            if (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+                if (!board[nr * 8 + nc]) moves.push(nr * 8 + nc);
+                else if (board[nr * 8 + nc].color !== myColor) {
+                    // Jump move
+                    const jr = nr + dr;
+                    const jc = nc + dc;
+                    if (jr >= 0 && jr <= 7 && jc >= 0 && jc <= 7 && !board[jr * 8 + jc]) {
+                        moves.push(jr * 8 + jc);
+                    }
+                }
+            }
+        }
+        return moves;
+    }, [board, myColor]);
+
+    const validMoves = useMemo(() => selected !== null ? getValidMoves(selected) : [], [selected, getValidMoves]);
+
     const handleSquareClick = async (index: number) => {
         if (!isMyTurn) return;
 
@@ -315,9 +409,14 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                 setSelected(index);
             }
         } else {
-            // Attempt move
             if (index === selected) {
                 setSelected(null);
+                return;
+            }
+
+            if (!validMoves.includes(index)) {
+                if (piece && piece.color === myColor) setSelected(index);
+                else setSelected(null);
                 return;
             }
 
@@ -329,80 +428,61 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
             const rowDiff = toRow - fromRow;
             const colDiff = Math.abs(toCol - fromCol);
 
-            // Basic diagonal check
-            if (colDiff === Math.abs(rowDiff)) {
-                let isValid = false;
-                let capturedIndex = null;
-
-                if (colDiff === 1) {
-                    // Normal move
-                    if (!board[index]) {
-                        if (myColor === 'white' && rowDiff === -1) isValid = true;
-                        if (myColor === 'black' && rowDiff === 1) isValid = true;
-                        if (board[selected].king) isValid = true;
-                    }
-                } else if (colDiff === 2) {
-                    // Jump move
-                    const midRow = fromRow + rowDiff / 2;
-                    const midCol = fromCol + (toCol - fromCol) / 2;
-                    const midIndex = midRow * 8 + midCol;
-                    const midPiece = board[midIndex];
-
-                    if (!board[index] && midPiece && midPiece.color !== myColor) {
-                        isValid = true;
-                        capturedIndex = midIndex;
-                    }
-                }
-
-                if (isValid) {
-                    const newBoard = [...board];
-                    newBoard[index] = { ...newBoard[selected] };
-                    newBoard[selected] = null;
-                    if (capturedIndex !== null) newBoard[capturedIndex] = null;
-
-                    // King promotion
-                    if (myColor === 'white' && toRow === 0) newBoard[index].king = true;
-                    if (myColor === 'black' && toRow === 7) newBoard[index].king = true;
-
-                    // Update state
-                    try {
-                        await apiFetch(`/api/games/${sessionId}/move`, {
-                            method: 'POST',
-                            body: JSON.stringify({ 
-                                state: { 
-                                    ...state, 
-                                    board: newBoard, 
-                                    turn: myColor === 'white' ? 'black' : 'white' 
-                                } 
-                            })
-                        });
-                        setSelected(null);
-                    } catch (e) { console.error(e); }
-                }
+            let capturedIndex = null;
+            if (colDiff === 2) {
+                const midRow = fromRow + rowDiff / 2;
+                const midCol = fromCol + (index % 8 - fromCol) / 2;
+                capturedIndex = midRow * 8 + midCol;
             }
-            setSelected(null);
+
+            const newBoard = [...board];
+            newBoard[index] = { ...newBoard[selected] };
+            newBoard[selected] = null;
+            if (capturedIndex !== null) newBoard[capturedIndex] = null;
+
+            if (myColor === 'white' && toRow === 0) newBoard[index].king = true;
+            if (myColor === 'black' && toRow === 7) newBoard[index].king = true;
+
+            try {
+                // Optimistic update
+                setBoard(newBoard);
+                apiFetch(`/api/games/${sessionId}/move`, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        state: { 
+                            ...state, 
+                            board: newBoard, 
+                            turn: myColor === 'white' ? 'black' : 'white' 
+                        } 
+                    })
+                });
+                setSelected(null);
+            } catch (e) { console.error(e); }
         }
     };
 
-    const memoBoard = React.useMemo(() => {
+    const memoBoard = useMemo(() => {
         return board.map((piece, i) => {
             const row = Math.floor(i / 8);
             const col = i % 8;
-            const isWhiteSquare = (row + col) % 2 === 0;
+            const isBlackSquare = (row + col) % 2 === 1;
+            const isValidMove = validMoves.includes(i);
+
             return (
                 <div 
                     key={i} 
                     onClick={() => handleSquareClick(i)}
                     className={cn(
                         "flex items-center justify-center relative backdrop-blur-sm transition-all h-full aspect-square",
-                        isWhiteSquare ? 'bg-slate-300' : 'bg-slate-700',
+                        !isBlackSquare ? 'bg-slate-300' : 'bg-slate-700',
                         isMyTurn && piece?.color === myColor && "cursor-pointer hover:bg-slate-600",
-                        selected === i && "ring-4 ring-accent ring-inset z-10"
+                        selected === i && "ring-4 ring-accent ring-inset z-10",
+                        isValidMove && "bg-accent/30 cursor-pointer"
                     )}
                 >
                     {piece && (
                         <motion.div 
-                            layoutId={`piece-${i}-${piece.color}`}
+                            layoutId={`checkers-piece-${i}`}
                             initial={false}
                             className={cn(
                                 "w-10 h-10 md:w-12 md:h-12 rounded-full shadow-2xl border-2 flex items-center justify-center",
@@ -412,10 +492,11 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                             {piece.king && <Shield className={piece.color === 'white' ? 'text-slate-400' : 'text-slate-600'} size={16} />}
                         </motion.div>
                     )}
+                    {isValidMove && <div className="absolute w-3 h-3 bg-accent rounded-full animate-pulse" />}
                 </div>
             );
         });
-    }, [board, selected, isMyTurn, myColor]);
+    }, [board, selected, isMyTurn, myColor, validMoves]);
 
     return (
         <div className="w-full max-w-md aspect-square bg-slate-900 rounded-[3rem] border-8 border-slate-800 shadow-2xl relative overflow-hidden">
@@ -552,20 +633,68 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
     const [ready, setReady] = useState<boolean>(state?.players?.[myIndex]?.ready || false);
     const [opponentReady, setOpponentReady] = useState<boolean>(state?.players?.[oppIndex]?.ready || false);
 
-    const toggleShip = (index: number) => {
-        if (ready) return;
-        let newShips = [...ships];
-        if (newShips.includes(index)) {
-            newShips = newShips.filter(s => s !== index);
-        } else {
-            if (newShips.length >= 10) return;
-            newShips.push(index);
+    // Ship placement states
+    const [orientation, setOrientation] = useState<'h' | 'v'>('h');
+    const [shipCounts, setShipCounts] = useState({ 4: 0, 3: 0, 2: 0, 1: 0 });
+
+    useEffect(() => {
+        // Re-calculate ship counts from 'ships' if needed
+        // For now, let's keep them in parallel for display
+    }, [ships]);
+
+    const SHIP_LIMITS = { 4: 1, 3: 2, 2: 3, 1: 4 };
+
+    const [shipToPlace, setShipToPlace] = useState(4); // Current ship size to place
+
+    const canPlaceShip = (index: number, size: number, orient: 'h' | 'v') => {
+        if (shipCounts[size as keyof typeof shipCounts] >= SHIP_LIMITS[size as keyof typeof SHIP_LIMITS]) return null;
+
+        const row = Math.floor(index / 10);
+        const col = index % 10;
+        
+        let indices = [];
+        for (let i = 0; i < size; i++) {
+            const r = orient === 'v' ? row + i : row;
+            const c = orient === 'h' ? col + i : col;
+            if (r > 9 || c > 9) return null;
+            indices.push(r * 10 + c);
         }
-        setShips(newShips);
+
+        // Check collisions and adjacency
+        for (const idx of indices) {
+            const r = Math.floor(idx / 10);
+            const c = idx % 10;
+            // Check neighbors (including diagonals and self)
+            for (let dr = -1; dr <= 1; dr++) {
+                for (let dc = -1; dc <= 1; dc++) {
+                    const nr = r + dr;
+                    const nc = c + dc;
+                    if (nr >= 0 && nr <= 9 && nc >= 0 && nc <= 9) {
+                        if (ships.includes(nr * 10 + nc)) return null;
+                    }
+                }
+            }
+        }
+        return indices;
+    };
+
+    const handleCellClick = (index: number) => {
+        if (ready) return;
+        
+        const indices = canPlaceShip(index, shipToPlace, orientation);
+        if (indices) {
+            setShips(prev => [...prev, ...indices]);
+            setShipCounts(prev => ({ ...prev, [shipToPlace]: prev[shipToPlace as keyof typeof prev] + 1 }));
+        } else {
+            if (ships.includes(index)) {
+                setShips([]);
+                setShipCounts({ 4: 0, 3: 0, 2: 0, 1: 0 });
+            }
+        }
     };
 
     const handleReady = () => {
-        if (ships.length < 10) return;
+        if (ships.length !== 20) return; // 1*4 + 2*3 + 3*2 + 4*1 = 20 cells
         setReady(true);
         updateState({ ships, ready: true });
     };
@@ -618,12 +747,12 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
         <div className="w-full max-w-2xl h-full flex flex-col p-8 space-y-6 animate-in zoom-in duration-500 overflow-y-auto">
             <div className="flex flex-wrap gap-8 justify-center">
                 <div className="space-y-4">
-                    <p className="text-[10px] font-black uppercase text-center text-emerald-400 tracking-widest">Мои Воды ({ships.length}/10)</p>
+                    <p className="text-[10px] font-black uppercase text-center text-emerald-400 tracking-widest">Мои Воды ({ships.length}/20)</p>
                     <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-4 border-slate-700 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => (
                             <div 
                                 key={i} 
-                                onClick={() => toggleShip(i)}
+                                onClick={() => handleCellClick(i)}
                                 className={cn(
                                     "bg-slate-900 transition-colors relative",
                                     ships.includes(i) ? "bg-emerald-500/40" : "",
@@ -681,13 +810,50 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
 
             <div className="flex flex-col items-center gap-4 mt-4">
                 {!ready && (
-                    <button 
-                        onClick={handleReady}
-                        disabled={ships.length < 10}
-                        className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white px-12 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-xl shadow-emerald-500/20 active:scale-95 transition-all"
-                    >
-                        Готов к бою
-                    </button>
+                    <div className="flex flex-col items-center gap-6 w-full">
+                        <div className="flex gap-4 p-2 bg-slate-800 rounded-2xl border border-slate-700">
+                           {[4, 3, 2, 1].map(size => (
+                               <button 
+                                 key={size}
+                                 onClick={() => setShipToPlace(size)}
+                                 className={cn(
+                                     "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative",
+                                     shipToPlace === size ? "bg-accent text-white shadow-lg" : "bg-white/5 text-white/50 hover:bg-white/10"
+                                 )}
+                               >
+                                   {size}x 
+                                   <span className={cn(
+                                       "ml-2 text-[8px]",
+                                       shipCounts[size as keyof typeof shipCounts] >= SHIP_LIMITS[size as keyof typeof SHIP_LIMITS] ? "text-emerald-400" : "text-white/30"
+                                   )}>
+                                       {shipCounts[size as keyof typeof shipCounts]}/{SHIP_LIMITS[size as keyof typeof SHIP_LIMITS]}
+                                   </span>
+                               </button>
+                           ))}
+                           <button 
+                             onClick={() => setOrientation(prev => prev === 'h' ? 'v' : 'h')}
+                             className="px-4 py-2 bg-indigo-500/20 text-indigo-400 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                           >
+                               {orientation === 'h' ? 'Гориз' : 'Вертик'}
+                           </button>
+                           <button 
+                             onClick={() => setShips([])}
+                             className="px-4 py-2 bg-rose-500/20 text-rose-400 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                           >
+                               Сброс
+                           </button>
+                        </div>
+                        <button 
+                            onClick={handleReady}
+                            disabled={ships.length !== 20}
+                            className={cn(
+                                "px-12 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all text-white",
+                                ships.length === 20 ? "bg-emerald-500 shadow-emerald-500/20" : "bg-slate-700 opacity-50 cursor-not-allowed"
+                            )}
+                        >
+                            Готов к бою (20/20)
+                        </button>
+                    </div>
                 )}
                 {ready && opponentReady && (
                     <div className={cn(
