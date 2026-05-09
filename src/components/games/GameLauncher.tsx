@@ -66,40 +66,40 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/95 backdrop-blur-3xl flex flex-col md:flex-row p-4 md:p-8 animate-in fade-in duration-300 gap-6 overflow-hidden">
+    <div className="fixed inset-0 z-[120] bg-black/95 backdrop-blur-3xl flex flex-col md:flex-row p-4 md:p-6 lg:p-8 animate-in fade-in duration-300 gap-4 md:gap-6 overflow-hidden">
       <div className="flex-1 flex flex-col items-center justify-center relative">
-        <header className="flex items-center justify-between mb-8 w-full max-w-4xl">
-            <div className="flex items-center gap-6">
-            <div className="w-16 h-16 bg-accent rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-accent/40 relative">
-                <div className="absolute inset-0 bg-white/20 rounded-[2rem] animate-pulse" />
-                <Gamepad2 className="relative" size={32} />
+        <header className="flex items-center justify-between mb-4 md:mb-8 w-full max-w-4xl">
+            <div className="flex items-center gap-3 md:gap-6">
+            <div className="w-12 h-12 md:w-16 md:h-16 bg-accent rounded-[1.5rem] md:rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-accent/40 relative">
+                <div className="absolute inset-0 bg-white/20 rounded-[1.5rem] md:rounded-[2rem] animate-pulse" />
+                <Gamepad2 className="relative" size={24} />
             </div>
             <div>
-                <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter leading-none">
+                <h2 className="text-xl md:text-3xl font-black italic text-white uppercase tracking-tighter leading-none">
                 {gameType === 'chess' ? 'Шахматный Мастер' : gameType === 'words' ? 'Битва Слов' : gameType === 'checkers' ? 'Ударные Шашки' : 'SoulБитва'}
                 </h2>
-                <div className="flex items-center gap-2 mt-2">
-                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-                    <p className="text-[11px] font-black text-accent uppercase tracking-widest">В ЭФИРЕ • ПРОТИВ {partnerName}</p>
+                <div className="flex items-center gap-2 mt-1 md:mt-2">
+                    <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-emerald-500 rounded-full animate-ping" />
+                    <p className="text-[9px] md:text-[11px] font-black text-accent uppercase tracking-widest truncate max-w-[120px] md:max-w-none">ПРОТИВ {partnerName}</p>
                 </div>
             </div>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
                 <button 
                     onClick={() => setShowChat(!showChat)}
                     className={cn(
-                        "p-4 rounded-2xl transition-all active:scale-95 flex items-center gap-2 font-black text-[10px] uppercase tracking-widest",
+                        "p-3 md:p-4 rounded-xl md:rounded-2xl transition-all active:scale-95 flex items-center gap-2 font-black text-[9px] md:text-[10px] uppercase tracking-widest",
                         showChat ? "bg-accent text-white" : "bg-white/5 text-white/50 hover:bg-white/10"
                     )}
                 >
-                    <MessageSquare size={20} />
-                    {showChat ? 'Скрыть чат' : 'Чат игры'}
+                    <MessageSquare size={18} />
+                    <span className="hidden sm:inline">{showChat ? 'Скрыть чат' : 'Чат игры'}</span>
                 </button>
-                <button onClick={onClose} className="p-4 bg-white/5 rounded-[1.5rem] text-white/50 hover:bg-white/10 hover:text-white transition-all active:scale-90"><X size={28} /></button>
+                <button onClick={onClose} className="p-3 md:p-4 bg-white/5 rounded-xl md:rounded-[1.5rem] text-white/50 hover:bg-white/10 hover:text-white transition-all active:scale-90"><X size={24} /></button>
             </div>
         </header>
 
-        <div className="flex-1 bg-bg-secondary/50 rounded-[4rem] border border-white/5 shadow-2xl overflow-hidden relative flex flex-col items-center justify-center w-full max-w-4xl backdrop-blur-md">
+        <div className="flex-1 bg-bg-secondary/50 rounded-[2.5rem] md:rounded-[4rem] border border-white/5 shadow-2xl overflow-hidden relative flex flex-col items-center justify-center w-full max-w-4xl backdrop-blur-md">
             {renderGame()}
         </div>
       </div>
@@ -204,12 +204,13 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const [game, setGame] = useState(new Chess(state?.fen === 'start' ? undefined : state?.fen));
     const [moveFrom, setMoveFrom] = useState('');
     const [optionSquares, setOptionSquares] = useState({});
+    const [isProcessing, setIsProcessing] = useState(false);
 
     // Keep track of the last processed FEN to avoid unnecessary resets
     const [lastReceivedFen, setLastReceivedFen] = useState(state?.fen);
 
     useEffect(() => {
-        if (state?.fen && state.fen !== game.fen() && state.fen !== lastReceivedFen) {
+        if (!isProcessing && state?.fen && state.fen !== game.fen() && state.fen !== lastReceivedFen) {
             try {
                 const newGame = new Chess(state.fen === 'start' ? undefined : state.fen);
                 setGame(newGame);
@@ -218,7 +219,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 setMoveFrom('');
             } catch (e) { console.error(e); }
         }
-    }, [state?.fen]);
+    }, [state?.fen, isProcessing]);
 
     function onSquareClick(square: string) {
         if (!state?.players || game.isGameOver()) return;
@@ -278,23 +279,29 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     }
 
     async function makeMove(move: any) {
+        if (isProcessing) return null;
         try {
             const gameCopy = new Chess(game.fen());
             const result = gameCopy.move(move);
             if (result) {
+                setIsProcessing(true);
                 // Optimistic update
                 setGame(gameCopy);
                 setLastReceivedFen(gameCopy.fen()); // Prevent sync-back
                 setOptionSquares({});
                 setMoveFrom('');
                 
-                await apiFetch(`/api/games/${sessionId}/move`, {
-                    method: 'POST',
-                    body: JSON.stringify({ 
-                        state: { ...state, fen: gameCopy.fen(), turn: gameCopy.turn() === 'w' ? 'white' : 'black' },
-                        move: { from: move.from, to: move.to, piece: result.piece, san: result.san }
-                    })
-                });
+                try {
+                    await apiFetch(`/api/games/${sessionId}/move`, {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            state: { ...state, fen: gameCopy.fen(), turn: gameCopy.turn() === 'w' ? 'white' : 'black' },
+                            move: { from: move.from, to: move.to, piece: result.piece, san: result.san }
+                        })
+                    });
+                } finally {
+                    setTimeout(() => setIsProcessing(false), 500);
+                }
             }
             return result;
         } catch (e) { return null; }
@@ -368,6 +375,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
 const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => {
     const [selected, setSelected] = useState<number | null>(null);
     const [board, setBoard] = useState<any[]>(state?.board || []);
+    const [isProcessing, setIsProcessing] = useState(false);
 
     const myPlayerIndex = state?.players?.findIndex((p: any) => p.id === currentUserId);
     const myIndex = myPlayerIndex === -1 || myPlayerIndex === undefined ? 0 : myPlayerIndex;
@@ -375,6 +383,7 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
     const myColor = myIndex === 0 ? 'white' : 'black';
 
     useEffect(() => {
+        if (isProcessing) return;
         if (!state?.board) {
             // Initialize board if empty
             const newBoard = Array.from({ length: 64 }).map((_, i) => {
@@ -465,9 +474,10 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
             if (myColor === 'black' && toRow === 7) newBoard[index].king = true;
 
             try {
+                setIsProcessing(true);
                 // Optimistic update
                 setBoard(newBoard);
-                apiFetch(`/api/games/${sessionId}/move`, {
+                await apiFetch(`/api/games/${sessionId}/move`, {
                     method: 'POST',
                     body: JSON.stringify({ 
                         state: { 
@@ -478,7 +488,9 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                     })
                 });
                 setSelected(null);
-            } catch (e) { console.error(e); }
+            } catch (e) { console.error(e); } finally {
+                setTimeout(() => setIsProcessing(false), 500);
+            }
         }
     };
 
@@ -594,9 +606,23 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         } catch (e) { console.error(e); } finally { setSending(false); }
     };
 
+    const handleInputChange = (val: string) => {
+        const cleaned = val.toUpperCase().trim();
+        if (words.length > 0) {
+            const lastW = words[words.length - 1];
+            const lastChar = lastW.charAt(lastW.length - 1).toUpperCase();
+            // Prevent deleting the required first letter
+            if (!cleaned.startsWith(lastChar)) {
+                setInput(lastChar);
+                return;
+            }
+        }
+        setInput(cleaned);
+    };
+
     return (
-        <div className="w-full max-w-md h-full flex flex-col p-8 space-y-8 animate-in slide-in-from-bottom duration-500">
-            <div className="flex-1 space-y-4 overflow-y-auto pr-4 scroll-smooth">
+        <div className="w-full max-w-md h-full flex flex-col p-4 md:p-8 space-y-6 md:space-y-8 animate-in slide-in-from-bottom duration-500 overflow-hidden">
+            <div className="flex-1 space-y-4 overflow-y-auto pr-2 scroll-smooth">
                 {words.length === 0 && (
                     <div className="flex flex-col items-center justify-center h-full text-center space-y-4 opacity-50">
                         <Edit3 size={48} className="text-accent" />
@@ -631,11 +657,11 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 )}
                 <input 
                     value={input} 
-                    onChange={e => setInput(e.target.value.toUpperCase())} 
+                    onChange={e => handleInputChange(e.target.value)} 
                     onKeyDown={e => e.key === 'Enter' && handleSendWord()}
-                    placeholder={isMyTurn ? "Введите слово..." : ""} 
+                    placeholder={isMyTurn ? "Слово..." : ""} 
                     disabled={sending || !isMyTurn}
-                    className="flex-1 bg-transparent p-2 outline-none text-lg font-black italic uppercase text-text-main tracking-tighter"
+                    className="flex-1 bg-transparent p-2 outline-none text-base md:text-lg font-black italic uppercase text-text-main tracking-tighter"
                 />
                 <button 
                     onClick={handleSendWord}
@@ -790,9 +816,9 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
     const isLoss = winnerId && winnerId !== currentUserId;
 
     return (
-        <div className="w-full max-w-2xl h-full flex flex-col p-8 space-y-6 animate-in zoom-in duration-500 overflow-y-auto relative">
+        <div className="w-full h-full flex flex-col p-4 md:p-8 space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative">
             {winnerId && (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-xl z-50 flex flex-col items-center justify-center p-8 text-center space-y-4 animate-in fade-in zoom-in">
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-xl z-[60] flex flex-col items-center justify-center p-8 text-center space-y-4 animate-in fade-in zoom-in">
                     <div className={cn("p-8 rounded-[3rem] shadow-2xl", isWin ? "bg-emerald-500/20 border-emerald-500" : "bg-rose-500/20 border-rose-500")}>
                         <Trophy size={64} className={isWin ? "text-emerald-500 animate-bounce" : "text-slate-500"} />
                     </div>
@@ -805,8 +831,8 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                 </div>
             )}
             
-            <div className="flex flex-wrap gap-8 justify-center">
-                <div className="space-y-4">
+            <div className="flex flex-col md:flex-row gap-4 md:gap-8 justify-center items-center">
+                <div className="space-y-4 scale-[0.7] sm:scale-[0.8] md:scale-100 transform origin-center">
                     <div className="flex items-center justify-between px-2">
                         <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">Мои Воды</p>
                         <span className="text-[10px] font-black italic text-white/40">{ships.length}/20</span>
@@ -832,7 +858,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                     </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 scale-[0.7] sm:scale-[0.8] md:scale-100 transform origin-center">
                     <div className="flex items-center justify-between px-2">
                         <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Вражеский Флот</p>
                         <span className="text-[10px] font-black italic text-white/40">{shots.filter(s => state?.players?.[oppIndex]?.ships?.includes(s)).length}/20</span>
