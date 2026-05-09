@@ -36,21 +36,25 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
       if (Array.isArray(data)) {
         setMessages(data);
         if (data.length > 0) {
-          const newMessages = lastMessageId 
-            ? data.filter((m: any) => m.id > lastMessageId && m.senderId !== currentUserId)
-            : data.filter((m: any) => m.senderId !== currentUserId);
-          
-          if (newMessages.length > 0 && !showChat) {
-            setUnreadCount(prev => prev + newMessages.length);
+          if (lastMessageId === null) {
+            // Initial load - don't count unread, just set the reference
+            setLastMessageId(data[data.length - 1].id);
+          } else {
+            const newMessages = data.filter((m: any) => m.id > lastMessageId && m.senderId !== currentUserId);
+            if (newMessages.length > 0 && !showChat) {
+              setUnreadCount(prev => prev + newMessages.length);
+            }
+            setLastMessageId(data[data.length - 1].id);
           }
-          setLastMessageId(data[data.length - 1].id);
         }
       }
     } catch (e) {}
   }, [partnerId, lastMessageId, showChat, currentUserId]);
 
   useEffect(() => {
-    if (showChat) setUnreadCount(0);
+    if (showChat) {
+        setUnreadCount(0);
+    }
   }, [showChat]);
 
   useEffect(() => {
@@ -87,7 +91,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
       case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} />;
       case 'words': return <WordsGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} />;
       case 'checkers': return <CheckersGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} />;
-      case 'seabattle': return <SeaBattleGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} />;
+      case 'seabattle': return <SeaBattleGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} onClose={onClose} />;
       default: return (
         <div className="text-center space-y-6 max-w-xs transition-all animate-in fade-in zoom-in duration-500 px-8">
             <div className="w-24 h-24 bg-accent/5 rounded-[2.5rem] flex items-center justify-center mx-auto border border-accent/10">
@@ -144,7 +148,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
       </div>
 
       {showChat && (
-          <div className="absolute right-4 bottom-4 top-20 md:relative md:inset-auto w-[calc(100%-2rem)] md:w-[350px] lg:w-[450px] h-[calc(100%-6rem)] md:h-full bg-bg-primary/95 md:bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl z-[100]">
+          <div className="absolute right-4 bottom-4 top-20 md:relative md:inset-auto w-[calc(100%-2rem)] md:w-[350px] lg:w-[450px] xl:w-[500px] h-[calc(100%-6rem)] md:h-full bg-bg-primary/95 md:bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl z-[100]">
               <ChatInGame 
                 sessionId={sessionId} 
                 partnerName={partnerName} 
@@ -302,12 +306,12 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             const newSquares: any = {};
             moves.map((move) => {
                 newSquares[move.to] = {
-                    background: "radial-gradient(circle, var(--color-accent, rgba(16, 185, 129, 0.4)) 20%, transparent 25%)",
+                    background: "radial-gradient(circle, #10b981 30%, transparent 40%)",
                     borderRadius: "50%",
                 };
                 return move;
             });
-            newSquares[square] = { background: "rgba(var(--accent-rgb), 0.2)", borderRadius: "8px" };
+            newSquares[square] = { background: "rgba(16, 185, 129, 0.2)", borderRadius: "8px" };
             setOptionSquares(newSquares);
             return;
         }
@@ -347,12 +351,16 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 position={game.fen()} 
                 onPieceDrop={onDrop} 
                 onSquareClick={onSquareClick}
-                animationDuration={200}
+                animationDuration={300}
                 customSquareStyles={optionSquares}
                 boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
-                customDarkSquareStyle={{ backgroundColor: 'var(--color-bg-primary, #1e293b)' }}
-                customLightSquareStyle={{ backgroundColor: 'var(--color-text-dim, #cbd5e1)', opacity: 0.8 }}
-                customBoardStyle={{ borderRadius: '1.5rem', overflow: 'hidden' }}
+                customDarkSquareStyle={{ backgroundColor: '#475569' }}
+                customLightSquareStyle={{ backgroundColor: '#cbd5e1' }}
+                customBoardStyle={{ 
+                    borderRadius: '0.75rem', 
+                    overflow: 'hidden',
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                }}
             />
             {game.isGameOver() && (
                 <div className="absolute inset-0 bg-bg-primary/90 flex flex-col items-center justify-center p-8 text-center space-y-4 backdrop-blur-md z-30">
@@ -724,7 +732,7 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     );
 };
 
-const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) => {
+const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state, onClose }: any) => {
     const myPlayerIndex = state?.players?.findIndex((p: any) => p?.id === currentUserId);
     const myIndex = myPlayerIndex === -1 || myPlayerIndex === undefined ? 0 : myPlayerIndex;
     const oppIndex = 1 - myIndex;
@@ -864,7 +872,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
     const isWin = winnerId === currentUserId;
 
     return (
-        <div className="w-full h-full flex flex-col p-2 md:p-8 space-y-2 md:space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative items-center">
+        <div className="w-full h-full flex flex-col p-1 md:p-8 space-y-1 md:space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative items-center pb-20 md:pb-8">
             {winnerId && (
                 <div className="absolute inset-0 bg-bg-primary/95 backdrop-blur-xl z-[60] flex flex-col items-center justify-center p-8 text-center space-y-4 animate-in fade-in zoom-in">
                     <div className={cn("p-8 rounded-[3rem] shadow-2xl", isWin ? "bg-emerald-500/20 border-emerald-500" : "bg-rose-500/20 border-rose-500")}>
@@ -876,28 +884,29 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                     <p className="text-[10px] font-black uppercase text-text-dim tracking-widest max-w-xs leading-relaxed">
                         {isWin ? 'Вы мастерски уничтожили весь вражеский флот. Командование гордится вами!' : 'Ваш флот пошел на дно. Самое время для реванша!'}
                     </p>
+                    <button onClick={onClose} className="px-10 py-4 bg-accent text-white rounded-2xl font-black uppercase text-xs">Закрыть</button>
                 </div>
             )}
             
-            <div className="flex flex-col md:flex-row gap-6 md:gap-12 justify-center items-center scale-[0.65] sm:scale-75 md:scale-90 lg:scale-100 transform origin-top transition-transform h-min">
-                <div className="space-y-3 transform origin-center">
+            <div className="flex flex-col md:flex-row gap-4 md:gap-12 justify-center items-center scale-[0.6] xs:scale-[0.7] sm:scale-75 md:scale-90 lg:scale-100 transform origin-top transition-transform h-min mt-2">
+                <div className="space-y-2 transform origin-center">
                     <div className="flex items-center justify-between px-2">
                         <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">Мои Воды</p>
                         <span className="text-[10px] font-black italic text-text-main/40">{ships.length}/20</span>
                     </div>
-                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-bg-primary border-4 border-bg-secondary aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
+                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-200 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-800 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => (
                             <div 
                                 key={i} 
                                 onClick={() => handleCellClick(i)}
                                 className={cn(
-                                    "bg-bg-primary transition-colors relative h-full w-full",
+                                    "bg-white dark:bg-slate-900 transition-colors relative h-full w-full",
                                     ships.includes(i) ? "bg-emerald-500 shadow-[inset_0_0_10px_rgba(16,185,129,0.5)]" : "",
-                                    !ready && "hover:bg-bg-secondary cursor-pointer"
+                                    !ready && "hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                                 )} 
                             >
                                 {opponentShots.includes(i) && (
-                                    <div className={cn("absolute inset-0 flex items-center justify-center font-bold text-[10px]", ships.includes(i) ? "text-rose-500" : "text-white/20")}>
+                                    <div className={cn("absolute inset-0 flex items-center justify-center font-bold text-[10px]", ships.includes(i) ? "text-rose-500" : "text-black/10 dark:text-white/20")}>
                                         {ships.includes(i) ? '💥' : '•'}
                                     </div>
                                 )}
@@ -906,12 +915,12 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                     </div>
                 </div>
 
-                <div className="space-y-3 transform origin-center">
+                <div className="space-y-2 transform origin-center">
                     <div className="flex items-center justify-between px-2">
                         <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Вражеский Флот</p>
                         <span className="text-[10px] font-black italic text-text-main/40">{shots.filter(s => state?.players?.[oppIndex]?.ships?.includes(s)).length}/20</span>
                     </div>
-                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-bg-primary border-4 border-bg-secondary aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
+                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-200 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-800 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => {
                             const isHit = shots.includes(i) && state?.players?.[oppIndex]?.ships?.includes(i);
                             const isMiss = shots.includes(i) && !state?.players?.[oppIndex]?.ships?.includes(i);
@@ -921,18 +930,18 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                                     key={i} 
                                     onClick={() => handleShoot(i)}
                                     className={cn(
-                                        "bg-bg-primary group relative h-full w-full",
-                                        isMyTurn && !shots.includes(i) && "cursor-crosshair hover:bg-bg-secondary"
+                                        "bg-white dark:bg-slate-900 group relative h-full w-full",
+                                        isMyTurn && !shots.includes(i) && "cursor-crosshair hover:bg-slate-100 dark:hover:bg-slate-800"
                                     )}
                                 >
                                     {isMyTurn && !shots.includes(i) && <div className="absolute inset-0 bg-accent opacity-0 group-hover:opacity-20 transition-opacity" />}
                                     {isHit && <div className="absolute inset-0 flex items-center justify-center text-rose-500 font-bold text-[10px]">💥</div>}
-                                    {isMiss && <div className="absolute inset-0 flex items-center justify-center text-white/20 font-bold text-[10px]">•</div>}
+                                    {isMiss && <div className="absolute inset-0 flex items-center justify-center text-black/10 dark:text-white/20 font-bold text-[10px]">•</div>}
                                 </div>
                             );
                         })}
                         {!opponentReady && (
-                            <div className="absolute inset-0 bg-bg-primary/60 backdrop-blur-md flex items-center justify-center p-8">
+                            <div className="absolute inset-0 bg-white/60 dark:bg-bg-primary/60 backdrop-blur-md flex items-center justify-center p-8">
                                 <div className="text-center space-y-2">
                                     <RefreshCw className="animate-spin text-accent mx-auto" size={24} />
                                     <p className="text-[9px] font-black uppercase text-text-main tracking-widest">Противник расставляет силы...</p>
@@ -943,16 +952,16 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                 </div>
             </div>
 
-            <div className="flex flex-col items-center gap-2 mt-1 mb-8 md:mb-0 scale-90 sm:scale-100">
+            <div className="flex flex-col items-center gap-1 mt-0 mb-4 md:mb-0 scale-90 sm:scale-100 pb-12 w-full max-w-sm">
                 {!ready && (
-                    <div className="flex flex-col items-center gap-3 w-full">
-                        <div className="flex flex-wrap justify-center gap-1.5 md:gap-4 p-3 md:p-4 bg-bg-secondary border border-white/5 rounded-[2rem] md:rounded-3xl shadow-xl max-w-full">
+                    <div className="flex flex-col items-center gap-2 w-full">
+                        <div className="flex flex-wrap justify-center gap-1 md:gap-3 p-2 md:p-4 bg-bg-secondary border border-white/5 rounded-[1.5rem] md:rounded-3xl shadow-xl max-w-full">
                            {[4, 3, 2, 1].map(size => (
                                <button 
                                  key={size}
                                  onClick={() => setShipToPlace(size)}
                                  className={cn(
-                                     "px-2.5 md:px-5 py-1.5 md:py-3 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all relative flex items-center gap-1.5 md:gap-2",
+                                     "px-2 md:px-5 py-1.5 md:py-3 rounded-lg md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all relative flex items-center gap-1 md:gap-2",
                                      shipToPlace === size ? "bg-accent text-white shadow-lg" : "bg-bg-primary text-text-dim hover:text-text-main"
                                  )}
                                >
@@ -968,17 +977,17 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                                    </span>
                                 </button>
                            ))}
-                           <div className="w-px h-6 md:h-8 bg-white/5 mx-1 md:mx-2" />
+                           <div className="w-px h-6 md:h-8 bg-white/5 mx-0.5 md:mx-2" />
                            <button 
                              onClick={() => setOrientation(prev => prev === 'h' ? 'v' : 'h')}
-                             className="px-2.5 md:px-5 py-1.5 md:py-3 bg-indigo-500/10 text-indigo-500 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/20 transition-all flex items-center gap-1.5 md:gap-2"
+                             className="px-2 md:px-5 py-1.5 md:py-3 bg-indigo-500/10 text-indigo-500 rounded-lg md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/20 transition-all flex items-center gap-1 md:gap-2"
                            >
-                                {orientation === 'h' ? <div className="w-2.5 md:w-4 h-0.5 md:h-1 bg-current rounded-full" /> : <div className="w-0.5 md:w-1 h-2.5 md:h-4 bg-current rounded-full" />}
-                                <span className="hidden xs:inline">{orientation === 'h' ? 'Гор.' : 'Верт.'}</span>
+                                {orientation === 'h' ? <div className="w-2 md:w-4 h-0.5 md:h-1 bg-current rounded-full" /> : <div className="w-0.5 md:w-1 h-2 md:h-4 bg-current rounded-full" />}
+                                <span className="hidden xs:inline">{orientation === 'h' ? 'Гориз.' : 'Верт.'}</span>
                            </button>
                            <button 
                              onClick={() => { setShips([]); setShipCounts({ 4: 0, 3: 0, 2: 0, 1: 0 }); setShipToPlace(4); }}
-                             className="px-2.5 md:px-5 py-1.5 md:py-3 bg-rose-500/10 text-rose-500 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/20 transition-all"
+                             className="px-2 md:px-5 py-1.5 md:py-3 bg-rose-500/10 text-rose-500 rounded-lg md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/20 transition-all"
                            >
                                 Сброс
                            </button>
@@ -987,11 +996,11 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                             onClick={handleReady}
                             disabled={ships.length !== 20}
                             className={cn(
-                                "px-10 md:px-12 py-3.5 md:py-5 rounded-[1.5rem] md:rounded-[2rem] font-black uppercase text-[10px] md:text-[11px] tracking-widest shadow-xl active:scale-95 transition-all text-white",
-                                ships.length === 20 ? "bg-emerald-500 shadow-emerald-500/20" : "bg-bg-secondary opacity-50 cursor-not-allowed"
+                                "w-full md:w-auto px-10 py-3.5 md:py-5 rounded-xl md:rounded-[2rem] font-black uppercase text-[10px] md:text-[11px] tracking-widest shadow-xl active:scale-95 transition-all text-white",
+                                ships.length === 20 ? "bg-emerald-500 shadow-emerald-500/20" : "bg-bg-secondary/50 text-text-dim/50 cursor-not-allowed"
                             )}
                         >
-                            Начать (20/20)
+                            Начать сражение (20/20)
                         </button>
                     </div>
                 )}
