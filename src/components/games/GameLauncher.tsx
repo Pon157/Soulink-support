@@ -54,8 +54,12 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
   useEffect(() => {
     if (showChat) {
         setUnreadCount(0);
+        // Also update lastSeen locally to prevent issues
+        if (messages.length > 0) {
+            setLastMessageId(messages[messages.length - 1].id);
+        }
     }
-  }, [showChat]);
+  }, [showChat, messages]);
 
   useEffect(() => {
     if (partnerId) {
@@ -65,18 +69,26 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
     }
   }, [partnerId, fetchMessages]);
 
+  const gameIntervalRef = useRef<any>(null);
+  const isFetchingRef = useRef(false);
+
   useEffect(() => {
     const fetchGame = async () => {
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
         try {
             const res = await apiFetch(`/api/games/${sessionId}`);
-            const data = await res.json();
-            setGameState(data);
-            setLoading(false);
+            if (res.ok) {
+                const data = await res.json();
+                setGameState(data);
+                setLoading(false);
+            }
         } catch (e) { console.error(e); }
+        finally { isFetchingRef.current = false; }
     };
     fetchGame();
-    const interval = setInterval(fetchGame, 3000);
-    return () => clearInterval(interval);
+    gameIntervalRef.current = setInterval(fetchGame, 3000);
+    return () => clearInterval(gameIntervalRef.current);
   }, [sessionId]);
 
   const renderGame = () => {
@@ -148,7 +160,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
       </div>
 
       {showChat && (
-          <div className="absolute right-4 bottom-4 top-20 md:relative md:inset-auto w-[calc(100%-2rem)] md:w-[350px] lg:w-[450px] xl:w-[500px] h-[calc(100%-6rem)] md:h-full bg-bg-primary/95 md:bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl z-[100]">
+          <div className="absolute right-4 bottom-4 top-20 md:relative md:inset-auto w-[calc(100%-2rem)] md:w-[320px] lg:w-[400px] xl:w-[500px] h-[calc(100%-6rem)] md:h-full bg-bg-primary/95 md:bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl z-[100]">
               <ChatInGame 
                 sessionId={sessionId} 
                 partnerName={partnerName} 
@@ -306,12 +318,17 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             const newSquares: any = {};
             moves.map((move) => {
                 newSquares[move.to] = {
-                    background: "radial-gradient(circle, #10b981 30%, transparent 40%)",
+                    background: "radial-gradient(circle, #3b82f6 40%, transparent 45%)",
                     borderRadius: "50%",
+                    boxShadow: "inset 0 0 0 4px rgba(59, 130, 246, 0.4)"
                 };
                 return move;
             });
-            newSquares[square] = { background: "rgba(16, 185, 129, 0.2)", borderRadius: "8px" };
+            newSquares[square] = { 
+                background: "rgba(59, 130, 246, 0.4)", 
+                borderRadius: "12px",
+                boxShadow: "inset 0 0 10px rgba(59, 130, 246, 0.6)"
+            };
             setOptionSquares(newSquares);
             return;
         }
@@ -339,14 +356,15 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         if (move) {
             setMoveFrom(null);
             setOptionSquares({});
+            return true;
         }
-        return move !== null;
+        return false;
     }
 
     const ChessboardAny = Chessboard as any;
 
     return (
-        <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative transition-all animate-in zoom-in duration-500 p-1 md:p-3">
+        <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative transition-all animate-in zoom-in duration-500 p-1 md:p-3 touch-none">
             <ChessboardAny 
                 position={game.fen()} 
                 onPieceDrop={onDrop} 
@@ -359,8 +377,9 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 customBoardStyle={{ 
                     borderRadius: '0.75rem', 
                     overflow: 'hidden',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)'
                 }}
+                draggable={isCurrentTurnMe && !isProcessing}
             />
             {game.isGameOver() && (
                 <div className="absolute inset-0 bg-bg-primary/90 flex flex-col items-center justify-center p-8 text-center space-y-4 backdrop-blur-md z-30">
@@ -888,13 +907,13 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state, onClose }
                 </div>
             )}
             
-            <div className="flex flex-col md:flex-row gap-4 md:gap-12 justify-center items-center scale-[0.6] xs:scale-[0.7] sm:scale-75 md:scale-90 lg:scale-100 transform origin-top transition-transform h-min mt-2">
-                <div className="space-y-2 transform origin-center">
-                    <div className="flex items-center justify-between px-2">
+            <div className="flex flex-col md:flex-row gap-2 md:gap-12 justify-center items-center scale-[0.5] xs:scale-[0.6] sm:scale-75 md:scale-90 lg:scale-100 transform origin-top transition-transform h-min mt-1 max-w-full overflow-hidden">
+                <div className="space-y-1 transform origin-center flex flex-col items-center">
+                    <div className="flex items-center justify-between px-2 w-full max-w-[200px] md:max-w-none">
                         <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">Мои Воды</p>
                         <span className="text-[10px] font-black italic text-text-main/40">{ships.length}/20</span>
                     </div>
-                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-200 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-800 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
+                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-200 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-800 aspect-square w-52 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => (
                             <div 
                                 key={i} 
@@ -915,12 +934,12 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state, onClose }
                     </div>
                 </div>
 
-                <div className="space-y-2 transform origin-center">
-                    <div className="flex items-center justify-between px-2">
+                <div className="space-y-1 transform origin-center flex flex-col items-center">
+                    <div className="flex items-center justify-between px-2 w-full max-w-[200px] md:max-w-none">
                         <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Вражеский Флот</p>
                         <span className="text-[10px] font-black italic text-text-main/40">{shots.filter(s => state?.players?.[oppIndex]?.ships?.includes(s)).length}/20</span>
                     </div>
-                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-200 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-800 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
+                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-200 dark:bg-slate-800 border-4 border-slate-300 dark:border-slate-800 aspect-square w-52 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => {
                             const isHit = shots.includes(i) && state?.players?.[oppIndex]?.ships?.includes(i);
                             const isMiss = shots.includes(i) && !state?.players?.[oppIndex]?.ships?.includes(i);
