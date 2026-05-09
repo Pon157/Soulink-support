@@ -87,7 +87,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
         finally { isFetchingRef.current = false; }
     };
     fetchGame();
-    gameIntervalRef.current = setInterval(fetchGame, 3000);
+    gameIntervalRef.current = setInterval(fetchGame, 1500);
     return () => clearInterval(gameIntervalRef.current);
   }, [sessionId]);
 
@@ -249,22 +249,32 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const [optionSquares, setOptionSquares] = useState({});
     const [isProcessing, setIsProcessing] = useState(false);
     const [lastReceivedFen, setLastReceivedFen] = useState(state?.fen);
+    const [lastMoveTimestamp, setLastMoveTimestamp] = useState(0);
+
+    const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
+    const myColor = myPlayerIndex === 0 ? 'w' : 'b';
+    const isCurrentTurnMe = game.turn() === myColor;
 
     useEffect(() => {
-        if (!isProcessing && state?.fen && state.fen !== game.fen() && state.fen !== lastReceivedFen) {
+        if (isProcessing) return;
+        const now = Date.now();
+        if (now - lastMoveTimestamp < 2000 && state?.fen === lastReceivedFen) return;
+
+        if (state?.fen && state.fen !== game.fen()) {
             try {
-                const newGame = new Chess(state.fen === 'start' ? undefined : state.fen);
-                setGame(newGame);
+                const serverGame = new Chess(state.fen === 'start' ? undefined : state.fen);
+                const isMyTurnInServer = serverGame.turn() === myColor;
+                
+                // If server is still on our turn but we moved locally less than 2s ago, skip
+                if (isMyTurnInServer && now - lastMoveTimestamp < 2000) return;
+
+                setGame(serverGame);
                 setLastReceivedFen(state.fen);
                 setOptionSquares({});
                 setMoveFrom(null);
             } catch (e) { console.error(e); }
         }
-    }, [state?.fen, isProcessing]);
-
-    const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
-    const myColor = myPlayerIndex === 0 ? 'w' : 'b';
-    const isCurrentTurnMe = game.turn() === myColor;
+    }, [state?.fen, isProcessing, lastMoveTimestamp, myColor]);
 
     async function syncMove(fen: string, result: any) {
         setIsProcessing(true);
@@ -290,7 +300,8 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             const result = gameCopy.move(move);
             if (result) {
                 setGame(gameCopy);
-                setLastReceivedFen(gameCopy.fen());
+                setLastReceivedFen(game.fen()); // Mark previous as "received" so we don't snap back
+                setLastMoveTimestamp(Date.now());
                 syncMove(gameCopy.fen(), result);
                 return result;
             }
@@ -318,16 +329,18 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             const newSquares: any = {};
             moves.map((move) => {
                 newSquares[move.to] = {
-                    background: "radial-gradient(circle, #3b82f6 40%, transparent 45%)",
+                    background: "radial-gradient(circle, rgba(59, 130, 246, 0.7) 40%, transparent 45%)",
                     borderRadius: "50%",
-                    boxShadow: "inset 0 0 0 4px rgba(59, 130, 246, 0.4)"
+                    border: "4px solid rgba(59, 130, 246, 0.4)",
+                    boxShadow: "0 0 15px rgba(59, 130, 246, 0.5)"
                 };
                 return move;
             });
             newSquares[square] = { 
-                background: "rgba(59, 130, 246, 0.4)", 
+                background: "rgba(59, 130, 246, 0.5)", 
                 borderRadius: "12px",
-                boxShadow: "inset 0 0 10px rgba(59, 130, 246, 0.6)"
+                border: "2px solid #3b82f6",
+                boxShadow: "0 0 20px rgba(59, 130, 246, 0.7)"
             };
             setOptionSquares(newSquares);
             return;
@@ -413,6 +426,7 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
     const [selected, setSelected] = useState<number | null>(null);
     const [board, setBoard] = useState<any[]>(state?.board || []);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [lastMoveTimestamp, setLastMoveTimestamp] = useState(0);
 
     const myPlayerIndex = state?.players?.findIndex((p: any) => p.id === currentUserId);
     const myIndex = myPlayerIndex === -1 || myPlayerIndex === undefined ? 0 : myPlayerIndex;
@@ -421,6 +435,12 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
 
     useEffect(() => {
         if (isProcessing) return;
+        const now = Date.now();
+        if (now - lastMoveTimestamp < 2000) {
+            // Check if turn actually changed in server state
+            if (state?.turn === myColor) return;
+        }
+
         if (!state?.board) {
             // Initialize board if empty
             const newBoard = Array.from({ length: 64 }).map((_, i) => {
@@ -550,9 +570,8 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                 // Optimistic update
                 setBoard(newBoard);
                 setSelected(null);
-                
-                // Track FEN/Board to prevent sync-back
-                // For checkers we use board state directly
+                setLastMoveTimestamp(Date.now());
+                setIsProcessing(true);
                 
                 apiFetch(`/api/games/${sessionId}/move`, {
                     method: 'POST',
@@ -563,8 +582,8 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                             turn: myColor === 'white' ? 'black' : 'white' 
                         } 
                     })
-                });
-            } catch (e) { console.error(e); } 
+                }).finally(() => setIsProcessing(false));
+            } catch (e) { console.error(e); setIsProcessing(false); } 
         }
     };
 
@@ -633,12 +652,17 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const [words, setWords] = useState<string[]>(state?.words || []);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
+    const [lastMoveTimestamp, setLastMoveTimestamp] = useState(0);
     
     // Check if it's current user's turn
     const isMyTurn = state?.turn === currentUserId; 
     const partner = state?.players?.find((p: any) => p.id !== currentUserId);
 
     useEffect(() => {
+        if (sending) return;
+        const now = Date.now();
+        if (now - lastMoveTimestamp < 2000) return;
+
         if (state?.words) {
             setWords(state.words);
             const lastW = state.words[state.words.length - 1];
@@ -649,7 +673,7 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 }
             }
         }
-    }, [state?.words, isMyTurn]);
+    }, [state?.words, isMyTurn, lastMoveTimestamp, sending]);
 
     const handleSendWord = async () => {
         const cleanedInput = input.trim().toUpperCase();
@@ -664,8 +688,11 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         }
 
         setSending(true);
+        setLastMoveTimestamp(Date.now());
+        const nextWords = [...words, cleanedInput];
+        setWords(nextWords); // Optimistic
+
         try {
-            const nextWords = [...words, cleanedInput];
             await apiFetch(`/api/games/${sessionId}/move`, {
                 method: 'POST',
                 body: JSON.stringify({ 
