@@ -27,7 +27,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
 
   const partnerId = gameState?.players?.find((p: any) => p?.id !== currentUserId)?.id;
 
-  const fetchMessages = useCallback(async () => {
+    const fetchMessages = useCallback(async () => {
     if (!partnerId) return;
     try {
       const res = await apiFetch(`/api/messages/${partnerId}`);
@@ -36,13 +36,14 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
       if (Array.isArray(data)) {
         setMessages(data);
         if (data.length > 0) {
-          const latest = data[data.length - 1];
-          if (latest.id !== lastMessageId) {
-            if (!showChat && latest.senderId !== currentUserId) {
-              setUnreadCount(prev => prev + 1);
-            }
-            setLastMessageId(latest.id);
+          const newMessages = lastMessageId 
+            ? data.filter((m: any) => m.id > lastMessageId && m.senderId !== currentUserId)
+            : data.filter((m: any) => m.senderId !== currentUserId);
+          
+          if (newMessages.length > 0 && !showChat) {
+            setUnreadCount(prev => prev + newMessages.length);
           }
+          setLastMessageId(data[data.length - 1].id);
         }
       }
     } catch (e) {}
@@ -143,7 +144,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
       </div>
 
       {showChat && (
-          <div className="absolute right-4 bottom-4 top-20 md:relative md:inset-auto w-[calc(100%-2rem)] md:w-[400px] h-[calc(100%-6rem)] md:h-full bg-bg-primary/95 md:bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl z-[100]">
+          <div className="absolute right-4 bottom-4 top-20 md:relative md:inset-auto w-[calc(100%-2rem)] md:w-[350px] lg:w-[450px] h-[calc(100%-6rem)] md:h-full bg-bg-primary/95 md:bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl z-[100]">
               <ChatInGame 
                 sessionId={sessionId} 
                 partnerName={partnerName} 
@@ -259,9 +260,10 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                     move: { from: result.from, to: result.to, piece: result.piece, san: result.san }
                 })
             });
+            setLastReceivedFen(fen);
         } catch (e) { console.error(e); }
         finally {
-            setTimeout(() => setIsProcessing(false), 500);
+            setIsProcessing(false);
         }
     }
 
@@ -300,12 +302,12 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             const newSquares: any = {};
             moves.map((move) => {
                 newSquares[move.to] = {
-                    background: "radial-gradient(circle, rgba(var(--accent-rgb), 0.4) 20%, transparent 25%)",
+                    background: "radial-gradient(circle, var(--color-accent, rgba(16, 185, 129, 0.4)) 20%, transparent 25%)",
                     borderRadius: "50%",
                 };
                 return move;
             });
-            newSquares[square] = { background: "rgba(255, 255, 0, 0.4)" };
+            newSquares[square] = { background: "rgba(var(--accent-rgb), 0.2)", borderRadius: "8px" };
             setOptionSquares(newSquares);
             return;
         }
@@ -348,8 +350,8 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 animationDuration={200}
                 customSquareStyles={optionSquares}
                 boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
-                customDarkSquareStyle={{ backgroundColor: '#1e293b' }}
-                customLightSquareStyle={{ backgroundColor: '#cbd5e1' }}
+                customDarkSquareStyle={{ backgroundColor: 'var(--color-bg-primary, #1e293b)' }}
+                customLightSquareStyle={{ backgroundColor: 'var(--color-text-dim, #cbd5e1)', opacity: 0.8 }}
                 customBoardStyle={{ borderRadius: '1.5rem', overflow: 'hidden' }}
             />
             {game.isGameOver() && (
@@ -558,8 +560,8 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                     onClick={() => handleSquareClick(displayIdx)}
                     className={cn(
                         "flex items-center justify-center relative backdrop-blur-sm transition-all h-full aspect-square",
-                        !isBlackSquare ? 'bg-slate-200' : 'bg-slate-800',
-                        isMyTurn && pieceAtDisplay?.color === myColor && "cursor-pointer hover:bg-slate-700",
+                        !isBlackSquare ? 'bg-slate-200/50 dark:bg-slate-200/10' : 'bg-slate-800/50 dark:bg-slate-800/50',
+                        isMyTurn && pieceAtDisplay?.color === myColor && "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5",
                         selected === displayIdx && "ring-4 ring-accent ring-inset z-10",
                         isValidMove && "bg-accent/20 cursor-pointer"
                     )}
@@ -583,8 +585,8 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
     }, [board, selected, isMyTurn, myColor, validMoves, myIndex]);
 
     return (
-        <div className="w-full max-w-md aspect-square bg-slate-900 rounded-[3rem] border-8 border-slate-800 shadow-2xl relative overflow-hidden">
-            <div className="grid grid-cols-8 grid-rows-8 h-full bg-slate-800">
+        <div className="w-full max-w-md aspect-square bg-bg-secondary rounded-[3rem] border-8 border-bg-primary shadow-2xl relative overflow-hidden">
+            <div className="grid grid-cols-8 grid-rows-8 h-full bg-slate-200/20 dark:bg-slate-800/20">
                 {memoBoard}
             </div>
             
@@ -683,17 +685,17 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                         key={i} 
                         className={cn(
                             "p-5 rounded-[2.5rem] shadow-xl border relative",
-                            i % 2 === 1 ? "bg-accent text-white border-white/10 ml-12" : "bg-bg-primary text-text-main border-slate-800 mr-12"
+                            i % 2 === 1 ? "bg-accent text-white border-white/10 ml-12" : "bg-bg-primary text-text-main border-white/5 mr-12"
                         )}
                     >
                         <p className="font-black italic text-xl tracking-tighter leading-none">{w}</p>
-                        <div className={cn("absolute -bottom-2 text-[8px] font-black uppercase tracking-widest opacity-40 px-3", i % 2 === 1 ? "right-4" : "left-4 text-white")}>
+                        <div className={cn("absolute -bottom-2 text-[8px] font-black uppercase tracking-widest opacity-40 px-3", i % 2 === 1 ? "right-4" : "left-4 text-text-main")}>
                              {i % 2 === 1 ? 'Вы' : partnerName}
                         </div>
                     </motion.div>
                 ))}
             </div>
-            <div className="flex gap-4 items-center bg-bg-primary/50 p-4 rounded-[2.5rem] border border-slate-800 shadow-2xl backdrop-blur-xl relative">
+            <div className="flex gap-4 items-center bg-bg-primary/50 p-4 rounded-[2.5rem] border border-white/5 shadow-2xl backdrop-blur-xl relative">
                 {!isMyTurn && (
                     <div className="absolute inset-0 bg-bg-secondary/80 backdrop-blur-sm rounded-[2.5rem] flex items-center justify-center z-10 transition-all">
                         <div className="flex items-center gap-3">
@@ -862,7 +864,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
     const isWin = winnerId === currentUserId;
 
     return (
-        <div className="w-full h-full flex flex-col p-2 md:p-8 space-y-4 md:space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative items-center">
+        <div className="w-full h-full flex flex-col p-2 md:p-8 space-y-2 md:space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative items-center">
             {winnerId && (
                 <div className="absolute inset-0 bg-bg-primary/95 backdrop-blur-xl z-[60] flex flex-col items-center justify-center p-8 text-center space-y-4 animate-in fade-in zoom-in">
                     <div className={cn("p-8 rounded-[3rem] shadow-2xl", isWin ? "bg-emerald-500/20 border-emerald-500" : "bg-rose-500/20 border-rose-500")}>
@@ -883,15 +885,15 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                         <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">Мои Воды</p>
                         <span className="text-[10px] font-black italic text-text-main/40">{ships.length}/20</span>
                     </div>
-                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-4 border-slate-700 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
+                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-bg-primary border-4 border-bg-secondary aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => (
                             <div 
                                 key={i} 
                                 onClick={() => handleCellClick(i)}
                                 className={cn(
-                                    "bg-slate-900 transition-colors relative h-full w-full",
+                                    "bg-bg-primary transition-colors relative h-full w-full",
                                     ships.includes(i) ? "bg-emerald-500 shadow-[inset_0_0_10px_rgba(16,185,129,0.5)]" : "",
-                                    !ready && "hover:bg-slate-800 cursor-pointer"
+                                    !ready && "hover:bg-bg-secondary cursor-pointer"
                                 )} 
                             >
                                 {opponentShots.includes(i) && (
@@ -909,7 +911,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                         <p className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Вражеский Флот</p>
                         <span className="text-[10px] font-black italic text-text-main/40">{shots.filter(s => state?.players?.[oppIndex]?.ships?.includes(s)).length}/20</span>
                     </div>
-                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-4 border-slate-700 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
+                    <div className="grid grid-cols-10 grid-rows-10 gap-px bg-bg-primary border-4 border-bg-secondary aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => {
                             const isHit = shots.includes(i) && state?.players?.[oppIndex]?.ships?.includes(i);
                             const isMiss = shots.includes(i) && !state?.players?.[oppIndex]?.ships?.includes(i);
@@ -919,8 +921,8 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                                     key={i} 
                                     onClick={() => handleShoot(i)}
                                     className={cn(
-                                        "bg-slate-900 group relative h-full w-full",
-                                        isMyTurn && !shots.includes(i) && "cursor-crosshair hover:bg-slate-800"
+                                        "bg-bg-primary group relative h-full w-full",
+                                        isMyTurn && !shots.includes(i) && "cursor-crosshair hover:bg-bg-secondary"
                                     )}
                                 >
                                     {isMyTurn && !shots.includes(i) && <div className="absolute inset-0 bg-accent opacity-0 group-hover:opacity-20 transition-opacity" />}
@@ -941,56 +943,55 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                 </div>
             </div>
 
-            <div className="flex flex-col items-center gap-4 mt-2 mb-8 md:mb-0 scale-90 sm:scale-100">
+            <div className="flex flex-col items-center gap-2 mt-1 mb-8 md:mb-0 scale-90 sm:scale-100">
                 {!ready && (
-                    <div className="flex flex-col items-center gap-4 w-full">
-                        <div className="flex flex-wrap justify-center gap-2 md:gap-4 p-4 bg-bg-secondary border border-white/5 rounded-3xl shadow-xl max-w-full">
+                    <div className="flex flex-col items-center gap-3 w-full">
+                        <div className="flex flex-wrap justify-center gap-1.5 md:gap-4 p-3 md:p-4 bg-bg-secondary border border-white/5 rounded-[2rem] md:rounded-3xl shadow-xl max-w-full">
                            {[4, 3, 2, 1].map(size => (
                                <button 
                                  key={size}
                                  onClick={() => setShipToPlace(size)}
                                  className={cn(
-                                     "px-3 md:px-5 py-2 md:py-3 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all relative flex items-center gap-2",
+                                     "px-2.5 md:px-5 py-1.5 md:py-3 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all relative flex items-center gap-1.5 md:gap-2",
                                      shipToPlace === size ? "bg-accent text-white shadow-lg" : "bg-bg-primary text-text-dim hover:text-text-main"
                                  )}
                                >
-                                   <div className="flex gap-0.5">
+                                   <div className="hidden sm:flex gap-0.5">
                                       {Array.from({ length: size }).map((_, i) => <div key={i} className="w-1 h-1 bg-current rounded-full" />)}
                                    </div>
                                    {size}x 
                                    <span className={cn(
-                                       "text-[8px] font-black",
+                                       "text-[7px] md:text-[8px] font-black",
                                        shipCounts[size as keyof typeof shipCounts] >= SHIP_LIMITS[size as keyof typeof SHIP_LIMITS] ? "text-emerald-400" : "text-text-dim"
                                    )}>
                                        {shipCounts[size as keyof typeof shipCounts]}/{SHIP_LIMITS[size as keyof typeof SHIP_LIMITS]}
                                    </span>
                                 </button>
                            ))}
-                           <div className="hidden md:block w-px h-8 bg-white/5 mx-2" />
+                           <div className="w-px h-6 md:h-8 bg-white/5 mx-1 md:mx-2" />
                            <button 
                              onClick={() => setOrientation(prev => prev === 'h' ? 'v' : 'h')}
-                             className="px-3 md:px-5 py-2 md:py-3 bg-indigo-500/10 text-indigo-500 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/20 transition-all flex items-center gap-2"
+                             className="px-2.5 md:px-5 py-1.5 md:py-3 bg-indigo-500/10 text-indigo-500 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500/20 transition-all flex items-center gap-1.5 md:gap-2"
                            >
-                                {orientation === 'h' ? <div className="w-3 md:w-4 h-1 bg-current rounded-full" /> : <div className="w-1 h-3 md:w-4 bg-current rounded-full" />}
-                                <span className="hidden sm:inline">{orientation === 'h' ? 'Горизонтально' : 'Вертикально'}</span>
-                                <span className="sm:hidden">{orientation === 'h' ? 'Гор.' : 'Верт.'}</span>
+                                {orientation === 'h' ? <div className="w-2.5 md:w-4 h-0.5 md:h-1 bg-current rounded-full" /> : <div className="w-0.5 md:w-1 h-2.5 md:h-4 bg-current rounded-full" />}
+                                <span className="hidden xs:inline">{orientation === 'h' ? 'Гор.' : 'Верт.'}</span>
                            </button>
                            <button 
                              onClick={() => { setShips([]); setShipCounts({ 4: 0, 3: 0, 2: 0, 1: 0 }); setShipToPlace(4); }}
-                             className="px-3 md:px-5 py-2 md:py-3 bg-rose-500/10 text-rose-500 rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/20 transition-all"
+                             className="px-2.5 md:px-5 py-1.5 md:py-3 bg-rose-500/10 text-rose-500 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/20 transition-all"
                            >
-                                Сбросить
+                                Сброс
                            </button>
                         </div>
                         <button 
                             onClick={handleReady}
                             disabled={ships.length !== 20}
                             className={cn(
-                                "px-12 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-xl active:scale-95 transition-all text-white",
-                                ships.length === 20 ? "bg-emerald-500 shadow-emerald-500/20" : "bg-slate-700 opacity-50 cursor-not-allowed"
+                                "px-10 md:px-12 py-3.5 md:py-5 rounded-[1.5rem] md:rounded-[2rem] font-black uppercase text-[10px] md:text-[11px] tracking-widest shadow-xl active:scale-95 transition-all text-white",
+                                ships.length === 20 ? "bg-emerald-500 shadow-emerald-500/20" : "bg-bg-secondary opacity-50 cursor-not-allowed"
                             )}
                         >
-                            Начать сражение (20/20)
+                            Начать (20/20)
                         </button>
                     </div>
                 )}
