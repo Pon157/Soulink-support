@@ -91,7 +91,7 @@
 }
 
 body {
-  @apply antialiased text-slate-200 select-none;
+  @apply antialiased text-text-main select-none;
 }
 
 /* Custom Scrollbar for high density feel */
