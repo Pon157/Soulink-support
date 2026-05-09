@@ -485,10 +485,11 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
           {userRole === 'USER' && !chatId.startsWith('TICKET_') && chatId !== 'SYSTEM' && (
             <button 
               onClick={() => setShowRating(true)} 
-              className="p-3 bg-amber-500/10 text-amber-500 rounded-2xl hover:bg-amber-500/20 transition-all shadow-lg shadow-amber-500/10 active:scale-95"
+              className="p-3 bg-amber-500 text-white rounded-2xl hover:bg-amber-600 transition-all shadow-lg shadow-amber-500/20 active:scale-95 flex items-center gap-2"
               title="Написать отзыв"
             >
-                <Star size={20} />
+                <Star size={20} fill="white" />
+                <span className="text-[10px] font-black uppercase tracking-widest hidden md:block">Отзыв</span>
             </button>
           )}
         </div>
