@@ -94,6 +94,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
                 >
                     <MessageSquare size={18} />
                     <span className="hidden sm:inline">{showChat ? 'Скрыть чат' : 'Чат игры'}</span>
+                    {!showChat && unreadCount > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full text-[8px] flex items-center justify-center border-2 border-black animate-pulse">{unreadCount}</span>}
                 </button>
                 <button onClick={onClose} className="p-3 md:p-4 bg-white/5 rounded-xl md:rounded-[1.5rem] text-white/50 hover:bg-white/10 hover:text-white transition-all active:scale-90"><X size={24} /></button>
             </div>
@@ -105,8 +106,8 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
       </div>
 
       {showChat && (
-          <div className="w-full md:w-[400px] h-full bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[3rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl">
-              <ChatInGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} gameState={gameState} />
+          <div className="absolute right-4 bottom-4 top-20 md:relative md:inset-auto w-[calc(100%-2rem)] md:w-[400px] h-[calc(100%-6rem)] md:h-full bg-bg-primary/95 md:bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl z-[100]">
+              <ChatInGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} gameState={gameState} showChat={showChat} />
           </div>
       )}
     </div>
@@ -117,6 +118,9 @@ const ChatInGame = ({ sessionId, partnerName, currentUserId, gameState }: any) =
     const [messages, setMessages] = useState<any[]>([]);
     const [input, setInput] = useState('');
     const scrollRef = useRef<HTMLDivElement>(null);
+
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [lastMessageId, setLastMessageId] = useState<string | null>(null);
 
     const partner = gameState?.players?.find((p: any) => p?.id !== currentUserId);
     const chatId = partner?.id;
@@ -129,9 +133,24 @@ const ChatInGame = ({ sessionId, partnerName, currentUserId, gameState }: any) =
             const data = await res.json();
             if (Array.isArray(data)) {
                 setMessages(data);
+                
+                // Track unread messages
+                if (data.length > 0) {
+                    const latest = data[data.length - 1];
+                    if (latest.id !== lastMessageId) {
+                        if (!showChat && latest.senderId !== currentUserId) {
+                            setUnreadCount(prev => prev + 1);
+                        }
+                        setLastMessageId(latest.id);
+                    }
+                }
             }
         } catch (e) { }
     };
+
+    useEffect(() => {
+        if (showChat) setUnreadCount(0);
+    }, [showChat]);
 
     useEffect(() => {
         fetchMessages();
@@ -227,23 +246,23 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         const myColor = myPlayerIndex === 0 ? 'w' : 'b';
         if (game.turn() !== myColor) return;
 
-        // from square
-        if (!moveFrom) {
-            const hasMove = getMoveOptions(square);
-            if (hasMove) setMoveFrom(square);
+        // selection logic
+        if (moveFrom === "") {
+            const hasMoves = getMoveOptions(square);
+            if (hasMoves) setMoveFrom(square);
             return;
         }
 
-        // to square
-        const move = makeMove({
+        // move logic
+        const result = makeMove({
             from: moveFrom,
             to: square,
             promotion: "q",
         });
 
-        if (!move) {
-            const hasMove = getMoveOptions(square);
-            setMoveFrom(hasMove ? square : "");
+        if (!result) {
+            const hasMoves = getMoveOptions(square);
+            setMoveFrom(hasMoves ? square : "");
             return;
         }
 
@@ -252,6 +271,12 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     }
 
     function getMoveOptions(square: string) {
+        const piece = game.get(square as any);
+        if (!piece || piece.color !== (state.players.findIndex((p: any) => p.id === currentUserId) === 0 ? 'w' : 'b')) {
+            setOptionSquares({});
+            return false;
+        }
+
         const moves = game.moves({
             square: square as any,
             verbose: true,
@@ -272,39 +297,44 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             };
         });
         newSquares[square] = {
-            background: "rgba(255, 255, 0, 0.4)",
+            background: "rgba(99, 102, 241, 0.4)", // Indigo highlight for selected
+            borderRadius: "4px"
         };
         setOptionSquares(newSquares);
         return true;
     }
 
-    async function makeMove(move: any) {
+    function makeMove(move: any) {
         if (isProcessing) return null;
         try {
             const gameCopy = new Chess(game.fen());
             const result = gameCopy.move(move);
             if (result) {
-                setIsProcessing(true);
                 // Optimistic update
                 setGame(gameCopy);
-                setLastReceivedFen(gameCopy.fen()); // Prevent sync-back
-                setOptionSquares({});
-                setMoveFrom('');
+                setLastReceivedFen(gameCopy.fen());
                 
-                try {
-                    await apiFetch(`/api/games/${sessionId}/move`, {
-                        method: 'POST',
-                        body: JSON.stringify({ 
-                            state: { ...state, fen: gameCopy.fen(), turn: gameCopy.turn() === 'w' ? 'white' : 'black' },
-                            move: { from: move.from, to: move.to, piece: result.piece, san: result.san }
-                        })
-                    });
-                } finally {
-                    setTimeout(() => setIsProcessing(false), 500);
-                }
+                // Do network call in background
+                syncMove(gameCopy.fen(), result);
+                return result;
             }
-            return result;
         } catch (e) { return null; }
+        return null;
+    }
+
+    async function syncMove(fen: string, result: any) {
+        setIsProcessing(true);
+        try {
+            await apiFetch(`/api/games/${sessionId}/move`, {
+                method: 'POST',
+                body: JSON.stringify({ 
+                    state: { ...state, fen: fen, turn: game.turn() === 'w' ? 'black' : 'white' },
+                    move: { from: result.from, to: result.to, piece: result.piece, san: result.san }
+                })
+            });
+        } finally {
+            setTimeout(() => setIsProcessing(false), 500);
+        }
     }
 
     function onDrop(sourceSquare: string, targetSquare: string) {
@@ -319,8 +349,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             promotion: "q",
         });
 
-        if (move === null) return false;
-        return true;
+        return move !== null;
     }
 
     const myPlayerIndex = state.players?.findIndex((p: any) => p.id === currentUserId);
@@ -407,20 +436,48 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
         const fromRow = Math.floor(idx / 8);
         const fromCol = idx % 8;
 
-        const directions = board[idx].king ? [[1,1], [1,-1], [-1,1], [-1,-1]] : (myColor === 'white' ? [[-1,1], [-1,-1]] : [[1,1], [1,-1]]);
+        const isKing = board[idx].king;
+        const directions = [[1,1], [1,-1], [-1,1], [-1,-1]];
         
-        for (const [dr, dc] of directions) {
-            // Normal move
-            const nr = fromRow + dr;
-            const nc = fromCol + dc;
-            if (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
-                if (!board[nr * 8 + nc]) moves.push(nr * 8 + nc);
-                else if (board[nr * 8 + nc].color !== myColor) {
-                    // Jump move
-                    const jr = nr + dr;
-                    const jc = nc + dc;
-                    if (jr >= 0 && jr <= 7 && jc >= 0 && jc <= 7 && !board[jr * 8 + jc]) {
-                        moves.push(jr * 8 + jc);
+        if (isKing) {
+            // Long-range king logic
+            for (const [dr, dc] of directions) {
+                let nr = fromRow + dr;
+                let nc = fromCol + dc;
+                while (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+                    const targetIdx = nr * 8 + nc;
+                    if (!board[targetIdx]) {
+                        moves.push(targetIdx);
+                        nr += dr;
+                        nc += dc;
+                    } else {
+                        // Potential jump
+                        if (board[targetIdx].color !== myColor) {
+                            const jr = nr + dr;
+                            const jc = nc + dc;
+                            if (jr >= 0 && jr <= 7 && jc >= 0 && jc <= 7 && !board[jr * 8 + jc]) {
+                                moves.push(jr * 8 + jc);
+                            }
+                        }
+                        break; // Blocked
+                    }
+                }
+            }
+        } else {
+            // Normal piece logic
+            const moves_dir = myColor === 'white' ? [[-1,1], [-1,-1]] : [[1,1], [1,-1]];
+            for (const [dr, dc] of moves_dir) {
+                const nr = fromRow + dr;
+                const nc = fromCol + dc;
+                if (nr >= 0 && nr <= 7 && nc >= 0 && nc <= 7) {
+                    if (!board[nr * 8 + nc]) {
+                        moves.push(nr * 8 + nc);
+                    } else if (board[nr * 8 + nc].color !== myColor) {
+                        const jr = nr + dr;
+                        const jc = nc + dc;
+                        if (jr >= 0 && jr <= 7 && jc >= 0 && jc <= 7 && !board[jr * 8 + jc]) {
+                            moves.push(jr * 8 + jc);
+                        }
                     }
                 }
             }
@@ -474,10 +531,14 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
             if (myColor === 'black' && toRow === 7) newBoard[index].king = true;
 
             try {
-                setIsProcessing(true);
                 // Optimistic update
                 setBoard(newBoard);
-                await apiFetch(`/api/games/${sessionId}/move`, {
+                setSelected(null);
+                
+                // Track FEN/Board to prevent sync-back
+                // For checkers we use board state directly
+                
+                apiFetch(`/api/games/${sessionId}/move`, {
                     method: 'POST',
                     body: JSON.stringify({ 
                         state: { 
@@ -487,10 +548,7 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                         } 
                     })
                 });
-                setSelected(null);
-            } catch (e) { console.error(e); } finally {
-                setTimeout(() => setIsProcessing(false), 500);
-            }
+            } catch (e) { console.error(e); } 
         }
     };
 
@@ -607,15 +665,17 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     };
 
     const handleInputChange = (val: string) => {
-        const cleaned = val.toUpperCase().trim();
+        let cleaned = val.toUpperCase().replace(/[^А-ЯA-Z]/g, '');
         if (words.length > 0) {
             const lastW = words[words.length - 1];
             const lastChar = lastW.charAt(lastW.length - 1).toUpperCase();
-            // Prevent deleting the required first letter
+            
+            // Strictly enforce the first character
             if (!cleaned.startsWith(lastChar)) {
-                setInput(lastChar);
-                return;
+                cleaned = lastChar + cleaned.replace(lastChar, '');
             }
+            // Ensure even if they delete, the first char stays
+            if (cleaned.length === 0) cleaned = lastChar;
         }
         setInput(cleaned);
     };
@@ -816,7 +876,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
     const isLoss = winnerId && winnerId !== currentUserId;
 
     return (
-        <div className="w-full h-full flex flex-col p-4 md:p-8 space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative">
+        <div className="w-full h-full flex flex-col p-4 md:p-8 space-y-4 md:space-y-6 animate-in zoom-in duration-500 overflow-y-auto overflow-x-hidden relative">
             {winnerId && (
                 <div className="absolute inset-0 bg-black/80 backdrop-blur-xl z-[60] flex flex-col items-center justify-center p-8 text-center space-y-4 animate-in fade-in zoom-in">
                     <div className={cn("p-8 rounded-[3rem] shadow-2xl", isWin ? "bg-emerald-500/20 border-emerald-500" : "bg-rose-500/20 border-rose-500")}>
@@ -831,7 +891,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                 </div>
             )}
             
-            <div className="flex flex-col md:flex-row gap-4 md:gap-8 justify-center items-center">
+            <div className="flex flex-col md:flex-row gap-4 md:gap-8 justify-center items-center scale-[0.65] sm:scale-75 md:scale-90 lg:scale-100 transform origin-top transition-transform">
                 <div className="space-y-4 scale-[0.7] sm:scale-[0.8] md:scale-100 transform origin-center">
                     <div className="flex items-center justify-between px-2">
                         <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest">Мои Воды</p>
