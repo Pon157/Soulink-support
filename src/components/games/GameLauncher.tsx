@@ -21,6 +21,8 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
   const [loading, setLoading] = useState(true);
   const [gameState, setGameState] = useState<any>(null);
 
+  const [showChat, setShowChat] = useState(false);
+
   useEffect(() => {
     const fetchGame = async () => {
         try {
@@ -64,31 +66,131 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-black/95 backdrop-blur-3xl flex flex-col p-4 md:p-8 animate-in fade-in duration-300">
-      <header className="flex items-center justify-between mb-8 max-w-4xl mx-auto w-full">
-        <div className="flex items-center gap-6">
-          <div className="w-16 h-16 bg-accent rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-accent/40 relative">
-            <div className="absolute inset-0 bg-white/20 rounded-[2rem] animate-pulse" />
-            <Gamepad2 className="relative" size={32} />
-          </div>
-          <div>
-            <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter leading-none">
-              {gameType === 'chess' ? 'Шахматный Мастер' : gameType === 'words' ? 'Битва Слов' : gameType === 'checkers' ? 'Ударные Шашки' : 'SoulБитва'}
-            </h2>
-            <div className="flex items-center gap-2 mt-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-                <p className="text-[11px] font-black text-accent uppercase tracking-widest">В ЭФИРЕ • ПРОТИВ {partnerName}</p>
+    <div className="fixed inset-0 z-[120] bg-black/95 backdrop-blur-3xl flex flex-col md:flex-row p-4 md:p-8 animate-in fade-in duration-300 gap-6 overflow-hidden">
+      <div className="flex-1 flex flex-col items-center justify-center relative">
+        <header className="flex items-center justify-between mb-8 w-full max-w-4xl">
+            <div className="flex items-center gap-6">
+            <div className="w-16 h-16 bg-accent rounded-[2rem] flex items-center justify-center text-white shadow-2xl shadow-accent/40 relative">
+                <div className="absolute inset-0 bg-white/20 rounded-[2rem] animate-pulse" />
+                <Gamepad2 className="relative" size={32} />
             </div>
-          </div>
-        </div>
-        <button onClick={onClose} className="p-4 bg-white/5 rounded-[1.5rem] text-white/50 hover:bg-white/10 hover:text-white transition-all active:scale-90"><X size={28} /></button>
-      </header>
+            <div>
+                <h2 className="text-3xl font-black italic text-white uppercase tracking-tighter leading-none">
+                {gameType === 'chess' ? 'Шахматный Мастер' : gameType === 'words' ? 'Битва Слов' : gameType === 'checkers' ? 'Ударные Шашки' : 'SoulБитва'}
+                </h2>
+                <div className="flex items-center gap-2 mt-2">
+                    <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+                    <p className="text-[11px] font-black text-accent uppercase tracking-widest">В ЭФИРЕ • ПРОТИВ {partnerName}</p>
+                </div>
+            </div>
+            </div>
+            <div className="flex items-center gap-4">
+                <button 
+                    onClick={() => setShowChat(!showChat)}
+                    className={cn(
+                        "p-4 rounded-2xl transition-all active:scale-95 flex items-center gap-2 font-black text-[10px] uppercase tracking-widest",
+                        showChat ? "bg-accent text-white" : "bg-white/5 text-white/50 hover:bg-white/10"
+                    )}
+                >
+                    <MessageSquare size={20} />
+                    {showChat ? 'Скрыть чат' : 'Чат игры'}
+                </button>
+                <button onClick={onClose} className="p-4 bg-white/5 rounded-[1.5rem] text-white/50 hover:bg-white/10 hover:text-white transition-all active:scale-90"><X size={28} /></button>
+            </div>
+        </header>
 
-      <div className="flex-1 bg-bg-secondary/50 rounded-[4rem] border border-white/5 shadow-2xl overflow-hidden relative flex flex-col items-center justify-center max-w-4xl mx-auto w-full backdrop-blur-md">
-         {renderGame()}
+        <div className="flex-1 bg-bg-secondary/50 rounded-[4rem] border border-white/5 shadow-2xl overflow-hidden relative flex flex-col items-center justify-center w-full max-w-4xl backdrop-blur-md">
+            {renderGame()}
+        </div>
       </div>
+
+      {showChat && (
+          <div className="w-full md:w-[400px] h-full bg-bg-primary/80 backdrop-blur-xl border border-white/10 rounded-[3rem] overflow-hidden flex flex-col animate-in slide-in-from-right duration-500 shadow-2xl">
+              <ChatInGame chatId={sessionId.replace('game_', '')} partnerName={partnerName} currentUserId={currentUserId} />
+          </div>
+      )}
     </div>
   );
+};
+
+const ChatInGame = ({ chatId, partnerName, currentUserId }: any) => {
+    const [messages, setMessages] = useState<any[]>([]);
+    const [input, setInput] = useState('');
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const fetchMessages = async () => {
+        try {
+            const res = await apiFetch(`/api/chats/${chatId}/messages`);
+            const data = await res.json();
+            setMessages(data);
+        } catch (e) { console.error(e); }
+    };
+
+    useEffect(() => {
+        fetchMessages();
+        const interval = setInterval(fetchMessages, 2000);
+        return () => clearInterval(interval);
+    }, [chatId]);
+
+    useEffect(() => {
+        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    const handleSend = async () => {
+        if (!input.trim()) return;
+        try {
+            await apiFetch(`/api/messages/send`, {
+                method: 'POST',
+                body: JSON.stringify({ chatId, text: input })
+            });
+            setInput('');
+            fetchMessages();
+        } catch (e) { console.error(e); }
+    };
+
+    return (
+        <div className="flex flex-col h-full">
+            <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-accent/20 text-accent rounded-xl flex items-center justify-center">
+                        <MessageSquare size={20} />
+                    </div>
+                    <div>
+                        <p className="text-xs font-black text-white uppercase tracking-widest leading-none">{partnerName}</p>
+                        <p className="text-[8px] text-accent font-bold uppercase mt-1">Чат активен</p>
+                    </div>
+                </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                {messages.map((msg, i) => (
+                    <div key={i} className={cn("flex flex-col", msg.senderId === currentUserId ? "items-end" : "items-start")}>
+                        <div className={cn(
+                            "max-w-[80%] p-4 rounded-2xl text-[13px] font-medium leading-relaxed",
+                            msg.senderId === currentUserId ? "bg-accent text-white" : "bg-white/5 text-text-main border border-white/5"
+                        )}>
+                            {msg.text}
+                        </div>
+                    </div>
+                ))}
+                <div ref={scrollRef} />
+            </div>
+            <div className="p-6 bg-black/20 border-t border-white/5 flex gap-2">
+                <input 
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleSend()}
+                    placeholder="Написать..."
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/20 outline-none focus:border-accent/40 transition-all"
+                />
+                <button 
+                    onClick={handleSend}
+                    className="p-3 bg-accent text-white rounded-xl shadow-lg shadow-accent/20 active:scale-90 transition-all flex items-center justify-center"
+                >
+                    <ArrowRight size={20} />
+                </button>
+            </div>
+        </div>
+    );
 };
 
 const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId: string, partnerName: string, currentUserId: string, state: any }) => {
@@ -282,38 +384,43 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
         }
     };
 
+    const memoBoard = React.useMemo(() => {
+        return board.map((piece, i) => {
+            const row = Math.floor(i / 8);
+            const col = i % 8;
+            const isWhiteSquare = (row + col) % 2 === 0;
+            return (
+                <div 
+                    key={i} 
+                    onClick={() => handleSquareClick(i)}
+                    className={cn(
+                        "flex items-center justify-center relative backdrop-blur-sm transition-all h-full aspect-square",
+                        isWhiteSquare ? 'bg-slate-300' : 'bg-slate-700',
+                        isMyTurn && piece?.color === myColor && "cursor-pointer hover:bg-slate-600",
+                        selected === i && "ring-4 ring-accent ring-inset z-10"
+                    )}
+                >
+                    {piece && (
+                        <motion.div 
+                            layoutId={`piece-${i}-${piece.color}`}
+                            initial={false}
+                            className={cn(
+                                "w-10 h-10 md:w-12 md:h-12 rounded-full shadow-2xl border-2 flex items-center justify-center",
+                                piece.color === 'white' ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'
+                            )}
+                        >
+                            {piece.king && <Shield className={piece.color === 'white' ? 'text-slate-400' : 'text-slate-600'} size={16} />}
+                        </motion.div>
+                    )}
+                </div>
+            );
+        });
+    }, [board, selected, isMyTurn, myColor]);
+
     return (
         <div className="w-full max-w-md aspect-square bg-slate-900 rounded-[3rem] border-8 border-slate-800 shadow-2xl relative overflow-hidden">
             <div className="grid grid-cols-8 grid-rows-8 h-full bg-slate-800">
-                {board.map((piece, i) => {
-                    const row = Math.floor(i / 8);
-                    const col = i % 8;
-                    const isWhiteSquare = (row + col) % 2 === 0;
-                    return (
-                        <div 
-                            key={i} 
-                            onClick={() => handleSquareClick(i)}
-                            className={cn(
-                                "flex items-center justify-center relative backdrop-blur-sm transition-all",
-                                isWhiteSquare ? 'bg-slate-300' : 'bg-slate-700',
-                                isMyTurn && piece?.color === myColor && "cursor-pointer hover:bg-slate-600",
-                                selected === i && "ring-4 ring-accent ring-inset z-10"
-                            )}
-                        >
-                            {piece && (
-                                <motion.div 
-                                    layoutId={`piece-${i}-${piece.color}`}
-                                    className={cn(
-                                        "w-10 h-10 md:w-12 md:h-12 rounded-full shadow-2xl border-2 flex items-center justify-center",
-                                        piece.color === 'white' ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-700'
-                                    )}
-                                >
-                                    {piece.king && <Shield className={piece.color === 'white' ? 'text-slate-400' : 'text-slate-600'} size={16} />}
-                                </motion.div>
-                            )}
-                        </div>
-                    );
-                })}
+                {memoBoard}
             </div>
             
             {!isMyTurn && (
@@ -445,23 +552,22 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
     const [ready, setReady] = useState<boolean>(state?.players?.[myIndex]?.ready || false);
     const [opponentReady, setOpponentReady] = useState<boolean>(state?.players?.[oppIndex]?.ready || false);
 
-    const toggleShip = async (index: number) => {
+    const toggleShip = (index: number) => {
         if (ready) return;
         let newShips = [...ships];
         if (newShips.includes(index)) {
             newShips = newShips.filter(s => s !== index);
         } else {
-            if (newShips.length >= 20) return;
+            if (newShips.length >= 10) return;
             newShips.push(index);
         }
         setShips(newShips);
-        updateState({ ships: newShips });
     };
 
     const handleReady = () => {
-        if (ships.length < 20) return;
+        if (ships.length < 10) return;
         setReady(true);
-        updateState({ ready: true });
+        updateState({ ships, ready: true });
     };
 
     const handleShoot = async (index: number) => {
@@ -512,7 +618,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
         <div className="w-full max-w-2xl h-full flex flex-col p-8 space-y-6 animate-in zoom-in duration-500 overflow-y-auto">
             <div className="flex flex-wrap gap-8 justify-center">
                 <div className="space-y-4">
-                    <p className="text-[10px] font-black uppercase text-center text-emerald-400 tracking-widest">Мои Воды ({ships.length}/20)</p>
+                    <p className="text-[10px] font-black uppercase text-center text-emerald-400 tracking-widest">Мои Воды ({ships.length}/10)</p>
                     <div className="grid grid-cols-10 grid-rows-10 gap-px bg-slate-800 border-4 border-slate-700 aspect-square w-64 md:w-80 rounded-2xl overflow-hidden shadow-2xl relative">
                         {Array.from({ length: 100 }).map((_, i) => (
                             <div 
@@ -577,7 +683,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state }: any) =>
                 {!ready && (
                     <button 
                         onClick={handleReady}
-                        disabled={ships.length < 20}
+                        disabled={ships.length < 10}
                         className="bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white px-12 py-5 rounded-[2rem] font-black uppercase text-[11px] tracking-widest shadow-xl shadow-emerald-500/20 active:scale-95 transition-all"
                     >
                         Готов к бою
