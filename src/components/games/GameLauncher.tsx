@@ -258,15 +258,15 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     useEffect(() => {
         if (isProcessing) return;
         const now = Date.now();
-        if (now - lastMoveTimestamp < 2000 && state?.fen === lastReceivedFen) return;
+        // Increased threshold to 5s for slow servers
+        if (now - lastMoveTimestamp < 5000 && state?.fen === lastReceivedFen) return;
 
         if (state?.fen && state.fen !== game.fen()) {
             try {
                 const serverGame = new Chess(state.fen === 'start' ? undefined : state.fen);
                 const isMyTurnInServer = serverGame.turn() === myColor;
                 
-                // If server is still on our turn but we moved locally less than 2s ago, skip
-                if (isMyTurnInServer && now - lastMoveTimestamp < 2000) return;
+                if (isMyTurnInServer && now - lastMoveTimestamp < 5000) return;
 
                 setGame(serverGame);
                 setLastReceivedFen(state.fen);
@@ -274,7 +274,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 setMoveFrom(null);
             } catch (e) { console.error(e); }
         }
-    }, [state?.fen, isProcessing, lastMoveTimestamp, myColor]);
+    }, [state?.fen, isProcessing, lastMoveTimestamp, myColor, lastReceivedFen]);
 
     async function syncMove(fen: string, result: any) {
         setIsProcessing(true);
@@ -309,8 +309,31 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         return null;
     }
 
+    function showHints(square: string) {
+        const moves = game.moves({
+            square: square as any,
+            verbose: true,
+        });
+        if (moves.length === 0) return false;
+
+        const newSquares: any = {};
+        moves.forEach((move) => {
+            newSquares[move.to] = {
+                background: "radial-gradient(circle, rgba(59, 130, 246, 0.8) 35%, transparent 40%)",
+                borderRadius: "50%",
+                boxShadow: "0 0 10px rgba(59, 130, 246, 0.3)"
+            };
+        });
+        newSquares[square] = {
+            background: "rgba(59, 130, 246, 0.3)",
+            borderRadius: "8px"
+        };
+        setOptionSquares(newSquares);
+        return true;
+    }
+
     const onSquareClick = (square: string) => {
-        if (!isCurrentTurnMe) return;
+        if (!isCurrentTurnMe || isProcessing) return;
 
         if (moveFrom === square) {
             setMoveFrom(null);
@@ -318,40 +341,23 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             return;
         }
 
-        if (!moveFrom) {
-            const piece = game.get(square as any);
-            if (!piece || piece.color !== myColor) return;
-
-            const moves = game.moves({ square: square as any, verbose: true });
-            if (moves.length === 0) return;
-
-            setMoveFrom(square);
-            const newSquares: any = {};
-            moves.map((move) => {
-                newSquares[move.to] = {
-                    background: "radial-gradient(circle, rgba(59, 130, 246, 0.7) 40%, transparent 45%)",
-                    borderRadius: "50%",
-                    border: "4px solid rgba(59, 130, 246, 0.4)",
-                    boxShadow: "0 0 15px rgba(59, 130, 246, 0.5)"
-                };
-                return move;
+        if (moveFrom) {
+            const move = makeMove({
+                from: moveFrom,
+                to: square,
+                promotion: "q",
             });
-            newSquares[square] = { 
-                background: "rgba(59, 130, 246, 0.5)", 
-                borderRadius: "12px",
-                border: "2px solid #3b82f6",
-                boxShadow: "0 0 20px rgba(59, 130, 246, 0.7)"
-            };
-            setOptionSquares(newSquares);
-            return;
-        }
 
-        const move = makeMove({ from: moveFrom, to: square, promotion: "q" });
-        if (move === null) {
+            if (move) {
+                setMoveFrom(null);
+                setOptionSquares({});
+                return;
+            }
+            
             const piece = game.get(square as any);
             if (piece && piece.color === myColor) {
-               setMoveFrom(null);
-               onSquareClick(square);
+               setMoveFrom(square);
+               showHints(square);
             } else {
                setMoveFrom(null);
                setOptionSquares({});
@@ -359,8 +365,11 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             return;
         }
 
-        setMoveFrom(null);
-        setOptionSquares({});
+        const piece = game.get(square as any);
+        if (piece && piece.color === myColor) {
+            setMoveFrom(square);
+            showHints(square);
+        }
     };
 
     function onDrop(sourceSquare: string, targetSquare: string) {
@@ -379,9 +388,12 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     return (
         <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative transition-all animate-in zoom-in duration-500 p-1 md:p-3 touch-none">
             <ChessboardAny 
+                id="BasicBoard"
                 position={game.fen()} 
                 onPieceDrop={onDrop} 
                 onSquareClick={onSquareClick}
+                onPieceDragBegin={(_piece: string, square: string) => showHints(square)}
+                onPieceDragEnd={() => !moveFrom && setOptionSquares({})}
                 animationDuration={300}
                 customSquareStyles={optionSquares}
                 boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
@@ -392,7 +404,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                     overflow: 'hidden',
                     boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)'
                 }}
-                draggable={isCurrentTurnMe && !isProcessing}
+                draggable={isCurrentTurnMe}
             />
             {game.isGameOver() && (
                 <div className="absolute inset-0 bg-bg-primary/90 flex flex-col items-center justify-center p-8 text-center space-y-4 backdrop-blur-md z-30">
@@ -436,7 +448,7 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
     useEffect(() => {
         if (isProcessing) return;
         const now = Date.now();
-        if (now - lastMoveTimestamp < 2000) {
+        if (now - lastMoveTimestamp < 5000) {
             // Check if turn actually changed in server state
             if (state?.turn === myColor) return;
         }
