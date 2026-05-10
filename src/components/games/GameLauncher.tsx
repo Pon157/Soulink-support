@@ -100,10 +100,10 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
     );
 
     switch (gameType) {
-      case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} />;
-      case 'words': return <WordsGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} />;
-      case 'checkers': return <CheckersGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} />;
-      case 'seabattle': return <SeaBattleGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} state={gameState.state} onClose={onClose} />;
+      case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
+      case 'words': return <WordsGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
+      case 'checkers': return <CheckersGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
+      case 'seabattle': return <SeaBattleGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} onClose={onClose} />;
       default: return (
         <div className="text-center space-y-6 max-w-xs transition-all animate-in fade-in zoom-in duration-500 px-8">
             <div className="w-24 h-24 bg-accent/5 rounded-[2.5rem] flex items-center justify-center mx-auto border border-accent/10">
@@ -257,7 +257,7 @@ const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh
     );
 };
 
-const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId: string, partnerName: string, currentUserId: string, state: any }) => {
+const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { sessionId: string, partnerName: string, currentUserId: string, players: any[], state: any }) => {
     const [game, setGame] = useState(new Chess(state?.fen === 'start' ? undefined : state?.fen));
     const [moveFrom, setMoveFrom] = useState<string | null>(null);
     const [optionSquares, setOptionSquares] = useState<any>({});
@@ -268,9 +268,9 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
 
     // Robust player color identification
     const myPlayerIndex = useMemo(() => {
-        if (!state.players || !Array.isArray(state.players)) return -1;
-        return state.players.findIndex((p: any) => p.id === currentUserId);
-    }, [state.players, currentUserId]);
+        if (!players || !Array.isArray(players)) return -1;
+        return players.findIndex((p: any) => p.id === currentUserId);
+    }, [players, currentUserId]);
 
     const myColor = myPlayerIndex === 0 ? 'w' : (myPlayerIndex === 1 ? 'b' : null);
     const isCurrentTurnMe = myColor && game.turn() === myColor;
@@ -365,25 +365,33 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
 
     function showHints(square: string) {
         try {
+            const piece = game.get(square as any);
+            if (!piece || piece.color !== myColor) return false;
+
             const moves = game.moves({
                 square: square as any,
                 verbose: true,
             });
-            if (moves.length === 0) return false;
+            if (moves.length === 0) {
+                setOptionSquares({
+                    [square]: { background: "rgba(239, 68, 68, 0.3)", borderRadius: "4px" }
+                });
+                return false;
+            }
 
             const newSquares: any = {};
             moves.forEach((move) => {
                 newSquares[move.to] = {
                     background: move.captured ? 
-                        "radial-gradient(circle, rgba(239, 68, 68, 0.6) 70%, transparent 75%)" :
-                        "radial-gradient(circle, rgba(0, 0, 0, 0.1) 20%, transparent 25%)",
+                        "radial-gradient(circle, rgba(239, 68, 68, 0.8) 70%, transparent 75%)" :
+                        "radial-gradient(circle, rgba(59, 130, 246, 0.5) 25%, transparent 30%)",
                     borderRadius: "50%",
                 };
             });
             newSquares[square] = {
-                background: "rgba(59, 130, 246, 0.3)",
+                background: "rgba(59, 130, 246, 0.4)",
                 borderRadius: "4px",
-                boxShadow: "inset 0 0 10px rgba(59, 130, 246, 0.5)"
+                boxShadow: "inset 0 0 15px rgba(59, 130, 246, 0.6)"
             };
             setOptionSquares(newSquares);
             return true;
@@ -440,29 +448,39 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const ChessboardAny = Chessboard as any;
 
     return (
-        <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative transition-all animate-in zoom-in duration-500 p-1 md:p-3 touch-none">
-            <ChessboardAny 
-                id="BasicBoard"
-                position={game.fen()} 
-                onPieceDrop={onDrop} 
-                onSquareClick={onSquareClick}
-                onPieceDragBegin={(_piece: string, square: string) => showHints(square)}
-                onPieceDragEnd={() => {
-                    if (!moveFrom) setOptionSquares({});
-                }}
-                onSquareRightClick={() => false}
-                animationDuration={300}
-                customSquareStyles={combinedOptionSquares}
-                boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
-                customDarkSquareStyle={{ backgroundColor: '#475569' }}
-                customLightSquareStyle={{ backgroundColor: '#cbd5e1' }}
-                customBoardStyle={{ 
-                    borderRadius: '0.75rem', 
-                    overflow: 'hidden',
-                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)'
-                }}
-                draggable={!!isCurrentTurnMe}
-            />
+        <div className="flex flex-col items-center gap-4 w-full">
+            <div className="flex items-center gap-3 px-6 py-2 bg-bg-primary/50 backdrop-blur-md rounded-full border border-white/5 shadow-xl">
+                <div className={cn("w-3 h-3 rounded-full", myColor === 'w' ? "bg-white border border-slate-400" : "bg-slate-900 border border-slate-700")} />
+                <p className="text-[10px] font-black uppercase tracking-widest text-text-main">
+                    Вы играете за {myColor === 'w' ? 'Белых' : 'Черных'}
+                </p>
+                <div className="w-px h-3 bg-white/10 mx-1" />
+                <p className="text-[9px] font-bold text-text-dim uppercase">Используйте левую кнопку мыши</p>
+            </div>
+
+            <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative transition-all animate-in zoom-in duration-500 p-1 md:p-3 touch-none">
+                <ChessboardAny 
+                    id="BasicBoard"
+                    position={game.fen()} 
+                    onPieceDrop={onDrop} 
+                    onSquareClick={onSquareClick}
+                    onPieceDragBegin={(_piece: string, square: string) => showHints(square)}
+                    onPieceDragEnd={() => {
+                        if (!moveFrom) setOptionSquares({});
+                    }}
+                    onSquareRightClick={() => false}
+                    animationDuration={300}
+                    customSquareStyles={combinedOptionSquares}
+                    boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
+                    customDarkSquareStyle={{ backgroundColor: '#475569' }}
+                    customLightSquareStyle={{ backgroundColor: '#cbd5e1' }}
+                    customBoardStyle={{ 
+                        borderRadius: '0.75rem', 
+                        overflow: 'hidden',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)'
+                    }}
+                    draggable={!!isCurrentTurnMe}
+                />
             {game.isGameOver() && (
                 <div className="absolute inset-0 bg-bg-primary/90 flex flex-col items-center justify-center p-8 text-center space-y-4 backdrop-blur-md z-30">
                     <Trophy className="text-amber-500 animate-bounce" size={64} />
@@ -488,16 +506,17 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 </div>
             )}
         </div>
+    </div>
     );
 };
 
-const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => {
+const CheckersGame = ({ sessionId, partnerName, currentUserId, players, state }: any) => {
     const [selected, setSelected] = useState<number | null>(null);
     const [board, setBoard] = useState<any[]>(state?.board || []);
     const [isProcessing, setIsProcessing] = useState(false);
     const [lastMoveTimestamp, setLastMoveTimestamp] = useState(0);
 
-    const myPlayerIndex = state?.players?.findIndex((p: any) => p.id === currentUserId);
+    const myPlayerIndex = players?.findIndex((p: any) => p.id === currentUserId);
     const myIndex = myPlayerIndex === -1 || myPlayerIndex === undefined ? 0 : myPlayerIndex;
     const isMyTurn = state?.turn === (myIndex === 0 ? 'white' : 'black');
     const myColor = myIndex === 0 ? 'white' : 'black';
@@ -524,6 +543,20 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                 return null;
             });
             setBoard(newBoard);
+            
+            // Sync initial board to server if it was missing
+            if (!state?.board) {
+                apiFetch(`/api/games/${sessionId}/move`, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        state: { 
+                            ...state, 
+                            board: newBoard, 
+                            turn: 'white' // Initial turn
+                        } 
+                    })
+                });
+            }
         } else {
             // Only update if board actually changed or it's not our turn
             // This prevents the flickering reset during multiple jumps
@@ -786,10 +819,18 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
     }, [board, selected, isMyTurn, myColor, validMoves, myIndex]);
 
     return (
-        <div className="w-full max-w-md aspect-square bg-bg-secondary rounded-[3rem] border-8 border-bg-primary shadow-2xl relative overflow-hidden">
-            <div className="grid grid-cols-8 grid-rows-8 h-full bg-slate-200/20 dark:bg-slate-800/20">
-                {memoBoard}
+        <div className="flex flex-col items-center gap-4 w-full h-full p-4 md:p-8">
+            <div className="flex items-center gap-3 px-6 py-2 bg-bg-primary/50 backdrop-blur-md rounded-full border border-white/5 shadow-xl">
+                <div className={cn("w-3 h-3 rounded-full", myColor === 'white' ? "bg-white border border-slate-400" : "bg-slate-900 border border-slate-700")} />
+                <p className="text-[10px] font-black uppercase tracking-widest text-text-main">
+                    Вы играете за {myColor === 'white' ? 'Белых' : 'Черных'}
+                </p>
             </div>
+            
+            <div className="w-full max-w-md aspect-square bg-bg-secondary rounded-[3rem] border-8 border-bg-primary shadow-2xl relative overflow-hidden">
+                <div className="grid grid-cols-8 grid-rows-8 h-full bg-slate-200/20 dark:bg-slate-800/20">
+                    {memoBoard}
+                </div>
             
             {!isMyTurn && (
                 <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
@@ -800,10 +841,11 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
                 </div>
             )}
         </div>
+    </div>
     );
 };
 
-const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId: string, partnerName: string, currentUserId: string, state: any }) => {
+const WordsGame = ({ sessionId, partnerName, currentUserId, players, state }: { sessionId: string, partnerName: string, currentUserId: string, players: any[], state: any }) => {
     const [words, setWords] = useState<string[]>(state?.words || []);
     const [input, setInput] = useState('');
     const [sending, setSending] = useState(false);
@@ -811,7 +853,7 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     
     // Check if it's current user's turn
     const isMyTurn = state?.turn === currentUserId; 
-    const partner = state?.players?.find((p: any) => p.id !== currentUserId);
+    const partner = players?.find((p: any) => p.id !== currentUserId);
 
     useEffect(() => {
         if (sending) return;
@@ -933,8 +975,8 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     );
 };
 
-const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state, onClose }: any) => {
-    const myPlayerIndex = state?.players?.findIndex((p: any) => p?.id === currentUserId);
+const SeaBattleGame = ({ sessionId, partnerName, currentUserId, players, state, onClose }: any) => {
+    const myPlayerIndex = players?.findIndex((p: any) => p?.id === currentUserId);
     const myIndex = myPlayerIndex === -1 || myPlayerIndex === undefined ? 0 : myPlayerIndex;
     const oppIndex = 1 - myIndex;
 
@@ -1033,7 +1075,7 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, state, onClose }
     const updateState = async (myData: any, isMove = false, keepTurn = false, winner?: string) => {
         const newState = { 
             ...state,
-            players: state.players.map((p: any, idx: number) => 
+            players: (state.players || players).map((p: any, idx: number) => 
                 idx === myIndex ? { ...p, ...myData } : p
             )
         };
