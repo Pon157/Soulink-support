@@ -187,12 +187,18 @@ const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh
     useEffect(() => {
         if (chatContainerRef.current) {
             const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
-            const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-            if (isNearBottom || messages.length <= 1) {
-                scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+            // Robust bottom detection
+            const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+            
+            // Only scroll if we move to a new message and were at bottom, or it's the first message
+            if (isAtBottom || messages.length <= 1) {
+                const scrollTimeout = setTimeout(() => {
+                    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+                }, 100);
+                return () => clearTimeout(scrollTimeout);
             }
         }
-    }, [messages]);
+    }, [messages.length]);
 
     const handleSend = async () => {
         if (!input.trim() || !chatId) return;
@@ -266,17 +272,17 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const movableSquares = useMemo(() => {
         if (!isCurrentTurnMe || isProcessing || !!moveFrom) return {};
         const squares: any = {};
-        const pieces = game.board();
+        const items = game.board();
         for (let r = 0; r < 8; r++) {
             for (let c = 0; c < 8; c++) {
-                const p = pieces[r][c];
+                const p = items[r][c];
                 if (p && p.color === myColor) {
                     const square = `${String.fromCharCode(97 + c)}${8 - r}`;
                     const moves = game.moves({ square: square as any });
                     if (moves.length > 0) {
                         squares[square] = {
                             cursor: 'pointer',
-                            backgroundColor: 'rgba(59, 130, 246, 0.2)'
+                            backgroundColor: 'rgba(59, 130, 246, 0.15)'
                         };
                     }
                 }
@@ -294,16 +300,16 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         if (isProcessing) return;
         const now = Date.now();
         
-        // If we moved recently, ignore server state unless it matches our new FEN
-        // or enough time has passed for the server to definitely be ahead
+        // RECONCILIATION:
+        // If we moved recently, we strictly ignore the server state until it reports a turn change
+        // or a long timeout (10s) expires.
         if (now - lastMoveTimestamp < 10000) {
-            if (state?.fen === lastReceivedFen) return;
-            // If server turn is our turn, it means the server hasn't processed our move yet (most likely)
             const serverGame = new Chess(state?.fen === 'start' ? undefined : state?.fen);
-            if (serverGame.turn() === myColor && Date.now() - lastMoveTimestamp < 5000) return;
+            // If the server still says it's my turn, it means our move isn't fully processed/broadcasted.
+            if (serverGame.turn() === myColor) return;
         }
 
-        if (state?.fen && state.fen !== game.fen()) {
+        if (state?.fen && state.fen !== game.fen() && state.fen !== lastReceivedFen) {
             try {
                 const serverGame = new Chess(state.fen === 'start' ? undefined : state.fen);
                 setGame(serverGame);
@@ -312,7 +318,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 setMoveFrom(null);
             } catch (e) { console.error(e); }
         }
-    }, [state?.fen, isProcessing, lastMoveTimestamp, myColor, lastReceivedFen, game]);
+    }, [state?.fen, isProcessing, lastMoveTimestamp, myColor, lastReceivedFen]);
 
     async function syncMove(fen: string, result: any) {
         setIsProcessing(true);
@@ -349,33 +355,30 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     }
 
     function showHints(square: string) {
-        const moves = game.moves({
-            square: square as any,
-            verbose: true,
-        });
-        if (moves.length === 0) return false;
+        try {
+            const moves = game.moves({
+                square: square as any,
+                verbose: true,
+            });
+            if (moves.length === 0) return false;
 
-        const newSquares: any = {};
-        moves.forEach((move) => {
-            newSquares[move.to] = {
-                background: move.captured ? 
-                    "radial-gradient(circle, rgba(239, 68, 68, 0.4) 60%, transparent 65%)" :
-                    "radial-gradient(circle, rgba(59, 130, 246, 0.8) 40%, transparent 45%)",
-                borderRadius: "50%",
-                boxShadow: move.captured ? 
-                    "0 0 20px rgba(239, 68, 68, 0.4)" : 
-                    "0 0 15px rgba(59, 130, 246, 0.4)",
-                cursor: 'pointer'
+            const newSquares: any = {};
+            moves.forEach((move) => {
+                newSquares[move.to] = {
+                    background: move.captured ? 
+                        "radial-gradient(circle, rgba(239, 68, 68, 0.4) 60%, transparent 65%)" :
+                        "radial-gradient(circle, rgba(255, 255, 255, 0.3) 30%, transparent 35%)",
+                    borderRadius: "50%",
+                    cursor: 'pointer'
+                };
+            });
+            newSquares[square] = {
+                backgroundColor: "rgba(59, 130, 246, 0.4)",
+                borderRadius: "8px"
             };
-        });
-        newSquares[square] = {
-            background: "rgba(59, 130, 246, 0.4)",
-            borderRadius: "12px",
-            boxShadow: "0 0 25px rgba(59, 130, 246, 0.6)",
-            border: "2px solid #3b82f6"
-        };
-        setOptionSquares(newSquares);
-        return true;
+            setOptionSquares(newSquares);
+            return true;
+        } catch (e) { return false; }
     }
 
     const onSquareClick = (square: string) => {
@@ -500,8 +503,10 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
     useEffect(() => {
         if (isProcessing) return;
         const now = Date.now();
-        if (now - lastMoveTimestamp < 5000) {
-            // Check if turn actually changed in server state
+        
+        // Reconciliation for Checkers
+        if (now - lastMoveTimestamp < 10000) {
+            // If server turn matches our turn, but we just move, ignore it to prevent snap-back
             if (state?.turn === myColor) return;
         }
 
@@ -518,9 +523,13 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
             });
             setBoard(newBoard);
         } else {
-            setBoard(state.board);
+            // Only update if board actually changed or it's not our turn
+            // This prevents the flickering reset during multiple jumps
+            if (JSON.stringify(state.board) !== JSON.stringify(board)) {
+                setBoard(state.board);
+            }
         }
-    }, [state?.board]);
+    }, [state?.board, state?.turn, isProcessing, lastMoveTimestamp, myColor, board]);
 
     const getValidMoves = useCallback((idx: number) => {
         if (!board[idx] || board[idx].color !== myColor) return [];
