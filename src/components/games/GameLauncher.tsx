@@ -275,22 +275,24 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const movableSquares = useMemo(() => {
         if (!isCurrentTurnMe || isProcessing) return {};
         const squares: any = {};
-        const currentBoard = game.board();
-        for (let r = 0; r < 8; r++) {
-            for (let c = 0; c < 8; c++) {
-                const piece = currentBoard[r][c];
-                if (piece && piece.color === myColor) {
-                    const square = `${String.fromCharCode(97 + c)}${8 - r}`;
-                    const moves = game.moves({ square: square as any });
-                    if (moves.length > 0) {
-                        squares[square] = {
-                            background: 'rgba(59, 130, 246, 0.2)',
-                            borderRadius: '50%',
-                        };
+        try {
+            const currentBoard = game.board();
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = currentBoard[r][c];
+                    if (piece && piece.color === myColor) {
+                        const square = `${String.fromCharCode(97 + c)}${8 - r}`;
+                        const moves = game.moves({ square: square as any });
+                        if (moves.length > 0) {
+                            squares[square] = {
+                                background: 'rgba(59, 130, 246, 0.15)',
+                                borderRadius: '50%',
+                            };
+                        }
                     }
                 }
             }
-        }
+        } catch (e) { console.error(e); }
         return squares;
     }, [game, isCurrentTurnMe, isProcessing, myColor]);
 
@@ -304,19 +306,39 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         const now = Date.now();
         
         // RECONCILIATION:
-        // Ignore server if it's sending the FEN we just moved FROM, for 10s
-        if (now - lastMoveTimestamp < 10000 && state?.fen === preMoveFen) {
+        // Normalize FENs for comparison to avoid "start" vs explicit FEN differences
+        const normalizeFen = (f: string) => f === 'start' ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' : f;
+        const serverFen = normalizeFen(state?.fen || '');
+        const currentFen = game.fen();
+        const preMoveNormalized = preMoveFen ? normalizeFen(preMoveFen) : null;
+
+        // If we moved recently (last 10s), strictly ignore the server if it's still sending the FEN we just moved FROM
+        if (now - lastMoveTimestamp < 10000 && preMoveNormalized && serverFen === preMoveNormalized) {
             return;
         }
 
-        if (state?.fen && state.fen !== game.fen() && state.fen !== lastReceivedFen) {
+        // If turn belongs to me according to server but I just moved, we are waiting for server broadcast of the turn change
+        const serverTurnColor = state?.turn; // 'white' or 'black'
+        const myColorFull = myColor === 'w' ? 'white' : 'black';
+        
+        if (now - lastMoveTimestamp < 5000 && serverTurnColor === myColorFull) {
+            // But if the server says it's our turn AND the FEN matches our local FEN, we are in sync
+            if (serverFen === currentFen) {
+                // Sync ok
+            } else {
+                // Server hasn't seen our move yet
+                return;
+            }
+        }
+
+        if (state?.fen && serverFen !== currentFen && serverFen !== normalizeFen(lastReceivedFen || '')) {
             try {
                 const serverGame = new Chess(state.fen === 'start' ? undefined : state.fen);
                 setGame(serverGame);
                 setLastReceivedFen(state.fen);
                 setOptionSquares({});
                 setMoveFrom(null);
-                setPreMoveFen(null); // Reset pre-move tracking
+                setPreMoveFen(null); 
             } catch (e) { console.error(e); }
         }
     }, [state?.fen, isProcessing, lastMoveTimestamp, myColor, lastReceivedFen, game, preMoveFen]);
@@ -327,7 +349,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             await apiFetch(`/api/games/${sessionId}/move`, {
                 method: 'POST',
                 body: JSON.stringify({ 
-                    state: { ...state, fen: fen, turn: game.turn() === 'w' ? 'black' : 'white' },
+                    state: { ...state, fen: fen, turn: game.turn() === 'w' ? 'white' : 'black' },
                     move: { from: result.from, to: result.to, piece: result.piece, san: result.san }
                 })
             });
@@ -368,15 +390,15 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             moves.forEach((move) => {
                 newSquares[move.to] = {
                     background: move.captured ? 
-                        "radial-gradient(circle, rgba(239, 68, 68, 0.7) 70%, transparent 75%)" :
-                        "radial-gradient(circle, rgba(255, 255, 255, 0.4) 25%, transparent 30%)",
+                        "radial-gradient(circle, rgba(239, 68, 68, 0.8) 70%, transparent 75%)" :
+                        "radial-gradient(circle, rgba(0, 0, 0, 0.1) 25%, transparent 30%)",
                     borderRadius: "50%",
                 };
             });
             newSquares[square] = {
-                background: "rgba(59, 130, 246, 0.5)",
+                background: "rgba(59, 130, 246, 0.3)",
                 borderRadius: "4px",
-                boxShadow: "inset 0 0 15px rgba(59, 130, 246, 0.7)"
+                boxShadow: "inset 0 0 10px rgba(59, 130, 246, 0.5)"
             };
             setOptionSquares(newSquares);
             return true;
@@ -451,6 +473,11 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 onSquareClick={onSquareClick}
                 onPieceDragBegin={(_piece: string, square: string) => showHints(square)}
                 onPieceDragEnd={() => !moveFrom && setOptionSquares({})}
+                onSquareRightClick={(square: string) => {
+                    // Prevent right click menu and maybe show something useful?
+                    // For now just prevent it to avoid confusion
+                    return false;
+                }}
                 animationDuration={300}
                 customSquareStyles={combinedOptionSquares}
                 boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
