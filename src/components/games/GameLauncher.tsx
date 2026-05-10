@@ -182,8 +182,16 @@ const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh
     const partner = gameState?.players?.find((p: any) => p?.id !== currentUserId);
     const chatId = partner?.id;
 
+    const chatContainerRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
-        scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+        if (chatContainerRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+            const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+            if (isNearBottom || messages.length <= 1) {
+                scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
     }, [messages]);
 
     const handleSend = async () => {
@@ -211,7 +219,7 @@ const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh
                     </div>
                 </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-6 space-y-4">
                 {messages.map((msg: any, i: number) => (
                     <div key={i} className={cn("flex flex-col", msg.senderId === currentUserId ? "items-end" : "items-start")}>
                         <div className={cn(
@@ -255,26 +263,56 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const myColor = myPlayerIndex === 0 ? 'w' : 'b';
     const isCurrentTurnMe = game.turn() === myColor;
 
+    const movableSquares = useMemo(() => {
+        if (!isCurrentTurnMe || isProcessing || !!moveFrom) return {};
+        const squares: any = {};
+        const pieces = game.board();
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const p = pieces[r][c];
+                if (p && p.color === myColor) {
+                    const square = `${String.fromCharCode(97 + c)}${8 - r}`;
+                    const moves = game.moves({ square: square as any });
+                    if (moves.length > 0) {
+                        squares[square] = {
+                            cursor: 'pointer',
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)'
+                        };
+                    }
+                }
+            }
+        }
+        return squares;
+    }, [game, isCurrentTurnMe, isProcessing, myColor, moveFrom]);
+
+    const combinedOptionSquares = useMemo(() => ({
+        ...movableSquares,
+        ...optionSquares
+    }), [movableSquares, optionSquares]);
+
     useEffect(() => {
         if (isProcessing) return;
         const now = Date.now();
-        // Increased threshold to 5s for slow servers
-        if (now - lastMoveTimestamp < 5000 && state?.fen === lastReceivedFen) return;
+        
+        // If we moved recently, ignore server state unless it matches our new FEN
+        // or enough time has passed for the server to definitely be ahead
+        if (now - lastMoveTimestamp < 10000) {
+            if (state?.fen === lastReceivedFen) return;
+            // If server turn is our turn, it means the server hasn't processed our move yet (most likely)
+            const serverGame = new Chess(state?.fen === 'start' ? undefined : state?.fen);
+            if (serverGame.turn() === myColor && Date.now() - lastMoveTimestamp < 5000) return;
+        }
 
         if (state?.fen && state.fen !== game.fen()) {
             try {
                 const serverGame = new Chess(state.fen === 'start' ? undefined : state.fen);
-                const isMyTurnInServer = serverGame.turn() === myColor;
-                
-                if (isMyTurnInServer && now - lastMoveTimestamp < 5000) return;
-
                 setGame(serverGame);
                 setLastReceivedFen(state.fen);
                 setOptionSquares({});
                 setMoveFrom(null);
             } catch (e) { console.error(e); }
         }
-    }, [state?.fen, isProcessing, lastMoveTimestamp, myColor, lastReceivedFen]);
+    }, [state?.fen, isProcessing, lastMoveTimestamp, myColor, lastReceivedFen, game]);
 
     async function syncMove(fen: string, result: any) {
         setIsProcessing(true);
@@ -300,7 +338,8 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
             const result = gameCopy.move(move);
             if (result) {
                 setGame(gameCopy);
-                setLastReceivedFen(game.fen()); // Mark previous as "received" so we don't snap back
+                // Mark the NEW FEN as the one we expect/ignore until server catches up
+                setLastReceivedFen(gameCopy.fen()); 
                 setLastMoveTimestamp(Date.now());
                 syncMove(gameCopy.fen(), result);
                 return result;
@@ -319,14 +358,21 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
         const newSquares: any = {};
         moves.forEach((move) => {
             newSquares[move.to] = {
-                background: "radial-gradient(circle, rgba(59, 130, 246, 0.8) 35%, transparent 40%)",
+                background: move.captured ? 
+                    "radial-gradient(circle, rgba(239, 68, 68, 0.4) 60%, transparent 65%)" :
+                    "radial-gradient(circle, rgba(59, 130, 246, 0.8) 40%, transparent 45%)",
                 borderRadius: "50%",
-                boxShadow: "0 0 10px rgba(59, 130, 246, 0.3)"
+                boxShadow: move.captured ? 
+                    "0 0 20px rgba(239, 68, 68, 0.4)" : 
+                    "0 0 15px rgba(59, 130, 246, 0.4)",
+                cursor: 'pointer'
             };
         });
         newSquares[square] = {
-            background: "rgba(59, 130, 246, 0.3)",
-            borderRadius: "8px"
+            background: "rgba(59, 130, 246, 0.4)",
+            borderRadius: "12px",
+            boxShadow: "0 0 25px rgba(59, 130, 246, 0.6)",
+            border: "2px solid #3b82f6"
         };
         setOptionSquares(newSquares);
         return true;
@@ -335,12 +381,14 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
     const onSquareClick = (square: string) => {
         if (!isCurrentTurnMe || isProcessing) return;
 
+        // If clicking same square, deselect
         if (moveFrom === square) {
             setMoveFrom(null);
             setOptionSquares({});
             return;
         }
 
+        // If a piece is already selected, try to move
         if (moveFrom) {
             const move = makeMove({
                 from: moveFrom,
@@ -354,17 +402,21 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 return;
             }
             
+            // If move failed, maybe we clicked another of our pieces?
             const piece = game.get(square as any);
             if (piece && piece.color === myColor) {
                setMoveFrom(square);
                showHints(square);
-            } else {
-               setMoveFrom(null);
-               setOptionSquares({});
+               return;
             }
+            
+            // Otherwise deselect
+            setMoveFrom(null);
+            setOptionSquares({});
             return;
         }
 
+        // Select piece and show hints
         const piece = game.get(square as any);
         if (piece && piece.color === myColor) {
             setMoveFrom(square);
@@ -395,7 +447,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, state }: { sessionId
                 onPieceDragBegin={(_piece: string, square: string) => showHints(square)}
                 onPieceDragEnd={() => !moveFrom && setOptionSquares({})}
                 animationDuration={300}
-                customSquareStyles={optionSquares}
+                customSquareStyles={combinedOptionSquares}
                 boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
                 customDarkSquareStyle={{ backgroundColor: '#475569' }}
                 customLightSquareStyle={{ backgroundColor: '#cbd5e1' }}
@@ -527,8 +579,67 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
 
     const validMoves = useMemo(() => selected !== null ? getValidMoves(selected) : [], [selected, getValidMoves]);
 
+    const canJumpAgain = useCallback((idx: number, currentBoard: any[]) => {
+        const piece = currentBoard[idx];
+        if (!piece) return false;
+        const fromRow = Math.floor(idx / 8);
+        const fromCol = idx % 8;
+
+        const directions = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+        
+        if (piece.king) {
+            for (const [dr, dc] of directions) {
+                let r = fromRow + dr;
+                let c = fromCol + dc;
+                let foundEnemy = false;
+                
+                while (r >= 0 && r <= 7 && c >= 0 && c <= 7) {
+                    const currentIdx = r * 8 + c;
+                    const currentPiece = currentBoard[currentIdx];
+                    
+                    if (!foundEnemy) {
+                        if (currentPiece) {
+                            if (currentPiece.color !== piece.color) {
+                                foundEnemy = true;
+                            } else {
+                                break; // Blocked by own piece
+                            }
+                        }
+                    } else {
+                        if (!currentPiece) {
+                            return true; // Can jump here
+                        } else {
+                            break; // Blocked after enemy
+                        }
+                    }
+                    r += dr;
+                    c += dc;
+                }
+            }
+        } else {
+            for (const [dr, dc] of directions) {
+                const midR = fromRow + dr;
+                const midC = fromCol + dc;
+                const toR = fromRow + dr * 2;
+                const toC = fromCol + dc * 2;
+
+                if (toR >= 0 && toR <= 7 && toC >= 0 && toC <= 7) {
+                    const midIdx = midR * 8 + midC;
+                    const toIdx = toR * 8 + toC;
+                    const targetPiece = currentBoard[midIdx];
+                    const landingSquare = currentBoard[toIdx];
+
+                    if (targetPiece && targetPiece.color !== piece.color && !landingSquare) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }, []);
+
     const handleSquareClick = async (index: number) => {
-        if (!isMyTurn) return;
+        if (!isMyTurn || isProcessing) return;
 
         const piece = board[index];
         if (selected === null) {
@@ -537,6 +648,7 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
             }
         } else {
             if (index === selected) {
+                // Allow deselecting ONLY if we haven't just performed a jump that requires more jumps
                 setSelected(null);
                 return;
             }
@@ -578,23 +690,41 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, state }: any) => 
             if (myColor === 'white' && toRow === 0) newBoard[index].king = true;
             if (myColor === 'black' && toRow === 7) newBoard[index].king = true;
 
+            const jumped = capturedIndex !== null;
+            const jumpsAvailable = jumped && canJumpAgain(index, newBoard);
+
             try {
                 // Optimistic update
                 setBoard(newBoard);
-                setSelected(null);
                 setLastMoveTimestamp(Date.now());
-                setIsProcessing(true);
                 
-                apiFetch(`/api/games/${sessionId}/move`, {
-                    method: 'POST',
-                    body: JSON.stringify({ 
-                        state: { 
-                            ...state, 
-                            board: newBoard, 
-                            turn: myColor === 'white' ? 'black' : 'white' 
-                        } 
-                    })
-                }).finally(() => setIsProcessing(false));
+                if (jumpsAvailable) {
+                    setSelected(index);
+                    // Notify server about intermediate state but keep turn
+                    apiFetch(`/api/games/${sessionId}/move`, {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            state: { 
+                                ...state, 
+                                board: newBoard, 
+                                turn: myColor 
+                            } 
+                        })
+                    });
+                } else {
+                    setSelected(null);
+                    setIsProcessing(true);
+                    apiFetch(`/api/games/${sessionId}/move`, {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            state: { 
+                                ...state, 
+                                board: newBoard, 
+                                turn: myColor === 'white' ? 'black' : 'white' 
+                            } 
+                        })
+                    }).finally(() => setIsProcessing(false));
+                }
             } catch (e) { console.error(e); setIsProcessing(false); } 
         }
     };
