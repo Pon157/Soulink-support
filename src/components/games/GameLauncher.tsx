@@ -276,6 +276,16 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
     const isCurrentTurnMe = myColor && game.turn() === myColor;
 
     useEffect(() => {
+        console.log('Chess State:', {
+            turn: game.turn(),
+            myColor,
+            isCurrentTurnMe,
+            fen: game.fen(),
+            stateFen: state?.fen
+        });
+    }, [game, myColor, isCurrentTurnMe, state?.fen]);
+
+    useEffect(() => {
         if (isProcessing) return;
         const now = Date.now();
         
@@ -304,6 +314,16 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
         }
     }, [state?.fen, isProcessing, lastMoveTimestamp, myColor, lastReceivedFen, game, preMoveFen]);
 
+    const forceSync = () => {
+        try {
+            const updatedGame = new Chess(state.fen === 'start' ? undefined : state.fen || 'start');
+            setGame(updatedGame);
+            setOptionSquares({});
+            setLastMoveTimestamp(0); // Reset timer to allow reconciliation
+            setMoveFrom(null);
+        } catch (e) { console.error(e); }
+    };
+
     const combinedOptionSquares = useMemo(() => {
         const squares = { ...optionSquares };
         
@@ -318,7 +338,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
                             const sq = `${String.fromCharCode(97 + c)}${8 - r}`;
                             if (game.moves({ square: sq as any }).length > 0) {
                                 squares[sq] = {
-                                    background: 'rgba(59, 130, 246, 0.1)',
+                                    background: 'rgba(59, 130, 246, 0.25)',
                                     borderRadius: '50%',
                                 };
                             }
@@ -330,18 +350,26 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
         return squares;
     }, [game, isCurrentTurnMe, isProcessing, myColor, moveFrom, optionSquares]);
 
-    async function syncMove(fen: string, result: any) {
+    async function syncMove(fen: string, result: any, newTurn: string) {
         setIsProcessing(true);
         try {
-            await apiFetch(`/api/games/${sessionId}/move`, {
+            const res = await apiFetch(`/api/games/${sessionId}/move`, {
                 method: 'POST',
                 body: JSON.stringify({ 
-                    state: { ...state, fen: fen, turn: game.turn() === 'w' ? 'white' : 'black' },
+                    state: { ...state, fen: fen, turn: newTurn === 'w' ? 'white' : 'black' },
                     move: { from: result.from, to: result.to, piece: result.piece, san: result.san }
                 })
             });
+            if (!res.ok) throw new Error('Failed to sync move');
             setLastReceivedFen(fen);
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error(e);
+            // Revert on error
+            if (preMoveFen) {
+                setGame(new Chess(preMoveFen));
+                setPreMoveFen(null);
+            }
+        }
         finally { setIsProcessing(false); }
     }
 
@@ -353,10 +381,11 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
             const result = gameCopy.move(move);
             if (result) {
                 setPreMoveFen(oldFen);
+                const nextTurn = gameCopy.turn();
                 setGame(gameCopy);
                 setLastReceivedFen(gameCopy.fen()); 
                 setLastMoveTimestamp(Date.now());
-                syncMove(gameCopy.fen(), result);
+                syncMove(gameCopy.fen(), result, nextTurn);
                 return result;
             }
         } catch (e) { return null; }
@@ -455,20 +484,32 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
                     Вы играете за {myColor === 'w' ? 'Белых' : 'Черных'}
                 </p>
                 <div className="w-px h-3 bg-white/10 mx-1" />
-                <p className="text-[9px] font-bold text-text-dim uppercase">Используйте левую кнопку мыши</p>
+                <button 
+                    onClick={forceSync}
+                    className="text-[9px] font-black text-accent uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2"
+                >
+                    <RefreshCw size={10} />
+                    Синхронизировать
+                </button>
             </div>
+            <p className="text-[9px] font-bold text-text-dim uppercase">Используйте только ЛЕВУЮ кнопку мыши для ходов</p>
 
-            <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative transition-all animate-in zoom-in duration-500 p-1 md:p-3 touch-none">
+            <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative transition-all animate-in zoom-in duration-500 p-1 md:p-3">
                 <ChessboardAny 
                     id="BasicBoard"
                     position={game.fen()} 
                     onPieceDrop={onDrop} 
                     onSquareClick={onSquareClick}
-                    onPieceDragBegin={(_piece: string, square: string) => showHints(square)}
+                    onPieceDragBegin={(_piece: string, square: string) => {
+                        setMoveFrom(square);
+                        showHints(square);
+                    }}
                     onPieceDragEnd={() => {
-                        if (!moveFrom) setOptionSquares({});
+                        setOptionSquares({});
+                        setMoveFrom(null);
                     }}
                     onSquareRightClick={() => false}
+                    areArrowsAllowed={false}
                     animationDuration={300}
                     customSquareStyles={combinedOptionSquares}
                     boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
