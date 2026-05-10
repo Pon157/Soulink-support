@@ -262,9 +262,11 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
     const [moveFrom, setMoveFrom] = useState<string | null>(null);
     const [optionSquares, setOptionSquares] = useState<any>({});
     const [isProcessing, setIsProcessing] = useState(false);
-    const [lastReceivedFen, setLastReceivedFen] = useState(state?.fen || 'start');
     const [preMoveFen, setPreMoveFen] = useState<string | null>(null);
     const [lastMoveTimestamp, setLastMoveTimestamp] = useState(0);
+
+    // Track state acknowledged by or received from server
+    const [serverStateFen, setServerStateFen] = useState(state?.fen || 'start');
 
     // Robust player color identification
     const myPlayerIndex = useMemo(() => {
@@ -289,38 +291,42 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
         if (isProcessing) return;
         const now = Date.now();
         
-        const normalize = (f: string) => f === 'start' ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' : f;
+        const normalize = (f: string) => f === 'start' || !f ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' : f;
         const serverFen = normalize(state?.fen || 'start');
         const currentFen = normalize(game.fen());
         const preNormalized = preMoveFen ? normalize(preMoveFen) : null;
 
         // RECONCILIATION:
-        // 1. If we just moved (last 8s), ignore server if it still sends the FEN we moved FROM
-        if (now - lastMoveTimestamp < 8000 && preNormalized && serverFen === preNormalized) {
-            return;
+        // 1. If we just moved, ignore server if it still sends the state we just left
+        if (now - lastMoveTimestamp < 10000) {
+            if (serverFen === preNormalized) return;
+            const serverTurn = state?.turn;
+            const myTurnFull = myColor === 'w' ? 'white' : 'black';
+            if (serverTurn === myTurnFull && serverFen !== currentFen) return;
         }
 
-        // 2. If server turn matches our color, but server FEN is different from ours, we might be out of sync
-        // unless we just moved and the server hasn't acknowledged yet.
-        if (serverFen !== currentFen && serverFen !== normalize(lastReceivedFen)) {
+        // 2. Only update if server state changed from the last one we acknowledged as "from server"
+        if (serverFen !== normalize(serverStateFen)) {
             try {
-                const updatedGame = new Chess(state.fen === 'start' ? undefined : state.fen);
+                const updatedGame = new Chess(state.fen === 'start' ? undefined : state.fen || 'start');
                 setGame(updatedGame);
-                setLastReceivedFen(state.fen);
+                setServerStateFen(state.fen || 'start');
                 setOptionSquares({});
                 setMoveFrom(null);
                 setPreMoveFen(null);
             } catch (e) { console.error('Chess sync error:', e); }
         }
-    }, [state?.fen, isProcessing, lastMoveTimestamp, myColor, lastReceivedFen, game, preMoveFen]);
+    }, [state?.fen, state?.turn, isProcessing, lastMoveTimestamp, myColor, game, preMoveFen, serverStateFen]);
 
     const forceSync = () => {
         try {
             const updatedGame = new Chess(state.fen === 'start' ? undefined : state.fen || 'start');
             setGame(updatedGame);
+            setServerStateFen(state.fen || 'start');
             setOptionSquares({});
-            setLastMoveTimestamp(0); // Reset timer to allow reconciliation
+            setLastMoveTimestamp(0); 
             setMoveFrom(null);
+            setPreMoveFen(null);
         } catch (e) { console.error(e); }
     };
 
@@ -361,7 +367,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
                 })
             });
             if (!res.ok) throw new Error('Failed to sync move');
-            setLastReceivedFen(fen);
+            setServerStateFen(fen);
         } catch (e) { 
             console.error(e);
             // Revert on error
@@ -383,7 +389,6 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
                 setPreMoveFen(oldFen);
                 const nextTurn = gameCopy.turn();
                 setGame(gameCopy);
-                setLastReceivedFen(gameCopy.fen()); 
                 setLastMoveTimestamp(Date.now());
                 syncMove(gameCopy.fen(), result, nextTurn);
                 return result;
@@ -412,15 +417,16 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
             moves.forEach((move) => {
                 newSquares[move.to] = {
                     background: move.captured ? 
-                        "radial-gradient(circle, rgba(239, 68, 68, 0.8) 70%, transparent 75%)" :
-                        "radial-gradient(circle, rgba(59, 130, 246, 0.5) 25%, transparent 30%)",
+                        "radial-gradient(circle, rgba(239, 68, 68, 0.9) 70%, transparent 75%)" :
+                        "radial-gradient(circle, rgba(59, 130, 246, 0.7) 25%, transparent 30%)",
                     borderRadius: "50%",
                 };
             });
             newSquares[square] = {
                 background: "rgba(59, 130, 246, 0.4)",
                 borderRadius: "4px",
-                boxShadow: "inset 0 0 15px rgba(59, 130, 246, 0.6)"
+                boxShadow: "inset 0 0 20px rgba(59, 130, 246, 0.8)",
+                border: "2px solid #3b82f6"
             };
             setOptionSquares(newSquares);
             return true;
@@ -501,16 +507,19 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
                     onPieceDrop={onDrop} 
                     onSquareClick={onSquareClick}
                     onPieceDragBegin={(_piece: string, square: string) => {
+                        if (!isCurrentTurnMe || isProcessing) return;
                         setMoveFrom(square);
                         showHints(square);
                     }}
                     onPieceDragEnd={() => {
-                        setOptionSquares({});
-                        setMoveFrom(null);
+                        // Keep hints if we are in a multi-click move mode, 
+                        // but library usually cleans up highlights on drop
+                        if (!moveFrom) setOptionSquares({});
                     }}
-                    onSquareRightClick={() => false}
-                    areArrowsAllowed={false}
-                    animationDuration={300}
+                    onSquareRightClick={() => {}}
+                    allowDragOutsideBoard={false}
+                    customArrows={[]}
+                    animationDuration={200}
                     customSquareStyles={combinedOptionSquares}
                     boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
                     customDarkSquareStyle={{ backgroundColor: '#475569' }}
