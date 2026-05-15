@@ -273,10 +273,23 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
     // The last FEN we acknowledged as "coming from / already sent to the server"
     const [serverStateFen, setServerStateFen] = useState(state?.fen || 'start');
 
+    // ── CRITICAL FIX ──────────────────────────────────────────────────────────
+    // gameState.players (Prisma relation) has NO guaranteed order — the DB can
+    // return [creator, partner] or [partner, creator] at any time.
+    // state.players is written by the server with a fixed order:
+    //   index 0 = game creator = WHITE
+    //   index 1 = invited partner = BLACK
+    // We MUST use state.players to determine colour assignment.
+    // Using the Prisma players caused myPlayerIndex to be wrong (or -1),
+    // making myColor null → isCurrentTurnMe always false → pieces frozen,
+    // no hints, draggable=false.
     const myPlayerIndex = useMemo(() => {
-        if (!players || !Array.isArray(players)) return -1;
-        return players.findIndex((p: any) => p.id === currentUserId);
-    }, [players, currentUserId]);
+        // Prefer state.players (guaranteed order). Fall back to Prisma players
+        // only if state.players isn't populated yet.
+        const source = (state?.players?.length ? state.players : players) as any[];
+        if (!source || !Array.isArray(source)) return -1;
+        return source.findIndex((p: any) => p.id === currentUserId);
+    }, [state?.players, players, currentUserId]);
 
     const myColor = myPlayerIndex === 0 ? 'w' : (myPlayerIndex === 1 ? 'b' : null);
     const isCurrentTurnMe = myColor && game.turn() === myColor;
@@ -577,8 +590,10 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, players, state }:
     const [isProcessing, setIsProcessing] = useState(false);
     const [lastMoveTimestamp, setLastMoveTimestamp] = useState(0);
 
-    const myPlayerIndex = players?.findIndex((p: any) => p.id === currentUserId);
-    const myIndex = myPlayerIndex === -1 || myPlayerIndex === undefined ? 0 : myPlayerIndex;
+    // Same fix as ChessGame: use state.players (guaranteed order) not Prisma players
+    const _src = (state?.players?.length ? state.players : players) as any[];
+    const myPlayerIndex = _src?.findIndex((p: any) => p.id === currentUserId) ?? -1;
+    const myIndex = myPlayerIndex === -1 ? 0 : myPlayerIndex;
     const isMyTurn = state?.turn === (myIndex === 0 ? 'white' : 'black');
     const myColor = myIndex === 0 ? 'white' : 'black';
 
@@ -961,8 +976,10 @@ const WordsGame = ({ sessionId, partnerName, currentUserId, players, state }: { 
 //   • Ship placement controls use full-width flex-wrap row on mobile.
 // ─────────────────────────────────────────────────────────────────────────────
 const SeaBattleGame = ({ sessionId, partnerName, currentUserId, players, state, onClose }: any) => {
-    const myPlayerIndex = players?.findIndex((p: any) => p?.id === currentUserId);
-    const myIndex  = myPlayerIndex === -1 || myPlayerIndex === undefined ? 0 : myPlayerIndex;
+    // Same fix: use state.players (guaranteed order) not Prisma players
+    const _sbSrc = (state?.players?.length ? state.players : players) as any[];
+    const myPlayerIndex = _sbSrc?.findIndex((p: any) => p?.id === currentUserId) ?? -1;
+    const myIndex  = myPlayerIndex === -1 ? 0 : myPlayerIndex;
     const oppIndex = 1 - myIndex;
 
     const [ships, setShips]                 = useState<number[]>(state?.players?.[myIndex]?.ships || []);
