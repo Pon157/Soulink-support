@@ -679,75 +679,81 @@ function escapeHTML(str: string) {
 }
 
 async function sendTGNotification(recipientId: string, text: string, sourceId: string = 'SYSTEM', mediaUrl?: string) {
-    try {
-        const recipient = await prisma.user.findUnique({ where: { id: recipientId } });
-        if (!recipient?.telegramId) return;
+    const maxRetries = 2;
+    let attempt = 0;
 
-        // Check preferences
-        // SYSTEM and TICKET sources are mandatory.
-        const isMandatory = sourceId === 'SYSTEM' || sourceId === 'BROADCAST' || sourceId.startsWith('TICKET_');
-        if (!isMandatory) {
-            const allowedList = recipient.tgAllowedChats || [];
-            if (!recipient.tgNotifyAll && !allowedList.includes(sourceId)) {
-                return;
+    const executeRequest = async () => {
+        try {
+            const recipient = await prisma.user.findUnique({ where: { id: recipientId } });
+            if (!recipient?.telegramId) return;
+
+            const isMandatory = sourceId === 'SYSTEM' || sourceId === 'BROADCAST' || sourceId.startsWith('TICKET_');
+            if (!isMandatory) {
+                const allowedList = recipient.tgAllowedChats || [];
+                if (!recipient.tgNotifyAll && !allowedList.includes(sourceId)) {
+                    return;
+                }
             }
-        }
 
-        const token = process.env.TELEGRAM_BOT_TOKEN;
-        if (!token) return;
+            const token = process.env.TELEGRAM_BOT_TOKEN;
+            if (!token) return;
 
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 20000); // Increased to 20s timeout
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 25000); // 25s timeout
 
-        const method = mediaUrl ? 'sendPhoto' : 'sendMessage';
-        const body: any = {
-            chat_id: recipient.telegramId,
-            parse_mode: 'HTML'
-        };
+            const method = mediaUrl ? 'sendPhoto' : 'sendMessage';
+            const body: any = {
+                chat_id: recipient.telegramId,
+                parse_mode: 'HTML'
+            };
 
-        if (mediaUrl) {
-            body.photo = mediaUrl;
-            body.caption = text;
-        } else {
-            body.text = text;
-        }
-
-        const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeout);
-        
-        if (!res.ok) {
-            const err = await res.json();
-            // If HTML mode failed or media failed, try fallback sending as plain text sendMessage
-            if (err.description?.includes('can\'t parse entities') || (mediaUrl && !err.ok)) {
-                 await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: recipient.telegramId,
-                        text: text.replace(/<[^>]*>/g, '') + (mediaUrl ? `\n\n🖼 ${mediaUrl}` : ''), 
-                    })
-                });
-            } else if (res.status === 429) {
-                console.error('Telegram Rate Limited (429)');
+            const mediaPrefix = mediaUrl ? '🖼 [МЕДИА]\n\n' : '';
+            if (mediaUrl) {
+                body.photo = mediaUrl;
+                body.caption = mediaPrefix + text;
             } else {
-                console.error('Telegram API Error:', err.description, 'Source:', sourceId);
+                body.text = text;
             }
-        } else {
-            // Optional success log for debugging
-            // console.log(`TG notify success: ${recipientId} Source: ${sourceId}`);
+
+            const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                signal: controller.signal,
+                keepalive: true
+            });
+            
+            clearTimeout(timeout);
+            
+            if (!res.ok) {
+                const err = await res.json();
+                if (err.description?.includes('can\'t parse entities') || (mediaUrl && !err.ok)) {
+                     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: recipient.telegramId,
+                            text: (mediaUrl ? '[🖼 МЕДИА]\n' : '') + text.replace(/<[^>]*>/g, '') + (mediaUrl ? `\n\n🔗 ${mediaUrl}` : ''), 
+                        })
+                    });
+                } else if (res.status === 429) {
+                    console.error('Telegram Rate Limited (429)');
+                } else {
+                    console.error('Telegram API Error:', err.description, 'Source:', sourceId);
+                }
+            }
+        } catch (e: any) {
+            console.error(`TG notify attempt ${attempt + 1} failed:`, e.message, 'Source:', sourceId);
+            if (attempt < maxRetries) {
+                attempt++;
+                const delay = attempt * 2000;
+                await new Promise(r => setTimeout(r, delay));
+                return executeRequest();
+            }
         }
-    } catch (e: any) {
-        console.error('TG notify exception:', e.message, 'Source:', sourceId);
-        if (e.name === 'AbortError') {
-            console.error('TG notify: Request timed out');
-        }
-    }
+    };
+
+    return executeRequest();
 }
 
 async function notifyExternalBot(message: string) {
@@ -755,38 +761,51 @@ async function notifyExternalBot(message: string) {
     const adminChatId = "-1002334814885"; // Admin group
     if (!token) return;
     
-    try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+    const maxRetries = 2;
+    let attempt = 0;
 
-        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: adminChatId,
-                text: message,
-                parse_mode: 'HTML'
-            }),
-            signal: controller.signal
-        });
-        clearTimeout(timeout);
+    const executeRequest = async () => {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 15000);
 
-        if (!res.ok) {
-            const err = await res.json();
-            if (err.description?.includes('can\'t parse entities')) {
-                 await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chat_id: adminChatId,
-                        text: message.replace(/<[^>]*>/g, ''),
-                    })
-                });
+            const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: adminChatId,
+                    text: message,
+                    parse_mode: 'HTML'
+                }),
+                signal: controller.signal,
+                keepalive: true
+            });
+            clearTimeout(timeout);
+
+            if (!res.ok) {
+                const err = await res.json();
+                if (err.description?.includes('can\'t parse entities')) {
+                     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            chat_id: adminChatId,
+                            text: message.replace(/<[^>]*>/g, ''),
+                        })
+                    });
+                }
+            }
+        } catch (e: any) {
+            console.error(`External bot notify attempt ${attempt + 1} failed:`, e.message);
+            if (attempt < maxRetries) {
+                attempt++;
+                await new Promise(r => setTimeout(r, attempt * 1000));
+                return executeRequest();
             }
         }
-    } catch (e) {
-        console.error('External bot notify fail', e);
-    }
+    };
+
+    return executeRequest();
 }
 
 app.post('/api/user/tg-settings', authenticateToken, async (req: any, res: any) => {
@@ -1582,18 +1601,18 @@ app.post('/api/moderation/warn', authenticateToken, async (req: any, res: any) =
 });
 
 app.post('/api/moderation/ban', authenticateToken, async (req: any, res: any) => {
-    const { targetUserId, reason, durationDays } = req.body;
+    const { targetUserId, reason, durationHours } = req.body;
     if (!['ADMIN', 'CURATOR', 'OWNER'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
 
     try {
-        const banUntil = durationDays ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000) : null;
+        const banUntil = durationHours ? new Date(Date.now() + durationHours * 60 * 60 * 1000) : null;
         await prisma.user.update({
             where: { id: targetUserId },
             data: { banStatus: 'BANNED', banReason: reason, banUntil }
         });
 
         const sysId = await getSystemUserId();
-        const msgContent = `🚫 БЛОКИРОВКА: ${reason}\n\nСрок: ${durationDays ? durationDays + ' дн.' : 'Бессрочно'}`;
+        const msgContent = `🚫 БЛОКИРОВКА: ${reason}\n\nСрок: ${durationHours ? durationHours + ' ч.' : 'Бессрочно'}`;
         await prisma.message.create({
             data: {
                 senderId: sysId,
