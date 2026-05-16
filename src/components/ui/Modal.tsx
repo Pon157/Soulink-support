@@ -20,21 +20,21 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            className="absolute inset-0 bg-bg-primary/80 backdrop-blur-md"
           />
           <motion.div 
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative w-full max-w-xl bg-slate-900 border border-slate-800 rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+            className="relative w-full max-w-xl bg-bg-secondary border border-slate-800 rounded-[2.5rem] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
           >
             <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="text-xl font-black text-white italic tracking-tighter">{title}</h3>
-              <button onClick={onClose} className="p-2 text-slate-500 hover:text-white transition-colors bg-slate-800 rounded-xl">
+              <h3 className="text-xl font-black text-text-main italic tracking-tighter">{title}</h3>
+              <button onClick={onClose} className="p-2 text-text-dim hover:text-text-main transition-colors bg-bg-primary rounded-xl">
                 <X size={20} />
               </button>
             </div>
-            <div className="p-8 overflow-y-auto text-slate-300 space-y-4 font-medium leading-relaxed">
+            <div className="p-8 overflow-y-auto text-text-dim space-y-4 font-medium leading-relaxed">
               {children}
             </div>
           </motion.div>
