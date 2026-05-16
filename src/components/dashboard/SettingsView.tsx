@@ -188,13 +188,24 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
              ))}
           </div>
           <div className="space-y-3">
-             <p className="text-[10px] font-black uppercase text-text-dim px-2">Фоновый баннер</p>
+             <p className="text-[10px] font-black uppercase text-text-dim px-2">Шапка профиля (баннер)</p>
              <label className="flex items-center justify-between bg-bg-secondary p-4 rounded-2xl border border-slate-800 cursor-pointer">
                 <div className="flex items-center gap-3">
                   <ImageIcon size={20} className="text-accent" />
-                  <span className="text-sm font-bold italic tracking-tight">Загрузить свои обои</span>
+                  <span className="text-sm font-bold italic tracking-tight">Загрузить баннер профиля</span>
                 </div>
                 <input type="file" className="hidden" accept="image/*" onChange={handleBannerChange} />
+                <ChevronRight size={18} />
+             </label>
+          </div>
+          <div className="space-y-3">
+             <p className="text-[10px] font-black uppercase text-text-dim px-2">Общий фон приложения</p>
+             <label className="flex items-center justify-between bg-bg-secondary p-4 rounded-2xl border border-slate-800 cursor-pointer">
+                <div className="flex items-center gap-3">
+                  <Palette size={20} className="text-amber-400" />
+                  <span className="text-sm font-bold italic tracking-tight">Загрузить обои фона</span>
+                </div>
+                <input type="file" className="hidden" accept="image/*" onChange={handleWallpaper} />
                 <ChevronRight size={18} />
              </label>
           </div>
@@ -270,14 +281,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
 
           {[
             { label: 'Безопасность', icon: Shield, color: 'text-emerald-400', onClick: () => setShowSecurity(true) },
-            { label: 'Тема интерфейса', icon: Palette, color: 'text-purple-400', onClick: () => setShowTheme(true) },
-            { label: 'Обои чата', icon: ImageIcon, color: 'text-amber-400', onClick: () => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'image/*';
-              input.onchange = (e: any) => handleWallpaper(e);
-              input.click();
-            }},
+            { label: 'Тема и оформление', icon: Palette, color: 'text-purple-400', onClick: () => setShowTheme(true) },
             { label: 'Создать баннер', icon: PenTool, color: 'text-orange-400', onClick: () => setShowPaint(true) },
             { label: user.isOnRest ? 'Закончить отдых' : 'Уйти на отдых', icon: Coffee, color: user.isOnRest ? 'text-amber-400' : 'text-blue-400', onClick: handleToggleRest, hide: user.role === 'USER' },
             { label: 'Помощь', icon: HelpCircle, color: 'text-slate-400', onClick: () => setShowHelp(true) },
