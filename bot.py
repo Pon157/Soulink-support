@@ -3,23 +3,22 @@ import telebot
 import requests
 from telebot import apihelper
 
-# Token from environment
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-APP_URL = os.getenv('APP_URL', 'https://https://supportkmbp.webtm.ru/')
-# Deriving API URL from app preview URL if needed, but here they are likely identical for server routes
+# Токен бота и URL (оставлены жестко прописанными в коде)
+TOKEN = ''
+APP_URL = 'https://supportkmbp.webtm.ru/'
 API_URL = APP_URL 
 
-# Proxy configuration
-PROXY_HOST = os.getenv('TELEGRAM_BOT_PROXY_HOST')
-PROXY_PORT = os.getenv('TELEGRAM_BOT_PROXY_PORT')
-PROXY_USER = os.getenv('TELEGRAM_BOT_PROXY_USER')
-PROXY_PASS = os.getenv('TELEGRAM_BOT_PROXY_PASS')
+# Данные прокси
+PROXY_HOST = '185.88.99.86'
+PROXY_PORT = '8000'
+PROXY_USER = 'n6CZUF'
+PROXY_PASS = 'Py0CSG'
 
-if PROXY_HOST:
-    apihelper.proxy = {
-        'http': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
-        'https': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
-    }
+# Передаем словарь (dict), чтобы requests внутри telebot не падал
+apihelper.proxy = {
+    'http': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+    'https': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+}
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -27,9 +26,10 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
     args = message.text.split()
     if len(args) > 1:
-        token = args[1]
+        # .strip() убирает случайные пробелы, регистр букв (маленькие cuid) сохраняется
+        token = args[1].strip()
         try:
-            # Call backend to link account
+            # Запрос к бэкенду для привязки аккаунта
             res = requests.post(f"{API_URL}/api/bot/link", json={
                 "token": token,
                 "telegramId": str(message.chat.id)
@@ -58,5 +58,5 @@ if __name__ == "__main__":
     if not TOKEN:
         print("ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
     else:
-        print(f"Бот запущен...")
+        print(f"Бот запущен с прокси {PROXY_HOST}...")
         bot.infinity_polling()
