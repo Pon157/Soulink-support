@@ -15,11 +15,18 @@ PROXY_PORT = os.getenv('TELEGRAM_BOT_PROXY_PORT')
 PROXY_USER = os.getenv('TELEGRAM_BOT_PROXY_USER')
 PROXY_PASS = os.getenv('TELEGRAM_BOT_PROXY_PASS')
 
-if PROXY_HOST:
-    apihelper.proxy = {
-        'http': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
-        'https': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
-    }
+# Исправлено: Безопасное построение словаря прокси с валидацией авторизации
+if PROXY_HOST and PROXY_PORT:
+    if PROXY_USER and PROXY_PASS:
+        apihelper.proxy = {
+            'http': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+            'https': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+        }
+    else:
+        apihelper.proxy = {
+            'http': f"http://{PROXY_HOST}:{PROXY_PORT}",
+            'https': f"http://{PROXY_HOST}:{PROXY_PORT}"
+        }
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -27,7 +34,8 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
     args = message.text.split()
     if len(args) > 1:
-        token = args[1].strip().upper()
+        # Исправлено: Убран метод .upper(), так как cuid-токены бэкенда чувствительны к регистру (всегда строчные)
+        token = args[1].strip()
         print(f"Попытка привязки с токеном: {token}")
         try:
             # Call backend to link account
@@ -63,5 +71,8 @@ if __name__ == "__main__":
     if not TOKEN:
         print("ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
     else:
-        print(f"Бот запущен...")
+        if PROXY_HOST:
+            print(f"Бот запущен с использованием прокси {PROXY_HOST}...")
+        else:
+            print(f"Бот запущен...")
         bot.infinity_polling()
