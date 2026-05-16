@@ -530,7 +530,12 @@ app.get('/api/user/bot-link-token', authenticateToken, async (req: any, res: any
     try {
         let user = await prisma.user.findUnique({ where: { id: req.user.userId } });
         if (!user?.botAuthToken) {
-            const token = Math.random().toString(36).substring(2, 12).toUpperCase();
+            // Use clear characters to avoid confusion (0/O, 1/L/I removed)
+            const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+            let token = '';
+            for (let i = 0; i < 8; i++) {
+                token += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
             user = await prisma.user.update({
                 where: { id: req.user.userId },
                 data: { botAuthToken: token }
@@ -542,16 +547,24 @@ app.get('/api/user/bot-link-token', authenticateToken, async (req: any, res: any
 
 app.post('/api/bot/link', async (req: any, res: any) => {
     const { token, telegramId } = req.body;
+    if (!token) return res.status(400).json({ error: 'Missing token' });
+    const cleanToken = token.trim().toUpperCase();
     try {
-        const user = await prisma.user.findUnique({ where: { botAuthToken: token } });
-        if (!user) return res.status(404).json({ error: 'Token not found' });
+        const user = await prisma.user.findUnique({ where: { botAuthToken: cleanToken } });
+        if (!user) {
+            console.log(`Bot link failed: Token ${cleanToken} not found`);
+            return res.status(404).json({ error: 'Token not found' });
+        }
         
         await prisma.user.update({
             where: { id: user.id },
-            data: { telegramId, botAuthToken: null }
+            data: { telegramId: String(telegramId), botAuthToken: null }
         });
         res.json({ success: true, nickname: user.nickname });
-    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+    } catch (e) { 
+        console.error('Bot link internal error', e);
+        res.status(500).json({ error: 'Failed' }); 
+    }
 });
 
 // 5. Update Profile
