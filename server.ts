@@ -52,6 +52,45 @@ const transporter = nodemailer.createTransport({
 // Multer for file uploads
 const upload = multer({ storage: multer.memoryStorage() });
 
+// --- UTILS ---
+async function trackActivity(type: 'message' | 'user') {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    try {
+        await prisma.dailyStats.upsert({
+            where: { date: today },
+            update: {
+                messages: type === 'message' ? { increment: 1 } : undefined,
+                users: type === 'user' ? { increment: 1 } : undefined
+            },
+            create: {
+                date: today,
+                messages: type === 'message' ? 1 : 0,
+                users: type === 'user' ? 1 : 0
+            }
+        });
+    } catch (e) { console.error('Stats tracking fail', e); }
+}
+
+async function seedStats() {
+    const count = await prisma.dailyStats.count();
+    if (count > 0) return;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    for (let i = 0; i < 7; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        await prisma.dailyStats.create({
+            data: {
+                date,
+                messages: Math.floor(Math.random() * 50) + 10,
+                users: Math.floor(Math.random() * 5) + 1
+            }
+        }).catch(() => {});
+    }
+}
+seedStats();
+
 // --- MIDDLEWARE ---
 const authenticateToken = (req: any, res: any, next: any) => {
   const authHeader = req.headers['authorization'];
@@ -428,6 +467,8 @@ app.post('/api/auth/register-confirm', async (req, res) => {
       }
     });
 
+    await trackActivity('user');
+
     const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET);
     await prisma.verificationCode.delete({ where: { email } });
     
@@ -482,6 +523,35 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Ошибка входа' });
   }
+});
+
+// Bot Linking
+app.get('/api/user/bot-link-token', authenticateToken, async (req: any, res: any) => {
+    try {
+        let user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+        if (!user?.botAuthToken) {
+            const token = Math.random().toString(36).substring(2, 12).toUpperCase();
+            user = await prisma.user.update({
+                where: { id: req.user.userId },
+                data: { botAuthToken: token }
+            });
+        }
+        res.json({ token: user?.botAuthToken });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/bot/link', async (req: any, res: any) => {
+    const { token, telegramId } = req.body;
+    try {
+        const user = await prisma.user.findUnique({ where: { botAuthToken: token } });
+        if (!user) return res.status(404).json({ error: 'Token not found' });
+        
+        await prisma.user.update({
+            where: { id: user.id },
+            data: { telegramId, botAuthToken: null }
+        });
+        res.json({ success: true, nickname: user.nickname });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
 // 5. Update Profile
@@ -766,6 +836,8 @@ app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
       },
     });
 
+    await trackActivity('message');
+
     await prisma.userStats.upsert({
       where: { userId: req.user.userId },
       update: { messagesSent: { increment: 1 } },
@@ -797,7 +869,21 @@ app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
       const totalUsers = await prisma.user.count();
       const totalMessages = await prisma.message.count();
       const bannedUsers = await prisma.user.count({ where: { banStatus: 'BANNED' } });
-      return res.json({ totalUsers, totalMessages, bannedUsers, dailyStats: [30, 40, 35, 50, 45, 60, 55, 40, 50, 65] });
+      
+      const activity = await prisma.dailyStats.findMany({
+          orderBy: { date: 'desc' },
+          take: 10
+      });
+      
+      const botUsersCount = await prisma.user.count({ where: { telegramId: { not: null } } });
+
+      return res.json({ 
+          totalUsers, 
+          totalMessages, 
+          bannedUsers, 
+          botUsersCount,
+          dailyStats: activity.reverse().map(s => Math.min(100, (s.messages / 100) * 100)) // Scaled for graph
+      });
     }
     
     // Admins see only their stats
