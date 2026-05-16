@@ -10,7 +10,7 @@ load_dotenv()
 
 # Token from environment
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-APP_URL = os.getenv('APP_URL', 'https://supportkmbp.webtm.ru/')
+APP_URL = os.getenv('APP_URL', 'https://supportkmbp.webtm.ru/api/bot/link')
 # Deriving API URL from app preview URL if needed, but here they are likely identical for server routes
 API_URL = APP_URL 
 
