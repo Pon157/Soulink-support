@@ -174,18 +174,25 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
         <div className="space-y-6 text-center">
             <div className="bg-bg-primary p-8 rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full relative group">
                 <p className="text-[10px] font-black uppercase text-text-dim mb-2 tracking-[0.2em]">Ваш код авторизации</p>
-                <div className="flex items-center justify-center gap-4">
-                  <p className="text-4xl font-black text-accent tracking-widest italic">{botToken}</p>
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <p className="text-5xl font-black text-accent tracking-[0.2em] italic select-all cursor-pointer bg-accent/5 p-4 rounded-3xl w-full border border-accent/10" title="Нажмите, чтобы выделить">{botToken}</p>
                   <button 
                     onClick={() => {
                         if (botToken) {
-                            navigator.clipboard.writeText(botToken);
-                            alert('Код скопирован');
+                            navigator.clipboard.writeText(botToken).then(() => {
+                                const btn = document.activeElement as HTMLButtonElement;
+                                if (btn) {
+                                  const originalHtml = btn.innerHTML;
+                                  btn.innerHTML = '<span class="text-[10px] font-black uppercase tracking-widest text-emerald-400">СКОПИРОВАНО!</span>';
+                                  setTimeout(() => btn.innerHTML = originalHtml, 2000);
+                                }
+                            });
                         }
                     }}
-                    className="p-2 bg-accent/10 rounded-xl text-accent hover:bg-accent hover:text-white transition-all"
+                    className="w-full bg-white/10 p-5 rounded-2xl flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95 group border border-white/5"
                   >
-                    <Star size={16} fill="currentColor" />
+                    <Star size={18} fill="currentColor" className="text-accent group-hover:scale-110 transition-transform" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-text-main">Скопировать код</span>
                   </button>
                 </div>
             </div>
@@ -197,9 +204,15 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
             <div className="flex gap-2">
                 <button 
                   onClick={async () => {
-                    const res = await apiFetch('/api/user/bot-link-token/refresh', { method: 'POST' });
-                    const data = await res.json();
-                    setBotToken(data.token);
+                    try {
+                        const res = await apiFetch('/api/user/bot-link-token/refresh', { method: 'POST' });
+                        if (res.ok) {
+                            const data = await res.json();
+                            setBotToken(data.token);
+                        }
+                    } catch (e) {
+                        alert('Ошибка обновления');
+                    }
                   }}
                   className="flex-1 bg-slate-800 py-4 rounded-2xl font-black uppercase text-[10px]"
                 >
