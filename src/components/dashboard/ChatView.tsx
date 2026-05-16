@@ -122,11 +122,19 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
   const [replyTo, setReplyTo] = useState<any>(null);
   const [editingMessage, setEditingMessage] = useState<any>(null);
   const [showMsgActions, setShowMsgActions] = useState<string | null>(null);
+  const [showScrollBottom, setShowScrollBottom] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 200;
+    setShowScrollBottom(!isAtBottom);
   };
 
   useEffect(() => {
@@ -578,6 +586,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
 
       <div 
         ref={scrollContainerRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth transition-all"
         style={wallpaper ? {
           backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.7), rgba(var(--bg-primary-rgb), 0.85)), url(${wallpaper})`,
@@ -587,7 +596,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
         } : {}}
       >
         {messages.map((msg) => {
-          const isOwn = msg.senderId !== chatId;
+          const isMe = msg.senderId === currentUserId;
           const repliedToMsg = msg.replyToId ? messages.find(m => m.id === msg.replyToId) : null;
 
           return (
@@ -598,18 +607,18 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
               onClick={() => setShowMsgActions(showMsgActions === msg.id ? null : msg.id)}
               className={cn(
                 "max-w-[85%] p-3.5 rounded-3xl relative group cursor-pointer transition-all",
-                isOwn ? "bg-accent text-white ml-auto" : "bg-bg-primary text-text-main border border-slate-800/50 mr-auto",
+                isMe ? "bg-accent text-white ml-auto" : "bg-bg-primary text-text-main border border-slate-800/50 mr-auto",
                 showMsgActions === msg.id ? "ring-2 ring-blue-500/50" : ""
               )}
             >
               {showMsgActions === msg.id && (
                   <div className={cn(
                       "absolute -top-12 bg-bg-primary border border-slate-800 p-1 rounded-2xl flex gap-1 z-20 shadow-2xl",
-                      isOwn ? "right-0" : "left-0"
+                      isMe ? "right-0" : "left-0"
                   )}>
                       <button onClick={(e) => { e.stopPropagation(); setReplyTo(msg); setShowMsgActions(null); }} className="p-2 hover:bg-slate-800 rounded-xl text-text-main"><Reply size={16} /></button>
-                      {isOwn && !msg.isDeleted && <button onClick={(e) => { e.stopPropagation(); setEditingMessage(msg); setInput(msg.content); setShowMsgActions(null); }} className="p-2 hover:bg-slate-800 rounded-xl text-text-main"><Edit3 size={16} /></button>}
-                      {(isOwn || ['ADMIN', 'CURATOR', 'OWNER'].includes(userRole)) && <button onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); }} className="p-2 hover:bg-slate-800 rounded-xl text-rose-500"><Trash size={16} /></button>}
+                      {isMe && !msg.isDeleted && <button onClick={(e) => { e.stopPropagation(); setEditingMessage(msg); setInput(msg.content); setShowMsgActions(null); }} className="p-2 hover:bg-slate-800 rounded-xl text-text-main"><Edit3 size={16} /></button>}
+                      {(isMe || ['ADMIN', 'CURATOR', 'OWNER'].includes(userRole)) && <button onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.id); }} className="p-2 hover:bg-slate-800 rounded-xl text-rose-500"><Trash size={16} /></button>}
                   </div>
               )}
 
@@ -623,7 +632,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
       {msg.mediaType === 'game_invite' ? (
         <div className={cn(
             "p-6 rounded-[2.5rem] border-2 space-y-4 text-center",
-            isOwn ? "bg-white/10 border-white/20" : "bg-bg-secondary border-accent/20"
+            isMe ? "bg-white/10 border-white/20" : "bg-bg-secondary border-accent/20"
         )}>
             <div className="w-16 h-16 bg-accent rounded-[1.5rem] flex items-center justify-center mx-auto shadow-2xl shadow-accent/40">
                 <Gamepad2 size={32} className="text-white" />
@@ -633,21 +642,21 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                     {msg.mediaUrl === 'chess' ? 'Шахматная партия' : msg.mediaUrl === 'words' ? 'Битва в слова' : 'Игровая дуэль'}
                 </p>
                 <p className="text-[10px] uppercase font-black tracking-widest opacity-60">
-                    {isOwn ? 'Вы отправили вызов' : 'Вас вызывают на бой!'}
+                    {isMe ? 'Вы отправили вызов' : 'Вас вызывают на бой!'}
                 </p>
             </div>
             <button 
                 onClick={(e) => { e.stopPropagation(); setActiveGame({ type: msg.mediaUrl, sessionId: msg.content }); }}
                 className={cn(
                     "w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
-                    isOwn ? "bg-white text-slate-900" : "bg-accent text-white"
+                    isMe ? "bg-white text-slate-900" : "bg-accent text-white"
                 )}
             >
-                {isOwn ? 'Наблюдать' : 'Принять вызов'}
+                {isMe ? 'Наблюдать' : 'Принять вызов'}
             </button>
         </div>
       ) : msg.mediaType === 'voice' ? (
-        <VoiceMessage url={msg.mediaUrl!} isOwn={isOwn} />
+        <VoiceMessage url={msg.mediaUrl!} isOwn={isMe} />
       ) : msg.mediaType === 'photo' ? (
                 <img src={msg.mediaUrl} className="rounded-2xl w-full cursor-zoom-in shadow-lg" onClick={(e) => { e.stopPropagation(); onImageClick(msg.mediaUrl); }} />
               ) : msg.mediaType === 'video' ? (
@@ -659,7 +668,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
               <div className="flex items-center justify-end gap-1.5 mt-1 opacity-60 px-1">
                 {msg.isEdited && <span className="text-[8px] uppercase font-bold">ред.</span>}
                 <span className="text-[9px] uppercase font-black tracking-widest">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                {isOwn && <CheckCheck size={14} className={msg.read ? "text-blue-200" : "text-white/40"} />}
+                {isMe && <CheckCheck size={14} className={msg.read ? "text-blue-200" : "text-white/40"} />}
               </div>
             </motion.div>
           );
@@ -667,7 +676,18 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
         <div ref={messagesEndRef} />
       </div>
 
-      {(chatId !== 'SYSTEM' && !chatId.startsWith('SYSTEM_')) && (
+      {showScrollBottom && (
+          <button 
+            onClick={scrollToBottom}
+            className="absolute bottom-24 right-6 bg-accent text-white p-3 rounded-2xl shadow-2xl z-20 border border-white/20 animate-bounce"
+          >
+              <div className="rotate-90">
+                <ChevronRight size={24} />
+              </div>
+          </button>
+      )}
+
+      {(chatId !== 'SYSTEM' && !chatId.startsWith('SYSTEM_') && (userRole !== 'USER' || chatId !== 'SYSTEM')) && (
         <div className="p-4 bg-bg-primary border-t border-slate-800/50 space-y-3">
           {replyTo && (
               <div className="flex items-center justify-between bg-bg-secondary p-3 rounded-2xl border border-slate-800">
