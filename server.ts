@@ -24,7 +24,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -530,7 +530,6 @@ app.get('/api/user/bot-link-token', authenticateToken, async (req: any, res: any
     try {
         let user = await prisma.user.findUnique({ where: { id: req.user.userId } });
         if (!user?.botAuthToken) {
-            // Use clear characters to avoid confusion (0/O, 1/L/I removed)
             const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
             let token = '';
             for (let i = 0; i < 8; i++) {
@@ -542,6 +541,21 @@ app.get('/api/user/bot-link-token', authenticateToken, async (req: any, res: any
             });
         }
         res.json({ token: user?.botAuthToken });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/user/bot-link-token/refresh', authenticateToken, async (req: any, res: any) => {
+    try {
+        const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        let token = '';
+        for (let i = 0; i < 8; i++) {
+            token += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const user = await prisma.user.update({
+            where: { id: req.user.userId },
+            data: { botAuthToken: token }
+        });
+        res.json({ token: user.botAuthToken });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
@@ -851,6 +865,32 @@ app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
 
     await trackActivity('message');
 
+    // Update dialogs count for stats
+    const existingChat = await prisma.message.findFirst({
+        where: {
+            OR: [
+                { senderId: userId, receiverId },
+                { senderId: receiverId, receiverId: userId }
+            ],
+            NOT: { id: message.id }
+        }
+    });
+
+    if (!existingChat) {
+        await prisma.userStats.upsert({
+            where: { userId: userId },
+            update: { dialogsCount: { increment: 1 } },
+            create: { userId: userId, dialogsCount: 1 }
+        });
+        if (receiverId !== 'SYSTEM' && !receiverId.startsWith('TICKET_')) {
+            await prisma.userStats.upsert({
+                where: { userId: receiverId },
+                update: { dialogsCount: { increment: 1 } },
+                create: { userId: receiverId, dialogsCount: 1 }
+            });
+        }
+    }
+
     await prisma.userStats.upsert({
       where: { userId: req.user.userId },
       update: { messagesSent: { increment: 1 } },
@@ -889,12 +929,23 @@ app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
       });
       
       const botUsersCount = await prisma.user.count({ where: { telegramId: { not: null } } });
+      
+      const totalDialogsCount = await prisma.message.groupBy({
+          by: ['senderId', 'receiverId'],
+          _count: true
+      });
+      const pairs = new Set();
+      totalDialogsCount.forEach(d => {
+          const sorted = [d.senderId, d.receiverId].sort().join(':');
+          pairs.add(sorted);
+      });
 
       return res.json({ 
           totalUsers, 
           totalMessages, 
           bannedUsers, 
           botUsersCount,
+          totalDialogs: pairs.size,
           dailyStats: activity.reverse().map(s => Math.min(100, (s.messages / 100) * 100)) // Scaled for graph
       });
     }
