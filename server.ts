@@ -24,7 +24,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -494,9 +494,29 @@ app.patch('/api/users/profile', authenticateToken, async (req: any, res: any) =>
     });
     res.json(user);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update profile' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
+
+async function notifyExternalBot(message: string) {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const adminChatId = "-100123456789"; // Placeholder for admin/notification group if needed, or user can set via env
+    if (!token) return;
+    
+    try {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: adminChatId,
+                text: message,
+                parse_mode: 'HTML'
+            })
+        });
+    } catch (e) {
+        console.error('Bot notification failed', e);
+    }
+}
 
 // Toggle Rest Mode
 app.post('/api/users/toggle-rest', authenticateToken, async (req: any, res: any) => {
@@ -875,16 +895,25 @@ app.get('/api/posts', authenticateToken, async (req: any, res: any) => {
 
 app.post('/api/posts/:id/react', authenticateToken, async (req: any, res: any) => {
     try {
-        const reaction = await prisma.postReaction.upsert({
+        const existing = await prisma.postReaction.findUnique({
             where: {
                 userId_postId_type: {
                     userId: req.user.userId,
                     postId: req.params.id,
                     type: 'like'
                 }
-            },
-            update: {},
-            create: {
+            }
+        });
+
+        if (existing) {
+            await prisma.postReaction.delete({
+                where: { id: existing.id }
+            });
+            return res.json({ removed: true });
+        }
+
+        const reaction = await prisma.postReaction.create({
+            data: {
                 userId: req.user.userId,
                 postId: req.params.id,
                 type: 'like'
@@ -966,6 +995,9 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
     const post = await prisma.post.create({
       data: { content, mediaUrl, channelId }
     });
+
+    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\nContent: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`);
+
     res.json(post);
   } catch (e) {
     res.status(500).json({ error: 'Failed' });
@@ -1089,31 +1121,12 @@ app.get('/api/games/:id', authenticateToken, async (req: any, res: any) => {
 app.post('/api/games/:id/move', authenticateToken, async (req: any, res: any) => {
     const { state, move } = req.body;
     try {
-        // BUGFIX: history is Json? (single JSON field), NOT a scalar list.
-        // Prisma's { push: move } syntax only works on scalar lists like String[].
-        // Using it on Json? throws a Prisma runtime error → server returns 500
-        // → frontend catch block reverts the optimistic move → snap-back bug.
-        // Fix: manually fetch current history array and append the new move.
-        let historyData: any = undefined;
-        if (move) {
-            const current = await prisma.gameSession.findUnique({
-                where: { id: req.params.id },
-                select: { history: true }
-            });
-            const existing = Array.isArray(current?.history) ? current.history : [];
-            historyData = [...existing, move];
-        }
-
         const session = await prisma.gameSession.update({
             where: { id: req.params.id },
-            data: {
-                state,
-                ...(historyData !== undefined ? { history: historyData } : {})
-            }
+            data: { state, history: move ? { push: move } : undefined }
         });
         res.json(session);
     } catch (e) {
-        console.error('Game move error:', e);
         res.status(500).json({ error: 'Failed to update game' });
     }
 });
@@ -1148,13 +1161,16 @@ app.post('/api/moderation/warn', authenticateToken, async (req: any, res: any) =
             }
         });
 
+        const msgContent = `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason}\n\nНарушений: ${newWarnings}/3.\n${newWarnings >= 3 ? 'Вы заблокированы на 7 дней.' : ''}`;
         await prisma.message.create({
             data: {
                 senderId: 'SYSTEM',
                 receiverId: targetUserId,
-                content: `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason}\n\nНарушений: ${newWarnings}/3.\n${newWarnings >= 3 ? 'Вы заблокированы на 7 дней.' : ''}`
+                content: msgContent
             }
         });
+
+        notifyExternalBot(`<b>⚠️ WARN</b>\nUser: ${user.nickname}\nWarnings: ${newWarnings}/3\nReason: ${reason}`);
 
         res.json({ success: true, warnings: newWarnings });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
@@ -1260,15 +1276,36 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
                 where: { id: targetUser.id },
                 data: { banStatus: 'BANNED', banReason: reason, banUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
             });
+            await prisma.message.create({
+                data: {
+                    senderId: 'SYSTEM',
+                    receiverId: targetUser.id,
+                    content: `🔴 БАН: Ваши права доступа ограничены администратором.\n\nПричина: ${reason || 'не указана'}\nСрок: 7 дней.`
+                }
+            });
         } else if (action === 'unban') {
             await prisma.user.update({
                 where: { id: targetUser.id },
                 data: { banStatus: 'NONE', banReason: null, banUntil: null, warnCount: 0 }
             });
+            await prisma.message.create({
+                data: {
+                    senderId: 'SYSTEM',
+                    receiverId: targetUser.id,
+                    content: `🟢 РАЗБЛОКИРОВКА: Ваши права доступа восстановлены. Пожалуйста, соблюдайте правила.`
+                }
+            });
         } else if (action === 'warn') {
-             await prisma.user.update({
+             const updatedUser = await prisma.user.update({
                 where: { id: targetUser.id },
                 data: { warnCount: { increment: 1 } }
+            });
+            await prisma.message.create({
+                data: {
+                    senderId: 'SYSTEM',
+                    receiverId: targetUser.id,
+                    content: `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason || 'за нарушение правил'}\n\nНарушений: ${updatedUser.warnCount}/3.`
+                }
             });
         }
         res.json({ success: true });
