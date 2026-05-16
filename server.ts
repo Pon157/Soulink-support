@@ -24,7 +24,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -240,6 +240,20 @@ app.post('/api/tickets', authenticateToken, async (req: any, res: any) => {
                 }
             }
         });
+
+        // Notify all owners/curators about new ticket
+        try {
+            const staffToNotify = await prisma.user.findMany({
+                where: { role: { in: ['OWNER', 'CURATOR'] } },
+                select: { id: true, telegramId: true }
+            });
+            for (const s of staffToNotify) {
+                if (s.telegramId) {
+                    sendTGNotification(s.id, `<b>🎫 НОВЫЙ ТИКЕТ</b>\n\nОт: ${req.user.nickname}\nТема: ${subject}\n\n<a href="${process.env.APP_URL || '#'}">Nexus Panel</a>`, 'SYSTEM');
+                }
+            }
+        } catch (e) {}
+
         res.json(ticket);
     } catch (e) {
         res.status(500).json({ error: 'Failed' });
@@ -605,7 +619,23 @@ app.patch('/api/users/profile', authenticateToken, async (req: any, res: any) =>
 
 async function getSystemUserId() {
   const sys = await prisma.user.findFirst({ where: { username: 'SYSTEM' } });
-  return sys?.id || 'SYSTEM';
+  if (sys) return sys.id;
+  // Fallback but try to create it if it doesn't exist
+  try {
+      const created = await prisma.user.create({
+          data: {
+              id: 'SYSTEM',
+              email: 'system@team.local',
+              username: 'SYSTEM',
+              nickname: 'Команда Поддержки',
+              password: 'prevent_login_' + Math.random(),
+              role: 'OWNER',
+          }
+      });
+      return created.id;
+  } catch (e) {
+      return 'SYSTEM'; // Final fallback
+  }
 }
 
 async function sendTGNotification(recipientId: string, text: string, sourceId: string = 'SYSTEM') {
@@ -921,7 +951,7 @@ app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
       }
     });
 
-    sendTGNotification(receiverId, `<b>💬 НОВОЕ СООБЩЕНИЕ</b>\n\nОт: ${message.sender.nickname}\n\n${(content || '').substring(0, 200)}${(content || '').length > 200 ? '...' : ''}`, userId);
+    await sendTGNotification(receiverId, `<b>💬 НОВОЕ СООБЩЕНИЕ</b>\n\nОт: ${message.sender.nickname}\n\n${(content || '').substring(0, 200)}${(content || '').length > 200 ? '...' : ''}`, userId);
 
     await trackActivity('message');
 
@@ -1228,6 +1258,26 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
       data: { content, mediaUrl, channelId }
     });
 
+    // Notify subscribers via TG
+    try {
+        const subscribers = await prisma.subscription.findMany({
+            where: { channelId },
+            include: { user: { select: { id: true, telegramId: true, tgNotifyAll: true, tgAllowedChats: true } } }
+        });
+        
+        const channelSourceId = `CHANNEL_${channelId}`;
+        for (const sub of subscribers) {
+            if (sub.user.telegramId) {
+                const wantsNotify = sub.user.tgNotifyAll || sub.user.tgAllowedChats.includes(channelSourceId);
+                if (wantsNotify) {
+                    sendTGNotification(sub.user.id, `<b>📢 НОВЫЙ ПОСТ: ${channel.name}</b>\n\n${content.substring(0, 300)}${content.length > 300 ? '...' : ''}\n\n<a href="${process.env.APP_URL || '#'}">Открыть канал</a>`, channelSourceId);
+                }
+            }
+        }
+    } catch (e) {
+        // console.error('Channel notify failed', e);
+    }
+
     notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\nContent: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`);
 
     res.json(post);
@@ -1404,7 +1454,7 @@ app.post('/api/moderation/warn', authenticateToken, async (req: any, res: any) =
             }
         });
 
-        sendTGNotification(targetUserId, `<b>${newWarnings >= 3 ? '🚫 BLOCK' : '⚠️ WARN'}</b>\n\n${msgContent}`);
+        await sendTGNotification(targetUserId, `<b>${newWarnings >= 3 ? '🚫 BLOCK' : '⚠️ WARN'}</b>\n\n${msgContent}`);
 
         res.json({ success: true, warnings: newWarnings });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
@@ -1431,7 +1481,7 @@ app.post('/api/moderation/ban', authenticateToken, async (req: any, res: any) =>
             }
         });
 
-        sendTGNotification(targetUserId, `<b>🚫 БЛОКИРОВКА</b>\n\n${msgContent}`);
+        await sendTGNotification(targetUserId, `<b>🚫 БЛОКИРОВКА</b>\n\n${msgContent}`);
 
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
@@ -1519,7 +1569,7 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
             await prisma.message.create({
                 data: { senderId: sysId, receiverId: targetUser.id, content: msg }
             });
-            sendTGNotification(targetUser.id, `<b>🚫 БАН</b>\n\n${msg}`);
+            await sendTGNotification(targetUser.id, `<b>🚫 БАН</b>\n\n${msg}`);
 
         } else if (action === 'unban') {
             await prisma.user.update({
@@ -1530,7 +1580,7 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
             await prisma.message.create({
                 data: { senderId: sysId, receiverId: targetUser.id, content: msg }
             });
-            sendTGNotification(targetUser.id, `<b>✅ UNBAN</b>\n\n${msg}`);
+            await sendTGNotification(targetUser.id, `<b>✅ UNBAN</b>\n\n${msg}`);
 
         } else if (action === 'warn') {
             const newWarnings = (targetUser.warnCount || 0) + 1;
@@ -1558,7 +1608,7 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
             await prisma.message.create({
                 data: { senderId: sysId, receiverId: targetUser.id, content: msg }
             });
-            sendTGNotification(targetUser.id, `<b>${newWarnings >= 3 ? '🚫 BLOCK' : '⚠️ WARN'}</b>\n\n${msg}`);
+            await sendTGNotification(targetUser.id, `<b>${newWarnings >= 3 ? '🚫 BLOCK' : '⚠️ WARN'}</b>\n\n${msg}`);
         }
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
@@ -1578,10 +1628,11 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
     
     // Batch processing to prevent timeout
     const batchSize = 100;
+    const sysId = await getSystemUserId();
     for (let i = 0; i < users.length; i += batchSize) {
-        const sysId = await getSystemUserId();
-        await Promise.all(batch.map(u => {
-            sendTGNotification(u.id, `<b>📢 ОБЩАЯ РАССЫЛКА</b>\n\n${content}`, 'BROADCAST');
+        const batch = users.slice(i, i + batchSize);
+        await Promise.all(batch.map(async (u) => {
+            await sendTGNotification(u.id, `<b>📢 ОБЩАЯ РАССЫЛКА</b>\n\n${content}`, 'BROADCAST');
             return prisma.message.create({
                 data: {
                     senderId: sysId,
