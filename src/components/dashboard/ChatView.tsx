@@ -628,6 +628,13 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                   </div>
               )}
 
+              {msg.senderId === 'SYSTEM' && (
+                  <div className="flex items-center justify-center gap-1 mb-2 py-1 bg-white/10 rounded-lg text-[8px] font-black uppercase tracking-widest text-white/80">
+                      <Shield size={10} />
+                      SoulLink Official
+                  </div>
+              )}
+
       {/* Game Invite Rendering in messages loop */}
       {msg.mediaType === 'game_invite' ? (
         <div className={cn(
@@ -687,7 +694,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
           </button>
       )}
 
-      {(chatId !== 'SYSTEM' && !chatId.startsWith('SYSTEM_') && (userRole !== 'USER' || chatId !== 'SYSTEM')) && (
+      {chatId !== 'SYSTEM' && (
         <div className="p-4 bg-bg-primary border-t border-slate-800/50 space-y-3">
           {replyTo && (
               <div className="flex items-center justify-between bg-bg-secondary p-3 rounded-2xl border border-slate-800">
