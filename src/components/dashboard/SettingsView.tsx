@@ -171,11 +171,11 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
   return (
     <div className="flex-1 overflow-y-auto pb-24 relative bg-bg-primary">
       <Modal isOpen={!!botToken} onClose={() => setBotToken(null)} title="Привязка Telegram">
-        <div className="space-y-6 text-center">
-            <div className="bg-bg-primary p-8 rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full relative group">
-                <p className="text-[10px] font-black uppercase text-text-dim mb-2 tracking-[0.2em]">Ваш код авторизации</p>
-                <div className="flex flex-col items-center justify-center gap-4">
-                  <p className="text-5xl font-black text-accent tracking-[0.2em] italic select-all cursor-pointer bg-accent/5 p-4 rounded-3xl w-full border border-accent/10" title="Нажмите, чтобы выделить">{botToken}</p>
+        <div className="space-y-4 md:space-y-6 text-center">
+            <div className="bg-bg-primary p-4 md:p-8 rounded-3xl md:rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full relative">
+                <p className="text-[10px] font-black uppercase text-text-dim mb-2 tracking-[0.2em]">Код авторизации</p>
+                <div className="flex flex-col items-center justify-center gap-3 md:gap-4">
+                  <p className="text-2xl md:text-5xl font-black text-accent tracking-[0.2em] italic select-all cursor-pointer bg-accent/5 p-3 md:p-4 rounded-2xl md:rounded-3xl w-full border border-accent/10 break-all">{botToken}</p>
                   <button 
                     onClick={() => {
                         if (botToken) {
@@ -189,20 +189,22 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
                             });
                         }
                     }}
-                    className="w-full bg-white/10 p-5 rounded-2xl flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95 group border border-white/5"
+                    className="w-full bg-white/10 p-4 md:p-5 rounded-xl md:rounded-2xl flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95 group border border-white/5"
                   >
-                    <Star size={18} fill="currentColor" className="text-accent group-hover:scale-110 transition-transform" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-text-main">Скопировать код</span>
+                    <Star size={18} fill="currentColor" className="text-accent" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-text-main">Скопировать</span>
                   </button>
                 </div>
             </div>
-            <div className="space-y-2 text-sm text-text-dim italic">
-                <p>1. Откройте @SoulLink_Notif_bot в Telegram</p>
-                <p>2. Отправьте команду: <code className="bg-bg-secondary px-2 py-1 rounded text-accent">/start {botToken}</code></p>
-                <p>3. Вы будете получать уведомления!</p>
+            <div className="space-y-2 text-[11px] md:text-sm text-text-dim italic leading-tight">
+                <p>1. Откройте @SoulLink_Notif_bot</p>
+                <p>2. Отправьте: <code className="bg-bg-secondary px-2 py-1 rounded text-accent break-all">/start {botToken}</code></p>
             </div>
             <div className="space-y-4 pt-4 border-t border-slate-800">
-                <p className="text-[10px] font-black uppercase text-text-dim tracking-widest text-left">Настройки уведомлений</p>
+                <div className="flex flex-col gap-1 text-left">
+                    <p className="text-[9px] md:text-[10px] font-black uppercase text-text-dim tracking-widest">Уведомления</p>
+                    <p className="text-[8px] text-slate-500 font-medium">Включите "Все чаты" для получения пушей о личных сообщениях</p>
+                </div>
                 <button 
                     onClick={async () => {
                         const next = !user.tgNotifyAll;
@@ -212,15 +214,15 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
                         });
                         if (res.ok) setUser({ ...user, tgNotifyAll: next });
                     }}
-                    className="w-full flex items-center justify-between bg-bg-secondary p-4 rounded-2xl border border-slate-800"
+                    className="w-full flex items-center justify-between bg-bg-secondary p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-800"
                 >
-                    <span className="text-sm font-bold italic">Уведомлять о всех чатах</span>
-                    <div className={cn("w-10 h-5 rounded-full transition-all relative", user.tgNotifyAll ? "bg-accent" : "bg-slate-700")}>
+                    <span className="text-xs md:text-sm font-bold italic truncate mr-2">Все ЛС и чаты</span>
+                    <div className={cn("w-10 h-5 rounded-full transition-all relative shrink-0", user.tgNotifyAll ? "bg-accent" : "bg-slate-700")}>
                         <div className={cn("absolute top-1 w-3 h-3 bg-white rounded-full transition-all", user.tgNotifyAll ? "right-1" : "left-1")} />
                     </div>
                 </button>
                 <p className="text-[8px] text-text-dim uppercase font-black text-left opacity-60">
-                    * Уведомления о варнах, банах и рассылках всегда включены
+                    * Системные уведомления включены всегда
                 </p>
             </div>
 
@@ -233,15 +235,13 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
                             const data = await res.json();
                             setBotToken(data.token);
                         }
-                    } catch (e) {
-                        alert('Ошибка обновления');
-                    }
+                    } catch (e) {}
                   }}
-                  className="flex-1 bg-slate-800 py-4 rounded-2xl font-black uppercase text-[10px]"
+                  className="flex-1 bg-slate-800 py-3 md:py-4 rounded-xl md:rounded-2xl font-black uppercase text-[10px]"
                 >
-                    Обновить код
+                    Обновить
                 </button>
-                <button onClick={() => setBotToken(null)} className="flex-1 bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Понятно</button>
+                <button onClick={() => setBotToken(null)} className="flex-1 bg-accent py-3 md:py-4 rounded-xl md:rounded-2xl font-black uppercase text-[10px]">Понятно</button>
             </div>
         </div>
       </Modal>
