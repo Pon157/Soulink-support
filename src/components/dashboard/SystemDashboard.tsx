@@ -31,7 +31,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
   const [searchQuery, setSearchQuery] = useState('');
   const [adminFilter, setAdminFilter] = useState('');
   const [broadcastData, setBroadcastData] = useState({ title: '', content: '' });
-  const [sanctionData, setSanctionData] = useState({ targetId: '', action: 'ban', reason: '' });
+  const [sanctionData, setSanctionData] = useState({ targetId: '', action: 'ban', reason: '', durationHours: 24 });
 
   const fetchData = async () => {
     try {
@@ -445,7 +445,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
           </div>
           <div className="space-y-4">
             <input required value={broadcastData.title} onChange={e => setBroadcastData({...broadcastData, title: e.target.value})} placeholder="Тема" className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white italic font-black" />
-            <textarea required value={broadcastData.content} onChange={e => setBroadcastData({...broadcastData, content: e.target.value})} placeholder="Текст сообщения..." className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white italic min-h-[150px]" />
+            <textarea required value={broadcastData.content} onChange={e => setBroadcastData({...broadcastData, content: e.target.value})} placeholder="Текст сообщения..." className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white italic min-h-[150px] break-all" />
           </div>
           <button type="submit" className="w-full bg-blue-600 py-5 rounded-2xl md:rounded-[2rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-blue-600/20 active:scale-95 transition-all">Разослать всем</button>
         </form>
@@ -459,13 +459,33 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
              <p className="text-xs text-slate-400 italic px-2 md:px-4">Блокировка доступа или выдача предупреждений по ID или никнейму.</p>
           </div>
           <div className="space-y-4">
-            <input required value={sanctionData.targetId} onChange={e => setSanctionData({...sanctionData, targetId: e.target.value})} placeholder="Username или UID" className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white font-bold" />
+            <input required value={sanctionData.targetId} onChange={e => setSanctionData({...sanctionData, targetId: e.target.value})} placeholder="Username или UID" className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white font-bold break-all" />
             <div className="grid grid-cols-2 gap-2">
                {['ban', 'warn', 'unban', 'unwarn'].map(a => (
                  <button key={a} type="button" onClick={() => setSanctionData({...sanctionData, action: a})} className={cn("py-4 rounded-2xl font-black uppercase text-[10px] border transition-all", sanctionData.action === a ? "bg-rose-600 border-rose-500 text-white" : "bg-slate-900 border-slate-800 text-slate-500")}>{a}</button>
                ))}
             </div>
-            <textarea value={sanctionData.reason} onChange={e => setSanctionData({...sanctionData, reason: e.target.value})} placeholder="Обоснование..." className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white italic min-h-[100px]" />
+            {sanctionData.action === 'ban' && (
+              <div className="space-y-2">
+                <p className="text-[10px] font-black uppercase text-text-dim tracking-widest pl-2">Срок блокировки</p>
+                <div className="grid grid-cols-5 gap-2">
+                   {[1, 24, 168, 720, null].map(h => (
+                     <button 
+                        key={h ?? 'perm'} 
+                        type="button" 
+                        onClick={() => setSanctionData({...sanctionData, durationHours: h as any})}
+                        className={cn(
+                            "py-3 rounded-xl font-bold text-[10px] border transition-all",
+                            sanctionData.durationHours === h ? "bg-accent border-accent text-white" : "bg-slate-900 border-slate-800 text-slate-500"
+                        )}
+                     >
+                       {h === 1 ? '1ч' : h === 24 ? '1д' : h === 168 ? '1н' : h === 720 ? '1м' : 'Перм'}
+                     </button>
+                   ))}
+                </div>
+              </div>
+            )}
+            <textarea value={sanctionData.reason} onChange={e => setSanctionData({...sanctionData, reason: e.target.value})} placeholder="Обоснование..." className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white italic min-h-[100px] break-all" />
           </div>
           <button type="submit" className="w-full bg-rose-600 py-5 rounded-2xl md:rounded-[2rem] font-black uppercase text-[11px] shadow-xl shadow-rose-600/20 active:scale-95 transition-all">Привести в исполнение</button>
         </form>
