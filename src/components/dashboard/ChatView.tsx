@@ -123,6 +123,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
   const [editingMessage, setEditingMessage] = useState<any>(null);
   const [showMsgActions, setShowMsgActions] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -165,7 +166,16 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
     return () => clearInterval(interval);
   }, [chatId]);
 
-  useEffect(scrollToBottom, [messages]);
+  useEffect(() => {
+    if (messages.length > 0) {
+      const container = scrollContainerRef.current;
+      if (!container) return;
+      const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 150;
+      if (isAtBottom || messages.length <= 15) { // Initial load or user at bottom
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  }, [messages.length]);
 
   const handleSend = async (content?: string, mediaUrl?: string, mediaType?: string) => {
     if (!content?.trim() && !mediaUrl) return;
@@ -567,12 +577,13 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
       )}
 
       <div 
-        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth"
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth transition-all"
         style={wallpaper ? {
-          backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.9), rgba(var(--bg-primary-rgb), 0.95)), url(${wallpaper})`,
+          backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.7), rgba(var(--bg-primary-rgb), 0.85)), url(${wallpaper})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          backgroundAttachment: 'fixed'
+          backgroundAttachment: 'local'
         } : {}}
       >
         {messages.map((msg) => {
@@ -656,7 +667,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
         <div ref={messagesEndRef} />
       </div>
 
-      {(chatId !== 'SYSTEM' || (['ADMIN', 'CURATOR', 'OWNER'].includes(userRole))) && (
+      {(chatId !== 'SYSTEM' && !chatId.startsWith('SYSTEM_')) && (
         <div className="p-4 bg-bg-primary border-t border-slate-800/50 space-y-3">
           {replyTo && (
               <div className="flex items-center justify-between bg-bg-secondary p-3 rounded-2xl border border-slate-800">
