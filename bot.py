@@ -3,22 +3,23 @@ import telebot
 import requests
 from telebot import apihelper
 
-# Токен бота и URL (оставлены жестко прописанными в коде)
-TOKEN = ''
-APP_URL = 'https://supportkmbp.webtm.ru/'
+# Token from environment
+TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+APP_URL = os.getenv('APP_URL', 'https://your-app-url.ais.studio')
+# Deriving API URL from app preview URL if needed, but here they are likely identical for server routes
 API_URL = APP_URL 
 
-# Данные прокси
-PROXY_HOST = '185.88.99.86'
-PROXY_PORT = '8000'
-PROXY_USER = 'n6CZUF'
-PROXY_PASS = 'Py0CSG'
+# Proxy configuration
+PROXY_HOST = os.getenv('TELEGRAM_BOT_PROXY_HOST')
+PROXY_PORT = os.getenv('TELEGRAM_BOT_PROXY_PORT')
+PROXY_USER = os.getenv('TELEGRAM_BOT_PROXY_USER')
+PROXY_PASS = os.getenv('TELEGRAM_BOT_PROXY_PASS')
 
-# Передаем словарь (dict), чтобы requests внутри telebot не падал
-apihelper.proxy = {
-    'http': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
-    'https': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
-}
+if PROXY_HOST:
+    apihelper.proxy = {
+        'http': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+        'https': f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}"
+    }
 
 bot = telebot.TeleBot(TOKEN)
 
@@ -26,10 +27,10 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
     args = message.text.split()
     if len(args) > 1:
-        # .strip() убирает случайные пробелы, регистр букв (маленькие cuid) сохраняется
-        token = args[1].strip()
+        token = args[1].strip().upper()
+        print(f"Попытка привязки с токеном: {token}")
         try:
-            # Запрос к бэкенду для привязки аккаунта
+            # Call backend to link account
             res = requests.post(f"{API_URL}/api/bot/link", json={
                 "token": token,
                 "telegramId": str(message.chat.id)
@@ -37,11 +38,15 @@ def send_welcome(message):
             if res.status_code == 200:
                 data = res.json()
                 bot.reply_to(message, f"✅ Аккаунт привязан! Добро пожаловать, {data['nickname']}. Теперь вы будете получать уведомления здесь.")
+                print(f"Успешная привязка: {data['nickname']}")
                 return
             else:
-                bot.reply_to(message, "❌ Ошибка: Токен недействителен или срок его действия истек.")
+                error_msg = res.json().get('error', 'Неизвестная ошибка')
+                print(f"Ошибка привязки (Status {res.status_code}): {error_msg}")
+                bot.reply_to(message, f"❌ Ошибка: {error_msg}. Проверьте правильность кода или получите новый в настройках.")
         except Exception as e:
-            bot.reply_to(message, f"❌ Ошибка связи с сервером SoulLink: {str(e)}")
+            print(f"Исключение при связи с сервером: {str(e)}")
+            bot.reply_to(message, f"❌ Ошибка связи с сервером SoulLink. Попробуйте позже.")
             return
 
     markup = telebot.types.InlineKeyboardMarkup()
@@ -58,5 +63,5 @@ if __name__ == "__main__":
     if not TOKEN:
         print("ОШИБКА: TELEGRAM_BOT_TOKEN не установлен!")
     else:
-        print(f"Бот запущен с прокси {PROXY_HOST}...")
+        print(f"Бот запущен...")
         bot.infinity_polling()
