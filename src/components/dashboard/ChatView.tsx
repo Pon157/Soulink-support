@@ -116,6 +116,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [tgNotify, setTgNotify] = useState(currentUser.tgNotifyAll || currentUser.tgAllowedChats?.includes(chatId));
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
   const [errorModal, setErrorModal] = useState<string|null>(null);
   const [reviewPhoto, setReviewPhoto] = useState<string | null>(null);
@@ -491,6 +492,32 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
         </div>
         <div className="flex items-center gap-1.5 md:gap-2">
           {chatId !== 'SYSTEM' && !chatId.startsWith('TICKET_') && (
+              <>
+              <button 
+                onClick={async () => {
+                    const isAllowed = currentUser.tgAllowedChats?.includes(chatId);
+                    let newAllowed = [...(currentUser.tgAllowedChats || [])];
+                    if (isAllowed) newAllowed = newAllowed.filter(id => id !== chatId);
+                    else newAllowed.push(chatId);
+                    
+                    const res = await apiFetch('/api/user/tg-settings', {
+                        method: 'POST',
+                        body: JSON.stringify({ tgAllowedChats: newAllowed })
+                    });
+                    if (res.ok) {
+                        currentUser.tgAllowedChats = newAllowed;
+                        setTgNotify(!isAllowed);
+                    }
+                }}
+                className={cn(
+                    "p-3 rounded-2xl transition-all flex items-center gap-2 group",
+                    (currentUser.tgNotifyAll || tgNotify) ? "bg-amber-500/10 text-amber-500" : "bg-slate-800 text-text-dim"
+                )}
+                title="Уведомления в Telegram"
+              >
+                  <Bell size={20} fill={(currentUser.tgNotifyAll || tgNotify) ? "currentColor" : "none"} />
+                  <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">ТГ</span>
+              </button>
               <button 
                 onClick={() => setShowGameMenu(true)} 
                 className="p-3 bg-indigo-500/10 text-indigo-500 rounded-2xl hover:bg-indigo-500/20 transition-all focus:scale-110 active:scale-95 shadow-lg shadow-indigo-500/10 flex items-center gap-2 group"
@@ -499,6 +526,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                   <Gamepad2 size={20} />
                   <span className="text-[10px] font-black uppercase tracking-widest hidden lg:block">Игры</span>
               </button>
+              </>
           )}
           {chatId === 'SYSTEM' && <button onClick={() => setShowTicketModal(true)} className="p-3 bg-emerald-500/10 text-emerald-500 rounded-2xl hover:bg-emerald-500/20 transition-all font-black text-[10px] uppercase tracking-widest px-4 shadow-lg shadow-emerald-500/10 active:scale-95">Тикет</button>}
           {!chatId.startsWith('TICKET_') && chatId !== 'SYSTEM' && (
