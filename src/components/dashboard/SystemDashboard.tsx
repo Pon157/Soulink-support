@@ -180,17 +180,18 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
   ].filter(t => (!t.ownerOnly || role === 'OWNER') && (!t.curatorOnly || role === 'CURATOR' || role === 'OWNER'));
 
   return (
-    <div className="flex-1 overflow-y-auto pb-24 bg-bg-primary p-4 md:p-8">
+    <div className="flex-1 overflow-y-auto pb-24 bg-bg-primary p-4 md:p-6 lg:p-8">
+      {/* ... existing modals ... */}
       <Modal isOpen={showAddStaff} onClose={() => setShowAddStaff(false)} title="Новый сотрудник">
         <form onSubmit={handleAddStaff} className="space-y-4">
-          <input required value={newStaff.nickname} onChange={e => setNewStaff({...newStaff, nickname: e.target.value})} placeholder="Никнейм" className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main" />
-          <input required value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} placeholder="Логин" className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main" />
-          <input type="password" required value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} placeholder="Пароль" className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main" />
-          <select value={newStaff.role} onChange={e => setNewStaff({...newStaff, role: e.target.value})} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main appearance-none">
+          <input required value={newStaff.nickname} onChange={e => setNewStaff({...newStaff, nickname: e.target.value})} placeholder="Никнейм" className="w-full bg-bg-secondary p-4 rounded-3xl md:rounded-2xl outline-none text-text-main" />
+          <input required value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} placeholder="Логин" className="w-full bg-bg-secondary p-4 rounded-3xl md:rounded-2xl outline-none text-text-main" />
+          <input type="password" required value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} placeholder="Пароль" className="w-full bg-bg-secondary p-4 rounded-3xl md:rounded-2xl outline-none text-text-main" />
+          <select value={newStaff.role} onChange={e => setNewStaff({...newStaff, role: e.target.value})} className="w-full bg-bg-secondary p-4 rounded-3xl md:rounded-2xl outline-none text-text-main appearance-none">
             <option value="ADMIN">Администратор</option>
             <option value="CURATOR">Куратор</option>
           </select>
-          <button type="submit" className="w-full bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Зачислить</button>
+          <button type="submit" className="w-full bg-accent py-4 rounded-3xl md:rounded-2xl font-black uppercase text-[10px]">Зачислить</button>
         </form>
       </Modal>
 
@@ -224,25 +225,25 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         )}
       </header>
 
-      <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-8">
         {tabs.map(tab => (
           <button 
             key={tab.id}
             onClick={() => setView(tab.id as any)}
             className={cn(
-              "flex items-center gap-2 px-5 py-3 rounded-2xl font-black uppercase text-[9px] tracking-widest transition-all whitespace-nowrap",
+              "flex items-center gap-2 px-4 py-3 md:px-5 md:py-3 rounded-2xl font-black uppercase text-[8px] md:text-[9px] tracking-widest transition-all",
               view === tab.id ? "bg-accent text-white" : "bg-bg-secondary text-text-dim border border-slate-800/50"
             )}
           >
             <tab.icon size={14} />
-            {tab.label}
+            <span className="truncate">{tab.label}</span>
           </button>
         ))}
       </div>
 
       {view === 'stats' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {role === 'OWNER' ? (
               <>
                 <StatCard label="Сообщения" value={stats?.totalMessages} />
