@@ -2,17 +2,21 @@ import os
 import telebot
 import requests
 from telebot import apihelper
-# Добавлено: импорт для чтения файла .env
+# Добавлено: подгрузка файла .env
 from dotenv import load_dotenv
 
-# Добавлено: автоматическая инициализация переменных из .env
+# Инициализируем переменные окружения
 load_dotenv()
 
 # Token from environment
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-APP_URL = os.getenv('APP_URL', 'https://supportkmbp.webtm.ru/api/bot/link')
-# Deriving API URL from app preview URL if needed, but here they are likely identical for server routes
+APP_URL = os.getenv('APP_URL', 'https://supportkmbp.webtm.ru/').rstrip('/')
+if not APP_URL.startswith('http'):
+    APP_URL = f"https://{APP_URL}"
+
+# Deriving API URL - ensure no double slashes or missing schemes
 API_URL = APP_URL 
+print(f"API_URL установлен: {API_URL}")
 
 # Proxy configuration
 PROXY_HOST = os.getenv('TELEGRAM_BOT_PROXY_HOST')
@@ -20,7 +24,7 @@ PROXY_PORT = os.getenv('TELEGRAM_BOT_PROXY_PORT')
 PROXY_USER = os.getenv('TELEGRAM_BOT_PROXY_USER')
 PROXY_PASS = os.getenv('TELEGRAM_BOT_PROXY_PASS')
 
-# Исправлено: Безопасное построение словаря прокси с валидацией авторизации
+# Исправлено: Безопасная проверка прокси, чтобы не упасть с ошибкой форматирования
 if PROXY_HOST and PROXY_PORT:
     if PROXY_USER and PROXY_PASS:
         apihelper.proxy = {
@@ -39,7 +43,7 @@ bot = telebot.TeleBot(TOKEN)
 def send_welcome(message):
     args = message.text.split()
     if len(args) > 1:
-        # Исправлено: Убран метод .upper(), так как cuid-токены бэкенда чувствительны к регистру (всегда строчные)
+        # Исправлено: Убран .upper(), так как токены бэкенда чувствительны к регистру
         token = args[1].strip()
         print(f"Попытка привязки с токеном: {token}")
         try:
