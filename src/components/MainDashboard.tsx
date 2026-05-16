@@ -63,8 +63,8 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
     return () => clearInterval(interval);
   }, [user.id]);
 
-  const mainStyle = user?.banner ? {
-    backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.85), rgba(var(--bg-primary-rgb), 0.95)), url(${user.banner})`,
+  const mainStyle = user?.wallpaper ? {
+    backgroundImage: `linear-gradient(rgba(var(--bg-primary-rgb), 0.85), rgba(var(--bg-primary-rgb), 0.95)), url(${user.wallpaper})`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundAttachment: 'fixed'
@@ -126,7 +126,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
 
       {previewImage && (
         <div 
-          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4"
+          className="fixed inset-0 z-[100] bg-bg-primary/95 backdrop-blur-xl flex items-center justify-center p-4"
           onClick={() => setPreviewImage(null)}
         >
           <motion.img 
@@ -135,7 +135,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
             src={previewImage} 
             className="max-w-full max-h-full rounded-3xl shadow-2xl" 
           />
-          <button className="absolute top-8 right-8 text-white/50 hover:text-white transition-colors"><X size={32} /></button>
+          <button className="absolute top-8 right-8 text-text-dim hover:text-text-main transition-colors"><X size={32} /></button>
         </div>
       )}
 
