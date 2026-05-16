@@ -243,7 +243,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
 
       {view === 'stats' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+          <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {role === 'OWNER' ? (
               <>
                 <StatCard label="Сообщения" value={stats?.totalMessages} />
@@ -580,8 +580,8 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
 };
 
 const StatCard = ({ label, value }: { label: string, value: any }) => (
-  <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-[2rem]">
-    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">{label}</p>
-    <p className="text-2xl font-black text-white italic tracking-tighter">{value || 0}</p>
+  <div className="bg-slate-900/50 border border-slate-800 p-4 md:p-6 rounded-[2rem] overflow-hidden min-w-0">
+    <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1 truncate">{label}</p>
+    <p className="text-xl md:text-2xl font-black text-white italic tracking-tighter truncate break-all">{value || 0}</p>
   </div>
 );
