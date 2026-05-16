@@ -180,7 +180,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
   ].filter(t => (!t.ownerOnly || role === 'OWNER') && (!t.curatorOnly || role === 'CURATOR' || role === 'OWNER'));
 
   return (
-    <div className="flex-1 overflow-y-auto pb-24 bg-bg-primary p-6">
+    <div className="flex-1 overflow-y-auto pb-24 bg-bg-primary p-4 md:p-8">
       <Modal isOpen={showAddStaff} onClose={() => setShowAddStaff(false)} title="Новый сотрудник">
         <form onSubmit={handleAddStaff} className="space-y-4">
           <input required value={newStaff.nickname} onChange={e => setNewStaff({...newStaff, nickname: e.target.value})} placeholder="Никнейм" className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main" />
@@ -437,36 +437,36 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
 
       {view === 'broadcast' && (
         <form onSubmit={handleSendBroadcast} className="space-y-6">
-          <div className="bg-blue-600/5 border border-blue-600/10 p-8 rounded-[3rem] text-center space-y-4">
+          <div className="bg-blue-600/5 border border-blue-600/10 p-6 md:p-8 rounded-3xl md:rounded-[3rem] text-center space-y-4">
              <Mail size={40} className="mx-auto text-blue-500" />
              <h2 className="text-xl font-black text-white italic">Мгновенная рассылка</h2>
-             <p className="text-xs text-slate-400 italic px-4">Разовое сообщение всем участникам SoulLink. Будет отправлено в системный чат.</p>
+             <p className="text-xs text-slate-400 italic px-2 md:px-4">Разовое сообщение всем участникам SoulLink. Будет отправлено в системный чат.</p>
           </div>
           <div className="space-y-4">
-            <input required value={broadcastData.title} onChange={e => setBroadcastData({...broadcastData, title: e.target.value})} placeholder="Тема" className="w-full bg-slate-900 border border-slate-800 p-5 rounded-3xl outline-none text-white italic font-black" />
-            <textarea required value={broadcastData.content} onChange={e => setBroadcastData({...broadcastData, content: e.target.value})} placeholder="Текст сообщения..." className="w-full bg-slate-900 border border-slate-800 p-5 rounded-3xl outline-none text-white italic min-h-[150px]" />
+            <input required value={broadcastData.title} onChange={e => setBroadcastData({...broadcastData, title: e.target.value})} placeholder="Тема" className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white italic font-black" />
+            <textarea required value={broadcastData.content} onChange={e => setBroadcastData({...broadcastData, content: e.target.value})} placeholder="Текст сообщения..." className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white italic min-h-[150px]" />
           </div>
-          <button type="submit" className="w-full bg-blue-600 py-6 rounded-[2rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-blue-600/20 active:scale-95 transition-all">Разослать всем</button>
+          <button type="submit" className="w-full bg-blue-600 py-5 rounded-2xl md:rounded-[2rem] font-black uppercase tracking-[0.2em] text-[11px] shadow-xl shadow-blue-600/20 active:scale-95 transition-all">Разослать всем</button>
         </form>
       )}
 
       {view === 'sanctions' && (
         <form onSubmit={handleApplySanction} className="space-y-6">
-          <div className="bg-rose-600/5 border border-rose-600/10 p-8 rounded-[3rem] text-center space-y-4">
+          <div className="bg-rose-600/5 border border-rose-600/10 p-6 md:p-8 rounded-3xl md:rounded-[3rem] text-center space-y-4">
              <Lock size={40} className="mx-auto text-rose-500" />
              <h2 className="text-xl font-black text-white italic">Юрисдикция</h2>
-             <p className="text-xs text-slate-400 italic px-4">Блокировка доступа или выдача предупреждений по ID или никнейму.</p>
+             <p className="text-xs text-slate-400 italic px-2 md:px-4">Блокировка доступа или выдача предупреждений по ID или никнейму.</p>
           </div>
           <div className="space-y-4">
-            <input required value={sanctionData.targetId} onChange={e => setSanctionData({...sanctionData, targetId: e.target.value})} placeholder="Username или UID" className="w-full bg-slate-900 border border-slate-800 p-5 rounded-3xl outline-none text-white font-bold" />
+            <input required value={sanctionData.targetId} onChange={e => setSanctionData({...sanctionData, targetId: e.target.value})} placeholder="Username или UID" className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white font-bold" />
             <div className="grid grid-cols-2 gap-2">
                {['ban', 'warn', 'unban', 'unwarn'].map(a => (
                  <button key={a} type="button" onClick={() => setSanctionData({...sanctionData, action: a})} className={cn("py-4 rounded-2xl font-black uppercase text-[10px] border transition-all", sanctionData.action === a ? "bg-rose-600 border-rose-500 text-white" : "bg-slate-900 border-slate-800 text-slate-500")}>{a}</button>
                ))}
             </div>
-            <textarea value={sanctionData.reason} onChange={e => setSanctionData({...sanctionData, reason: e.target.value})} placeholder="Обоснование..." className="w-full bg-slate-900 border border-slate-800 p-5 rounded-3xl outline-none text-white italic min-h-[100px]" />
+            <textarea value={sanctionData.reason} onChange={e => setSanctionData({...sanctionData, reason: e.target.value})} placeholder="Обоснование..." className="w-full bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none text-white italic min-h-[100px]" />
           </div>
-          <button type="submit" className="w-full bg-rose-600 py-6 rounded-[2rem] font-black uppercase text-[11px] shadow-xl shadow-rose-600/20">Привести в исполнение</button>
+          <button type="submit" className="w-full bg-rose-600 py-5 rounded-2xl md:rounded-[2rem] font-black uppercase text-[11px] shadow-xl shadow-rose-600/20 active:scale-95 transition-all">Привести в исполнение</button>
         </form>
       )}
 
