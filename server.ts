@@ -559,6 +559,21 @@ app.post('/api/user/bot-link-token/refresh', authenticateToken, async (req: any,
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
+app.post('/api/user/bot-link-token/refresh', authenticateToken, async (req: any, res: any) => {
+    try {
+        const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+        let token = '';
+        for (let i = 0; i < 8; i++) {
+            token += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        const user = await prisma.user.update({
+            where: { id: req.user.userId },
+            data: { botAuthToken: token }
+        });
+        res.json({ token: user.botAuthToken });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
 app.post('/api/bot/link', async (req: any, res: any) => {
     const { token, telegramId } = req.body;
     if (!token) return res.status(400).json({ error: 'Missing token' });
@@ -929,15 +944,24 @@ app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
       });
       
       const botUsersCount = await prisma.user.count({ where: { telegramId: { not: null } } });
-      
-      const totalDialogsCount = await prisma.message.groupBy({
-          by: ['senderId', 'receiverId'],
-          _count: true
+
+      // Robust dialog count: unique pairs of (user1, user2) excluding SYSTEM/TICKET
+      const chats = await prisma.message.findMany({
+          select: { senderId: true, receiverId: true },
+          where: {
+              NOT: {
+                  OR: [
+                      { senderId: 'SYSTEM' },
+                      { receiverId: 'SYSTEM' },
+                      { receiverId: { startsWith: 'TICKET_' } }
+                  ]
+              }
+          }
       });
       const pairs = new Set();
-      totalDialogsCount.forEach(d => {
-          const sorted = [d.senderId, d.receiverId].sort().join(':');
-          pairs.add(sorted);
+      chats.forEach(c => {
+          const pair = [c.senderId, c.receiverId].sort().join(':');
+          pairs.add(pair);
       });
 
       return res.json({ 
@@ -946,17 +970,41 @@ app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
           bannedUsers, 
           botUsersCount,
           totalDialogs: pairs.size,
-          dailyStats: activity.reverse().map(s => Math.min(100, (s.messages / 100) * 100)) // Scaled for graph
+          dailyStats: activity.reverse().map(s => s.messages)
       });
     }
     
     // Admins see only their stats
-    const stats = await prisma.userStats.findUnique({ where: { userId: req.user.userId } });
+    const userStats = await prisma.userStats.findUnique({ where: { userId: req.user.userId } });
+    
+    let dialogsCount = userStats?.dialogsCount || 0;
+    if (dialogsCount === 0) {
+        const userChats = await prisma.message.groupBy({
+            by: ['senderId', 'receiverId'],
+            where: { 
+                OR: [{ senderId: req.user.userId }, { receiverId: req.user.userId }],
+                NOT: {
+                    OR: [
+                        { senderId: 'SYSTEM' },
+                        { receiverId: 'SYSTEM' },
+                        { receiverId: { startsWith: 'TICKET_' } }
+                    ]
+                }
+            }
+        });
+        const pairs = new Set();
+        userChats.forEach(c => {
+            const other = c.senderId === req.user.userId ? c.receiverId : c.senderId;
+            pairs.add(other);
+        });
+        dialogsCount = pairs.size;
+    }
+
     res.json({ 
       personal: true,
-      messagesSent: stats?.messagesSent || 0,
-      averageRating: stats?.averageRating || 0,
-      dialogsCount: stats?.dialogsCount || 0
+      messagesSent: userStats?.messagesSent || 0,
+      averageRating: userStats?.averageRating || 0,
+      dialogsCount
     });
   } catch {
     res.status(500).json({ error: 'Failed' });
