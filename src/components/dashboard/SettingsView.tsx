@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Camera, Shield, Bell, Palette, HelpCircle, User as UserIcon, LogOut, ChevronRight, Loader2, Image as ImageIcon, PenTool, Coffee, Star, Copy, Check } from 'lucide-react';
+import { Camera, Shield, Bell, Palette, HelpCircle, User as UserIcon, LogOut, ChevronRight, Loader2, Image as ImageIcon, PenTool, Coffee, Star } from 'lucide-react';
 import { uploadFile, updateProfile } from '../../lib/services';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
@@ -21,11 +21,9 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
   const [stats, setStats] = useState<any>(null);
   const [botToken, setBotToken] = useState<string | null>(null);
   const [loadingToken, setLoadingToken] = useState(false);
-  const [copiedToken, setCopiedToken] = useState(false); // Состояние для копирования
 
   const fetchBotToken = async () => {
     setLoadingToken(true);
-    setCopiedToken(false);
     try {
       const res = await apiFetch('/api/user/bot-link-token');
       const data = await res.json();
@@ -34,14 +32,6 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       setErrorModal('Не удалось получить токен');
     } finally {
       setLoadingToken(false);
-    }
-  };
-
-  const handleCopyToken = () => {
-    if (botToken) {
-      navigator.clipboard.writeText(botToken);
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000); // Возвращаем иконку обратно через 2 сек
     }
   };
 
@@ -182,29 +172,14 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
     <div className="flex-1 overflow-y-auto pb-24 relative bg-bg-primary">
       <Modal isOpen={!!botToken} onClose={() => setBotToken(null)} title="Привязка Telegram">
         <div className="space-y-6 text-center">
-            {/* Сделали блок интерактивным для клика */}
-            <button 
-              onClick={handleCopyToken}
-              className="bg-bg-primary p-8 rounded-[2.5rem] border-2 border-dashed border-accent/30 w-full flex flex-col items-center justify-center cursor-pointer hover:bg-accent/5 transition-all group"
-            >
+            <div className="bg-bg-primary p-8 rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full">
                 <p className="text-[10px] font-black uppercase text-text-dim mb-2 tracking-[0.2em]">Ваш код авторизации</p>
-                <div className="flex items-center gap-3">
-                    <p className="text-4xl font-black text-accent tracking-widest italic">{botToken}</p>
-                    {copiedToken ? (
-                      <Check size={28} className="text-emerald-500" />
-                    ) : (
-                      <Copy size={28} className="text-accent/50 group-hover:text-accent transition-colors" />
-                    )}
-                </div>
-                <p className={cn("text-[10px] uppercase font-bold mt-3 transition-colors", copiedToken ? "text-emerald-500" : "text-text-dim")}>
-                  {copiedToken ? "Скопировано!" : "Нажмите, чтобы скопировать"}
-                </p>
-            </button>
-
+                <p className="text-4xl font-black text-accent tracking-widest italic">{botToken}</p>
+            </div>
             <div className="space-y-2 text-sm text-text-dim italic">
-                <p>1. Откройте @ваше_имя_бота_bot в Telegram</p>
+                <p>1. Откройте @SoulLink_Notif_bot в Telegram</p>
                 <p>2. Отправьте команду: <code className="bg-bg-secondary px-2 py-1 rounded text-accent">/start {botToken}</code></p>
-                <p>3. Вы будете получать уведомления прямо в ТГ!</p>
+                <p>3. Вы будете получать уведомления!</p>
             </div>
             <button onClick={() => setBotToken(null)} className="w-full bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Понятно</button>
         </div>
