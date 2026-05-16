@@ -24,7 +24,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -559,21 +559,6 @@ app.post('/api/user/bot-link-token/refresh', authenticateToken, async (req: any,
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
-app.post('/api/user/bot-link-token/refresh', authenticateToken, async (req: any, res: any) => {
-    try {
-        const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-        let token = '';
-        for (let i = 0; i < 8; i++) {
-            token += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        const user = await prisma.user.update({
-            where: { id: req.user.userId },
-            data: { botAuthToken: token }
-        });
-        res.json({ token: user.botAuthToken });
-    } catch (e) { res.status(500).json({ error: 'Failed' }); }
-});
-
 app.post('/api/bot/link', async (req: any, res: any) => {
     const { token, telegramId } = req.body;
     if (!token) return res.status(400).json({ error: 'Missing token' });
@@ -945,12 +930,17 @@ app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
       
       const botUsersCount = await prisma.user.count({ where: { telegramId: { not: null } } });
 
+      const systemUser = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
+      const systemId = systemUser?.id || 'SYSTEM';
+
       // Robust dialog count: unique pairs of (user1, user2) excluding SYSTEM/TICKET
       const chats = await prisma.message.findMany({
           select: { senderId: true, receiverId: true },
           where: {
               NOT: {
                   OR: [
+                      { senderId: systemId },
+                      { receiverId: systemId },
                       { senderId: 'SYSTEM' },
                       { receiverId: 'SYSTEM' },
                       { receiverId: { startsWith: 'TICKET_' } }
@@ -979,12 +969,17 @@ app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
     
     let dialogsCount = userStats?.dialogsCount || 0;
     if (dialogsCount === 0) {
-        const userChats = await prisma.message.groupBy({
-            by: ['senderId', 'receiverId'],
+        const systemUser = await prisma.user.findUnique({ where: { username: 'SYSTEM' } });
+        const systemId = systemUser?.id || 'SYSTEM';
+
+        const userChats = await prisma.message.findMany({
+            select: { senderId: true, receiverId: true },
             where: { 
                 OR: [{ senderId: req.user.userId }, { receiverId: req.user.userId }],
                 NOT: {
                     OR: [
+                        { senderId: systemId },
+                        { receiverId: systemId },
                         { senderId: 'SYSTEM' },
                         { receiverId: 'SYSTEM' },
                         { receiverId: { startsWith: 'TICKET_' } }
@@ -995,7 +990,9 @@ app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
         const pairs = new Set();
         userChats.forEach(c => {
             const other = c.senderId === req.user.userId ? c.receiverId : c.senderId;
-            pairs.add(other);
+            if (other !== systemId && other !== 'SYSTEM') {
+                pairs.add(other);
+            }
         });
         dialogsCount = pairs.size;
     }
