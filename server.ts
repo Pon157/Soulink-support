@@ -595,9 +595,39 @@ app.patch('/api/users/profile', authenticateToken, async (req: any, res: any) =>
   }
 });
 
+async function sendTGNotification(recipientId: string, text: string, sourceId: string = 'SYSTEM') {
+    try {
+        const recipient = await prisma.user.findUnique({ where: { id: recipientId } });
+        if (!recipient?.telegramId) return;
+
+        // Check preferences
+        const isMandatory = sourceId === 'SYSTEM' || sourceId === 'BROADCAST' || sourceId.startsWith('TICKET_');
+        if (!isMandatory) {
+            if (!recipient.tgNotifyAll && !recipient.tgAllowedChats.includes(sourceId)) {
+                return;
+            }
+        }
+
+        const token = process.env.TELEGRAM_BOT_TOKEN;
+        if (!token) return;
+
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: recipient.telegramId,
+                text: text,
+                parse_mode: 'HTML'
+            })
+        });
+    } catch (e) {
+        // console.error('TG notify failed', e);
+    }
+}
+
 async function notifyExternalBot(message: string) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
-    const adminChatId = "-100123456789"; // Placeholder for admin/notification group if needed, or user can set via env
+    const adminChatId = "-1002334814885"; // Admin group
     if (!token) return;
     
     try {
@@ -610,10 +640,22 @@ async function notifyExternalBot(message: string) {
                 parse_mode: 'HTML'
             })
         });
-    } catch (e) {
-        console.error('Bot notification failed', e);
-    }
+    } catch (e) {}
 }
+
+app.post('/api/user/tg-settings', authenticateToken, async (req: any, res: any) => {
+    const { tgNotifyAll, tgAllowedChats } = req.body;
+    try {
+        const updated = await prisma.user.update({
+            where: { id: req.user.userId },
+            data: { 
+                tgNotifyAll: tgNotifyAll ?? undefined,
+                tgAllowedChats: tgAllowedChats ?? undefined
+            }
+        });
+        res.json(updated);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
 
 // Toggle Rest Mode
 app.post('/api/users/toggle-rest', authenticateToken, async (req: any, res: any) => {
@@ -861,7 +903,12 @@ app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
         mediaType,
         replyToId
       },
+      include: {
+        sender: { select: { nickname: true } }
+      }
     });
+
+    sendTGNotification(receiverId, `<b>💬 НОВОЕ СООБЩЕНИЕ</b>\n\nОт: ${message.sender.nickname}\n\n${(content || '').substring(0, 200)}${(content || '').length > 200 ? '...' : ''}`, userId);
 
     await trackActivity('message');
 
@@ -1023,29 +1070,6 @@ app.get('/api/admin/all-chats', authenticateToken, requireOwner, async (req: any
     res.json(chats);
   } catch (e) {
     res.status(500).json({ error: 'Failed to fetch all chats' });
-  }
-});
-
-// Sanctions: Ban/Warn/Unban
-app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res: any) => {
-  const { targetId, action, reason } = req.body;
-  try {
-    let updateData: any = {};
-    if (action === 'ban') updateData = { banStatus: 'BANNED' };
-    if (action === 'unban') updateData = { banStatus: 'NONE' };
-    if (action === 'warn') updateData = { warnCount: { increment: 1 }, banStatus: 'WARNED' };
-    if (action === 'unwarn') updateData = { warnCount: 0, banStatus: 'NONE' };
-
-    const user = await prisma.user.update({
-      where: { 
-        id: targetId.includes('-') ? targetId : undefined, // Check if UUID
-        username: !targetId.includes('-') ? targetId : undefined // Or Username
-      },
-      data: updateData
-    });
-    res.json(user);
-  } catch (e) {
-    res.status(404).json({ error: 'User not found' });
   }
 });
 
@@ -1346,17 +1370,18 @@ app.post('/api/moderation/warn', authenticateToken, async (req: any, res: any) =
             banUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days ban
         }
 
-        await prisma.user.update({
+        const updatedUser = await prisma.user.update({
             where: { id: targetUserId },
             data: { 
-                warnCount: newWarnings,
+                warnCount: newWarnings % 3 === 0 ? 0 : newWarnings, // Reset count on ban or just keep? User said 3 warns = ban. usually reset on ban.
                 banStatus,
                 banReason,
-                banUntil
+                banUntil: banUntil || undefined
             }
         });
 
-        const msgContent = `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason}\n\nНарушений: ${newWarnings}/3.\n${newWarnings >= 3 ? 'Вы заблокированы на 7 дней.' : ''}`;
+        const msgContent = `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason}\n\nНарушений: ${newWarnings}/3.\n${newWarnings >= 3 ? 'Вы автоматически заблокированы на 7 дней за систематические нарушения.' : ''}`;
+        
         await prisma.message.create({
             data: {
                 senderId: 'SYSTEM',
@@ -1365,7 +1390,7 @@ app.post('/api/moderation/warn', authenticateToken, async (req: any, res: any) =
             }
         });
 
-        notifyExternalBot(`<b>⚠️ WARN</b>\nUser: ${user.nickname}\nWarnings: ${newWarnings}/3\nReason: ${reason}`);
+        sendTGNotification(targetUserId, `<b>${newWarnings >= 3 ? '🚫 BLOCK' : '⚠️ WARN'}</b>\n\n${msgContent}`);
 
         res.json({ success: true, warnings: newWarnings });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
@@ -1382,13 +1407,16 @@ app.post('/api/moderation/ban', authenticateToken, async (req: any, res: any) =>
             data: { banStatus: 'BANNED', banReason: reason, banUntil }
         });
 
+        const msgContent = `🚫 БЛОКИРОВКА: ${reason}\n\nСрок: ${durationDays ? durationDays + ' дн.' : 'Бессрочно'}`;
         await prisma.message.create({
             data: {
                 senderId: 'SYSTEM',
                 receiverId: targetUserId,
-                content: `🚫 БЛОКИРОВКА: ${reason}\n\nСрок: ${durationDays ? durationDays + ' дн.' : 'Бессрочно'}`
+                content: msgContent
             }
         });
+
+        sendTGNotification(targetUserId, `<b>🚫 БЛОКИРОВКА</b>\n\n${msgContent}`);
 
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
@@ -1471,37 +1499,50 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
                 where: { id: targetUser.id },
                 data: { banStatus: 'BANNED', banReason: reason, banUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
             });
+            const msg = `🔴 БАН: Ваши права доступа ограничены администратором.\n\nПричина: ${reason || 'не указана'}\nСрок: 7 дней.`;
             await prisma.message.create({
-                data: {
-                    senderId: 'SYSTEM',
-                    receiverId: targetUser.id,
-                    content: `🔴 БАН: Ваши права доступа ограничены администратором.\n\nПричина: ${reason || 'не указана'}\nСрок: 7 дней.`
-                }
+                data: { senderId: 'SYSTEM', receiverId: targetUser.id, content: msg }
             });
+            sendTGNotification(targetUser.id, `<b>🚫 БАН</b>\n\n${msg}`);
+
         } else if (action === 'unban') {
             await prisma.user.update({
                 where: { id: targetUser.id },
                 data: { banStatus: 'NONE', banReason: null, banUntil: null, warnCount: 0 }
             });
+            const msg = `🟢 РАЗБЛОКИРОВКА: Ваши права доступа восстановлены. Пожалуйста, соблюдайте правила.`;
             await prisma.message.create({
-                data: {
-                    senderId: 'SYSTEM',
-                    receiverId: targetUser.id,
-                    content: `🟢 РАЗБЛОКИРОВКА: Ваши права доступа восстановлены. Пожалуйста, соблюдайте правила.`
-                }
+                data: { senderId: 'SYSTEM', receiverId: targetUser.id, content: msg }
             });
+            sendTGNotification(targetUser.id, `<b>✅ UNBAN</b>\n\n${msg}`);
+
         } else if (action === 'warn') {
-             const updatedUser = await prisma.user.update({
+            const newWarnings = (targetUser.warnCount || 0) + 1;
+            let banStatus = targetUser.banStatus;
+            let banReason = targetUser.banReason;
+            let banUntil = targetUser.banUntil;
+
+            if (newWarnings >= 3) {
+                banStatus = 'BANNED';
+                banReason = 'Автоматическая блокировка за 3 нарушения';
+                banUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+            }
+
+            await prisma.user.update({
                 where: { id: targetUser.id },
-                data: { warnCount: { increment: 1 } }
-            });
-            await prisma.message.create({
-                data: {
-                    senderId: 'SYSTEM',
-                    receiverId: targetUser.id,
-                    content: `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason || 'за нарушение правил'}\n\nНарушений: ${updatedUser.warnCount}/3.`
+                data: { 
+                    warnCount: newWarnings % 3 === 0 ? 0 : newWarnings,
+                    banStatus,
+                    banReason,
+                    banUntil: banUntil || undefined
                 }
             });
+
+            const msg = `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason || 'за нарушение правил'}\n\nНарушений: ${newWarnings}/3.\n${newWarnings >= 3 ? 'Вы автоматически заблокированы на 7 дней.' : ''}`;
+            await prisma.message.create({
+                data: { senderId: 'SYSTEM', receiverId: targetUser.id, content: msg }
+            });
+            sendTGNotification(targetUser.id, `<b>${newWarnings >= 3 ? '🚫 BLOCK' : '⚠️ WARN'}</b>\n\n${msg}`);
         }
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
@@ -1523,16 +1564,17 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
     const batchSize = 100;
     for (let i = 0; i < users.length; i += batchSize) {
         const batch = users.slice(i, i + batchSize);
-        await Promise.all(batch.map(u => 
-            prisma.message.create({
+        await Promise.all(batch.map(u => {
+            sendTGNotification(u.id, `<b>📢 ОБЩАЯ РАССЫЛКА</b>\n\n${content}`, 'BROADCAST');
+            return prisma.message.create({
                 data: {
                     senderId: systemUser.id,
                     receiverId: u.id,
                     content: `[РАССЫЛКА: ${title}]\n${content}`,
                     mediaType: 'text'
                 }
-            })
-        ));
+            });
+        }));
     }
     
     res.json({ success: true, processed: users.length });
@@ -1694,6 +1736,7 @@ async function initSystemUser() {
   if (!systemUser) {
     await prisma.user.create({
       data: {
+        id: 'SYSTEM',
         email: 'system@team.local',
         username: 'SYSTEM',
         nickname: 'Команда Поддержки',
