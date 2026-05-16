@@ -247,6 +247,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
               <>
                 <StatCard label="Сообщения" value={stats?.totalMessages} />
                 <StatCard label="Пользователи" value={stats?.totalUsers} />
+                <StatCard label="Диалоги" value={stats?.totalDialogs} />
                 <StatCard label="Ботоводы" value={stats?.botUsersCount} />
               </>
             ) : (
