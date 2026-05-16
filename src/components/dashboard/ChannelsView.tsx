@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Users, ChevronRight, Plus, MessageSquare, ImageIcon, ArrowLeft, Heart, Share2, MoreHorizontal, Shield, Loader2, Trash, Edit3, Reply, X } from 'lucide-react';
+import { Users, ChevronRight, Plus, MessageSquare, ImageIcon, ArrowLeft, Heart, Share2, MoreHorizontal, Shield, Loader2, Trash, Edit3, Reply, X, Bell } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
@@ -77,10 +77,15 @@ export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any
 const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfileClick }: { channel: any, onBack: () => void, user: any, onUpdate: () => void, onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
     const [posts, setPosts] = useState<any[]>([]);
     const [isSubscribed, setIsSubscribed] = useState(channel.isSubscribed || false);
+    const [tgAllowedChats, setTgAllowedChats] = useState<string[]>(user.tgAllowedChats || []);
 
     useEffect(() => {
         setIsSubscribed(channel.isSubscribed || false);
     }, [channel.id, channel.isSubscribed]);
+    
+    useEffect(() => {
+        setTgAllowedChats(user.tgAllowedChats || []);
+    }, [user.tgAllowedChats]);
 
     const [showPostModal, setShowPostModal] = useState(false);
     const [showEditChannelModal, setShowEditChannelModal] = useState(false);
@@ -93,6 +98,8 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
     const [uploading, setUploading] = useState(false);
 
     const isOwner = user.id === channel.ownerId;
+    const channelSourceId = `CHANNEL_${channel.id}`;
+    const isNotifying = user.tgNotifyAll || tgAllowedChats.includes(channelSourceId);
 
     const fetchPosts = async () => {
         try {
@@ -101,7 +108,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
             setPosts(data);
         } catch (e) { console.error(e); }
     };
-
+    
     const fetchComments = async (postId: string) => {
         try {
             const res = await apiFetch(`/api/posts/${postId}/comments`);
@@ -188,7 +195,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
             onBack(); // Go back to list as data changed
         } catch (e) { console.error(e); }
     };
-
+    
     const handleSubscribe = async () => {
         try {
             const res = await apiFetch(`/api/channels/subscribe/${channel.id}`, { method: 'POST' });
@@ -197,6 +204,24 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
         } catch (e) {
             console.error(e);
         }
+    };
+
+    const handleToggleTGNotify = async () => {
+        const isAllowed = tgAllowedChats.includes(channelSourceId);
+        let newAllowed = [...tgAllowedChats];
+        if (isAllowed) newAllowed = newAllowed.filter(id => id !== channelSourceId);
+        else newAllowed.push(channelSourceId);
+        
+        try {
+            const res = await apiFetch('/api/user/tg-settings', {
+                method: 'POST',
+                body: JSON.stringify({ tgAllowedChats: newAllowed })
+            });
+            if (res.ok) {
+                setTgAllowedChats(newAllowed);
+                user.tgAllowedChats = newAllowed; // Keep ref updated too
+            }
+        } catch (e) {}
     };
 
     return (
@@ -220,12 +245,25 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                             <p className="text-accent text-[8px] md:text-[10px] font-black uppercase tracking-widest mt-0.5 truncate bg-black/20 px-1 border-l border-accent w-fit">{channel.owner?.nickname || 'admin'}</p>
                         </div>
                     </button>
-                    <div className="shrink-0 mb-1 ml-auto">
+                    <div className="shrink-0 mb-1 ml-auto flex items-center gap-2">
                         {isOwner ? (
                             <button onClick={() => setShowPostModal(true)} className="bg-accent text-white w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-xl shadow-accent/20 active:scale-95 transition-all">
                                  <Plus size={24} className="md:w-7 md:h-7" />
                             </button>
                         ) : (
+                            <>
+                            {isSubscribed && (
+                                <button 
+                                    onClick={handleToggleTGNotify}
+                                    className={cn(
+                                        "w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center transition-all active:scale-95",
+                                        isNotifying ? "bg-amber-500/10 text-amber-500 border border-amber-500/20" : "bg-bg-secondary text-text-dim border border-slate-700"
+                                    )}
+                                    title="Уведомления в Telegram"
+                                >
+                                    <Bell size={20} fill={isNotifying ? "currentColor" : "none"} />
+                                </button>
+                            )}
                             <button 
                                 onClick={handleSubscribe} 
                                 className={cn(
@@ -235,6 +273,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                             >
                                 {isSubscribed ? 'Вы подписаны' : 'Подписаться'}
                             </button>
+                            </>
                         )}
                     </div>
                 </div>
