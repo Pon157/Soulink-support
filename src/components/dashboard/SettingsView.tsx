@@ -201,6 +201,29 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
                 <p>2. Отправьте команду: <code className="bg-bg-secondary px-2 py-1 rounded text-accent">/start {botToken}</code></p>
                 <p>3. Вы будете получать уведомления!</p>
             </div>
+            <div className="space-y-4 pt-4 border-t border-slate-800">
+                <p className="text-[10px] font-black uppercase text-text-dim tracking-widest text-left">Настройки уведомлений</p>
+                <button 
+                    onClick={async () => {
+                        const next = !user.tgNotifyAll;
+                        const res = await apiFetch('/api/user/tg-settings', {
+                            method: 'POST',
+                            body: JSON.stringify({ tgNotifyAll: next })
+                        });
+                        if (res.ok) setUser({ ...user, tgNotifyAll: next });
+                    }}
+                    className="w-full flex items-center justify-between bg-bg-secondary p-4 rounded-2xl border border-slate-800"
+                >
+                    <span className="text-sm font-bold italic">Уведомлять о всех чатах</span>
+                    <div className={cn("w-10 h-5 rounded-full transition-all relative", user.tgNotifyAll ? "bg-accent" : "bg-slate-700")}>
+                        <div className={cn("absolute top-1 w-3 h-3 bg-white rounded-full transition-all", user.tgNotifyAll ? "right-1" : "left-1")} />
+                    </div>
+                </button>
+                <p className="text-[8px] text-text-dim uppercase font-black text-left opacity-60">
+                    * Уведомления о варнах, банах и рассылках всегда включены
+                </p>
+            </div>
+
             <div className="flex gap-2">
                 <button 
                   onClick={async () => {
