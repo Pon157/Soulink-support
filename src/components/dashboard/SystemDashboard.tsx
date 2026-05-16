@@ -247,7 +247,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
               <>
                 <StatCard label="Сообщения" value={stats?.totalMessages} />
                 <StatCard label="Пользователи" value={stats?.totalUsers} />
-                <StatCard label="Баны" value={stats?.bannedUsers} />
+                <StatCard label="Ботоводы" value={stats?.botUsersCount} />
               </>
             ) : (
               <>
@@ -259,13 +259,16 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
           </div>
           {role === 'OWNER' && (
             <div className="bg-slate-900/50 p-6 rounded-[2.5rem] border border-slate-800">
-               <h3 className="text-[10px] font-black text-slate-500 uppercase mb-6 tracking-widest px-2">Системная активность (24ч)</h3>
+               <h3 className="text-[10px] font-black text-slate-500 uppercase mb-6 tracking-widest px-2">Активность сообщений (последние 10 дней)</h3>
                <div className="h-32 flex items-end gap-1.5 px-2">
                  {(stats?.dailyStats || []).map((v: number, i: number) => (
-                   <div key={i} className="flex-1 bg-blue-600/10 rounded-t-lg relative" style={{ height: `${v}%` }}>
-                      <div className="absolute top-0 left-0 w-full h-[2px] bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
+                   <div key={i} className="flex-1 bg-accent/10 rounded-t-lg relative" style={{ height: `${Math.max(5, v)}%` }}>
+                      <div className="absolute top-0 left-0 w-full h-[2px] bg-accent shadow-[0_0_8px_rgba(59,130,246,0.5)]" />
                    </div>
                  ))}
+                 {(stats?.dailyStats || []).length === 0 && (
+                   <div className="w-full h-full flex items-center justify-center text-[8px] text-text-dim uppercase font-black tracking-widest">Нет данных для графика</div>
+                 )}
                </div>
             </div>
           )}
