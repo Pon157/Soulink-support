@@ -65,9 +65,17 @@ model User {
   tickets          Ticket[]      @relation("UserTickets")
   managedTickets   Ticket[]      @relation("ManagedTickets")
   games            GameSession[] @relation("GamePlayers")
-  
-  // Исправление: добавлена обратная связь для сообщений в тикетах
-  ticketMessages   TicketMessage[] @relation("TicketSender")
+
+  // Bot related
+  telegramId      String?   @unique
+  botAuthToken    String?   @unique
+}
+
+model DailyStats {
+  id        String   @id @default(cuid())
+  date      DateTime @unique @default(now())
+  messages  Int      @default(0)
+  users     Int      @default(0)
 }
 
 model GameSession {
@@ -101,8 +109,7 @@ model TicketMessage {
   ticketId  String
   ticket    Ticket   @relation(fields: [ticketId], references: [id])
   senderId  String
-  // Использование именованной связи для точности
-  sender    User     @relation("TicketSender", fields: [senderId], references: [id])
+  sender    User     @relation(fields: [senderId], references: [id])
   content   String
   mediaUrl  String?
   mediaType String   @default("text")
