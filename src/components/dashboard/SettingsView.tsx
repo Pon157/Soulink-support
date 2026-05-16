@@ -19,6 +19,21 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
   const [showPaint, setShowPaint] = useState(false);
   const [passwords, setPasswords] = useState({ old: '', new: '' });
   const [stats, setStats] = useState<any>(null);
+  const [botToken, setBotToken] = useState<string | null>(null);
+  const [loadingToken, setLoadingToken] = useState(false);
+
+  const fetchBotToken = async () => {
+    setLoadingToken(true);
+    try {
+      const res = await apiFetch('/api/user/bot-link-token');
+      const data = await res.json();
+      setBotToken(data.token);
+    } catch (e) {
+      setErrorModal('Не удалось получить токен');
+    } finally {
+      setLoadingToken(false);
+    }
+  };
 
   React.useEffect(() => {
     const fetchStats = async () => {
@@ -155,6 +170,21 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 relative bg-bg-primary">
+      <Modal isOpen={!!botToken} onClose={() => setBotToken(null)} title="Привязка Telegram">
+        <div className="space-y-6 text-center">
+            <div className="bg-bg-primary p-8 rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full">
+                <p className="text-[10px] font-black uppercase text-text-dim mb-2 tracking-[0.2em]">Ваш код авторизации</p>
+                <p className="text-4xl font-black text-accent tracking-widest italic">{botToken}</p>
+            </div>
+            <div className="space-y-2 text-sm text-text-dim italic">
+                <p>1. Откройте @ваше_имя_бота_bot в Telegram</p>
+                <p>2. Отправьте команду: <code className="bg-bg-secondary px-2 py-1 rounded text-accent">/start {botToken}</code></p>
+                <p>3. Вы будете получать уведомления прямо в ТГ!</p>
+            </div>
+            <button onClick={() => setBotToken(null)} className="w-full bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Понятно</button>
+        </div>
+      </Modal>
+
       <Modal isOpen={showNickModal} onClose={() => setShowNickModal(false)} title="Сменить имя">
         <form onSubmit={handleUpdateNickname} className="space-y-4">
           <input value={newNick} onChange={e => setNewNick(e.target.value)} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main font-bold italic" placeholder="Новый никнейм" />
@@ -281,6 +311,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
 
           {[
             { label: 'Безопасность', icon: Shield, color: 'text-emerald-400', onClick: () => setShowSecurity(true) },
+            { label: 'Ботоводство', icon: Bell, color: 'text-amber-400', onClick: fetchBotToken },
             { label: 'Тема и оформление', icon: Palette, color: 'text-purple-400', onClick: () => setShowTheme(true) },
             { label: 'Создать баннер', icon: PenTool, color: 'text-orange-400', onClick: () => setShowPaint(true) },
             { label: user.isOnRest ? 'Закончить отдых' : 'Уйти на отдых', icon: Coffee, color: user.isOnRest ? 'text-amber-400' : 'text-blue-400', onClick: handleToggleRest, hide: user.role === 'USER' },
