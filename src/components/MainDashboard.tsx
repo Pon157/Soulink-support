@@ -126,7 +126,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
 
       {previewImage && (
         <div 
-          className="fixed inset-0 z-[100] bg-bg-primary/95 backdrop-blur-xl flex items-center justify-center p-4"
+          className="fixed inset-0 z-[100] bg-bg-primary/90 backdrop-blur-2xl flex items-center justify-center p-4"
           onClick={() => setPreviewImage(null)}
         >
           <motion.img 
@@ -197,7 +197,7 @@ const ChatList = ({ onSelectChat, user }: { onSelectChat: (id: string) => void, 
       </div>
 
       {showAdmins && (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-md p-6 flex items-center justify-center" onClick={() => setShowAdmins(false)}>
+        <div className="fixed inset-0 z-[60] bg-bg-primary/80 backdrop-blur-md p-6 flex items-center justify-center" onClick={() => setShowAdmins(false)}>
           <div className="bg-bg-secondary border border-slate-800 p-8 rounded-[3rem] shadow-2xl w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-text-main font-black text-xl italic text-center mb-4">Начать новый диалог</h3>
             <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2">
