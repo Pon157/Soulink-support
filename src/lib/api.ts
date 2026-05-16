@@ -17,5 +17,11 @@ export const apiFetch = async (url: string, options: any = {}) => {
     localStorage.removeItem('soul_token');
     window.location.href = '/login';
   }
+  if (response.status === 403) {
+    const data = await response.clone().json().catch(() => ({}));
+    if (data.error === 'BANNED') {
+       window.dispatchEvent(new CustomEvent('user-banned', { detail: data }));
+    }
+  }
   return response;
 };
