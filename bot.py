@@ -19,7 +19,7 @@ apihelper.proxy = {
 
 # Get token from environment
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
-APP_URL = os.getenv('APP_URL', 'https://your-app-url.ais.studio')
+APP_URL = os.getenv('APP_URL', 'https://supportkmbp.webtm.ru/')
 
 bot = telebot.TeleBot(TOKEN)
 
