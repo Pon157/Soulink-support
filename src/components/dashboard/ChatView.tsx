@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video, Shield, Image as ImageIcon, Gamepad2, Hash } from 'lucide-react';
+import { ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video, Shield, Image as ImageIcon, Gamepad2, Hash, Bell } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
