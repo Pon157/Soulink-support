@@ -172,16 +172,41 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
     <div className="flex-1 overflow-y-auto pb-24 relative bg-bg-primary">
       <Modal isOpen={!!botToken} onClose={() => setBotToken(null)} title="Привязка Telegram">
         <div className="space-y-6 text-center">
-            <div className="bg-bg-primary p-8 rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full">
+            <div className="bg-bg-primary p-8 rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full relative group">
                 <p className="text-[10px] font-black uppercase text-text-dim mb-2 tracking-[0.2em]">Ваш код авторизации</p>
-                <p className="text-4xl font-black text-accent tracking-widest italic">{botToken}</p>
+                <div className="flex items-center justify-center gap-4">
+                  <p className="text-4xl font-black text-accent tracking-widest italic">{botToken}</p>
+                  <button 
+                    onClick={() => {
+                        if (botToken) {
+                            navigator.clipboard.writeText(botToken);
+                            alert('Код скопирован');
+                        }
+                    }}
+                    className="p-2 bg-accent/10 rounded-xl text-accent hover:bg-accent hover:text-white transition-all"
+                  >
+                    <Star size={16} fill="currentColor" />
+                  </button>
+                </div>
             </div>
             <div className="space-y-2 text-sm text-text-dim italic">
                 <p>1. Откройте @SoulLink_Notif_bot в Telegram</p>
                 <p>2. Отправьте команду: <code className="bg-bg-secondary px-2 py-1 rounded text-accent">/start {botToken}</code></p>
                 <p>3. Вы будете получать уведомления!</p>
             </div>
-            <button onClick={() => setBotToken(null)} className="w-full bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Понятно</button>
+            <div className="flex gap-2">
+                <button 
+                  onClick={async () => {
+                    const res = await apiFetch('/api/user/bot-link-token/refresh', { method: 'POST' });
+                    const data = await res.json();
+                    setBotToken(data.token);
+                  }}
+                  className="flex-1 bg-slate-800 py-4 rounded-2xl font-black uppercase text-[10px]"
+                >
+                    Обновить код
+                </button>
+                <button onClick={() => setBotToken(null)} className="flex-1 bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Понятно</button>
+            </div>
         </div>
       </Modal>
 
