@@ -697,7 +697,7 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
         if (!token) return;
 
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout
+        const timeout = setTimeout(() => controller.abort(), 20000); // Increased to 20s timeout
 
         const method = mediaUrl ? 'sendPhoto' : 'sendMessage';
         const body: any = {
@@ -734,14 +734,19 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
                     })
                 });
             } else if (res.status === 429) {
-                // Rate limited - ideally we should retry, but for now we just log
                 console.error('Telegram Rate Limited (429)');
             } else {
                 console.error('Telegram API Error:', err.description, 'Source:', sourceId);
             }
+        } else {
+            // Optional success log for debugging
+            // console.log(`TG notify success: ${recipientId} Source: ${sourceId}`);
         }
     } catch (e: any) {
         console.error('TG notify exception:', e.message, 'Source:', sourceId);
+        if (e.name === 'AbortError') {
+            console.error('TG notify: Request timed out');
+        }
     }
 }
 
@@ -751,6 +756,9 @@ async function notifyExternalBot(message: string) {
     if (!token) return;
     
     try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+
         const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -758,8 +766,11 @@ async function notifyExternalBot(message: string) {
                 chat_id: adminChatId,
                 text: message,
                 parse_mode: 'HTML'
-            })
+            }),
+            signal: controller.signal
         });
+        clearTimeout(timeout);
+
         if (!res.ok) {
             const err = await res.json();
             if (err.description?.includes('can\'t parse entities')) {
@@ -1364,19 +1375,26 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
         const postContent = content || '';
         const escapedContent = escapeHTML(postContent);
 
-        await Promise.allSettled(subscribers.map(async (sub) => {
-            if (sub.user.telegramId) {
-                const allowedList = sub.user.tgAllowedChats || [];
-                const wantsNotify = sub.user.tgNotifyAll || allowedList.includes(channelSourceId);
-                if (wantsNotify) {
-                    let msg = `<b>📢 НОВЫЙ ПОСТ: ${escapedName}</b>\n\n`;
-                    msg += `${escapedContent.substring(0, 300)}${postContent.length > 300 ? '...' : ''}\n\n`;
-                    msg += `<a href="${process.env.APP_URL || '#'}">Открыть канал</a>`;
-                    
-                    await sendTGNotification(sub.user.id, msg, channelSourceId, mediaUrl || undefined);
+        const batchSize = 25;
+        for (let i = 0; i < subscribers.length; i += batchSize) {
+            const batch = subscribers.slice(i, i + batchSize);
+            await Promise.allSettled(batch.map(async (sub) => {
+                if (sub.user.telegramId) {
+                    const allowedList = sub.user.tgAllowedChats || [];
+                    const wantsNotify = sub.user.tgNotifyAll || allowedList.includes(channelSourceId);
+                    if (wantsNotify) {
+                        let msg = `<b>📢 НОВЫЙ ПОСТ: ${escapedName}</b>\n\n`;
+                        msg += `${escapedContent.substring(0, 300)}${postContent.length > 300 ? '...' : ''}\n\n`;
+                        msg += `<a href="${process.env.APP_URL || '#'}">Открыть канал</a>`;
+                        
+                        await sendTGNotification(sub.user.id, msg, channelSourceId, mediaUrl || undefined);
+                    }
                 }
+            }));
+            if (i + batchSize < subscribers.length) {
+                await new Promise(r => setTimeout(r, 600));
             }
-        }));
+        }
     } catch (e) {
         // console.error('Channel notify failed', e);
     }
@@ -1732,11 +1750,11 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
     });
     
     // Batch processing to prevent timeout
-    const batchSize = 100;
+    const batchSize = 30; // Reduced batch size
     const sysId = await getSystemUserId();
     for (let i = 0; i < users.length; i += batchSize) {
         const batch = users.slice(i, i + batchSize);
-        await Promise.allSettled(batch.map(async (u) => {
+        const results = await Promise.allSettled(batch.map(async (u) => {
             try {
                 const escapedContent = escapeHTML(content);
                 await sendTGNotification(u.id, `<b>📢 ОБЩАЯ РАССЫЛКА</b>\n\n${escapedContent}`, 'BROADCAST');
@@ -1752,6 +1770,11 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
                 console.error(`Broadcast failed for user ${u.id}:`, innerE);
             }
         }));
+        
+        // Brief pause between batches
+        if (i + batchSize < users.length) {
+            await new Promise(r => setTimeout(r, 800));
+        }
     }
     
     res.json({ success: true, processed: users.length });
