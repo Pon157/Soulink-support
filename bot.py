@@ -2,10 +2,15 @@ import os
 import telebot
 import requests
 from telebot import apihelper
+# Добавлено: импорт для чтения файла .env
+from dotenv import load_dotenv
+
+# Добавлено: автоматическая инициализация переменных из .env
+load_dotenv()
 
 # Token from environment
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-APP_URL = os.getenv('APP_URL', 'https://your-app-url.ais.studio')
+APP_URL = os.getenv('APP_URL', 'https://supportkmbp.webtm.ru/')
 # Deriving API URL from app preview URL if needed, but here they are likely identical for server routes
 API_URL = APP_URL 
 
