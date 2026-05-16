@@ -24,7 +24,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -92,16 +92,44 @@ async function seedStats() {
 seedStats();
 
 // --- MIDDLEWARE ---
-const authenticateToken = (req: any, res: any, next: any) => {
+const authenticateToken = async (req: any, res: any, next: any) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.sendStatus(401);
 
-  jwt.verify(token, JWT_SECRET, (err: any, user: any) => {
+  jwt.verify(token, JWT_SECRET, async (err: any, user: any) => {
     if (err) return res.sendStatus(403);
-    req.user = user;
     
-    // Update lastSeen at most once every 5 minutes to reduce DB load
+    // Check if user is banned - Real-time enforcement
+    try {
+        const dbUser = await prisma.user.findUnique({ 
+            where: { id: user.userId },
+            select: { id: true, banStatus: true, banUntil: true, banReason: true, role: true, nickname: true }
+        });
+        
+        if (!dbUser) return res.sendStatus(404);
+        
+        if (dbUser.banStatus === 'BANNED') {
+            if (dbUser.banUntil && dbUser.banUntil < new Date()) {
+                await prisma.user.update({
+                    where: { id: dbUser.id },
+                    data: { banStatus: 'NONE', banUntil: null, banReason: null }
+                });
+            } else {
+                return res.status(403).json({ 
+                    error: 'BANNED', 
+                    reason: dbUser.banReason, 
+                    until: dbUser.banUntil 
+                });
+            }
+        }
+        
+        req.user = { ...user, role: dbUser.role, nickname: dbUser.nickname };
+    } catch (e) {
+        return res.sendStatus(500);
+    }
+    
+    // Update lastSeen at most once every 5 minutes
     const lastUpdate = (global as any).lastSeenUpdates?.[user.userId] || 0;
     const now = Date.now();
     if (now - lastUpdate > 5 * 60 * 1000) {
@@ -247,9 +275,11 @@ app.post('/api/tickets', authenticateToken, async (req: any, res: any) => {
                 where: { role: { in: ['OWNER', 'CURATOR'] } },
                 select: { id: true, telegramId: true }
             });
+            const escapedNick = escapeHTML(req.user.nickname);
+            const escapedSub = escapeHTML(subject);
             for (const s of staffToNotify) {
                 if (s.telegramId) {
-                    sendTGNotification(s.id, `<b>🎫 НОВЫЙ ТИКЕТ</b>\n\nОт: ${req.user.nickname}\nТема: ${subject}\n\n<a href="${process.env.APP_URL || '#'}">Nexus Panel</a>`, 'SYSTEM');
+                    await sendTGNotification(s.id, `<b>🎫 НОВЫЙ ТИКЕТ</b>\n\nОт: ${escapedNick}\nТема: ${escapedSub}\n\n<a href="${process.env.APP_URL || '#'}">Nexus Panel</a>`, 'SYSTEM');
                 }
             }
         } catch (e) {}
@@ -638,15 +668,27 @@ async function getSystemUserId() {
   }
 }
 
-async function sendTGNotification(recipientId: string, text: string, sourceId: string = 'SYSTEM') {
+function escapeHTML(str: string) {
+    return str.replace(/[&<>"']/g, (m) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[m] || m));
+}
+
+async function sendTGNotification(recipientId: string, text: string, sourceId: string = 'SYSTEM', mediaUrl?: string) {
     try {
         const recipient = await prisma.user.findUnique({ where: { id: recipientId } });
         if (!recipient?.telegramId) return;
 
         // Check preferences
+        // SYSTEM and TICKET sources are mandatory.
         const isMandatory = sourceId === 'SYSTEM' || sourceId === 'BROADCAST' || sourceId.startsWith('TICKET_');
         if (!isMandatory) {
-            if (!recipient.tgNotifyAll && !recipient.tgAllowedChats.includes(sourceId)) {
+            const allowedList = recipient.tgAllowedChats || [];
+            if (!recipient.tgNotifyAll && !allowedList.includes(sourceId)) {
                 return;
             }
         }
@@ -654,17 +696,52 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
         const token = process.env.TELEGRAM_BOT_TOKEN;
         if (!token) return;
 
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout
+
+        const method = mediaUrl ? 'sendPhoto' : 'sendMessage';
+        const body: any = {
+            chat_id: recipient.telegramId,
+            parse_mode: 'HTML'
+        };
+
+        if (mediaUrl) {
+            body.photo = mediaUrl;
+            body.caption = text;
+        } else {
+            body.text = text;
+        }
+
+        const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chat_id: recipient.telegramId,
-                text: text,
-                parse_mode: 'HTML'
-            })
+            body: JSON.stringify(body),
+            signal: controller.signal
         });
-    } catch (e) {
-        // console.error('TG notify failed', e);
+        
+        clearTimeout(timeout);
+        
+        if (!res.ok) {
+            const err = await res.json();
+            // If HTML mode failed or media failed, try fallback sending as plain text sendMessage
+            if (err.description?.includes('can\'t parse entities') || (mediaUrl && !err.ok)) {
+                 await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: recipient.telegramId,
+                        text: text.replace(/<[^>]*>/g, '') + (mediaUrl ? `\n\n🖼 ${mediaUrl}` : ''), 
+                    })
+                });
+            } else if (res.status === 429) {
+                // Rate limited - ideally we should retry, but for now we just log
+                console.error('Telegram Rate Limited (429)');
+            } else {
+                console.error('Telegram API Error:', err.description, 'Source:', sourceId);
+            }
+        }
+    } catch (e: any) {
+        console.error('TG notify exception:', e.message, 'Source:', sourceId);
     }
 }
 
@@ -674,7 +751,7 @@ async function notifyExternalBot(message: string) {
     if (!token) return;
     
     try {
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -683,7 +760,22 @@ async function notifyExternalBot(message: string) {
                 parse_mode: 'HTML'
             })
         });
-    } catch (e) {}
+        if (!res.ok) {
+            const err = await res.json();
+            if (err.description?.includes('can\'t parse entities')) {
+                 await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: adminChatId,
+                        text: message.replace(/<[^>]*>/g, ''),
+                    })
+                });
+            }
+        }
+    } catch (e) {
+        console.error('External bot notify fail', e);
+    }
 }
 
 app.post('/api/user/tg-settings', authenticateToken, async (req: any, res: any) => {
@@ -951,7 +1043,9 @@ app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
       }
     });
 
-    await sendTGNotification(receiverId, `<b>💬 НОВОЕ СООБЩЕНИЕ</b>\n\nОт: ${message.sender.nickname}\n\n${(content || '').substring(0, 200)}${(content || '').length > 200 ? '...' : ''}`, userId);
+    const escapedContent = escapeHTML(content || '');
+    const msg = `<b>💬 НОВОЕ СООБЩЕНИЕ</b>\n\nОт: ${escapeHTML(message.sender.nickname)}\n\n${escapedContent.substring(0, 200)}${escapedContent.length > 200 ? '...' : ''}`;
+    await sendTGNotification(receiverId, msg, userId, mediaUrl || undefined);
 
     await trackActivity('message');
 
@@ -1266,19 +1360,28 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
         });
         
         const channelSourceId = `CHANNEL_${channelId}`;
-        for (const sub of subscribers) {
+        const escapedName = escapeHTML(channel.name);
+        const postContent = content || '';
+        const escapedContent = escapeHTML(postContent);
+
+        await Promise.allSettled(subscribers.map(async (sub) => {
             if (sub.user.telegramId) {
-                const wantsNotify = sub.user.tgNotifyAll || sub.user.tgAllowedChats.includes(channelSourceId);
+                const allowedList = sub.user.tgAllowedChats || [];
+                const wantsNotify = sub.user.tgNotifyAll || allowedList.includes(channelSourceId);
                 if (wantsNotify) {
-                    sendTGNotification(sub.user.id, `<b>📢 НОВЫЙ ПОСТ: ${channel.name}</b>\n\n${content.substring(0, 300)}${content.length > 300 ? '...' : ''}\n\n<a href="${process.env.APP_URL || '#'}">Открыть канал</a>`, channelSourceId);
+                    let msg = `<b>📢 НОВЫЙ ПОСТ: ${escapedName}</b>\n\n`;
+                    msg += `${escapedContent.substring(0, 300)}${postContent.length > 300 ? '...' : ''}\n\n`;
+                    msg += `<a href="${process.env.APP_URL || '#'}">Открыть канал</a>`;
+                    
+                    await sendTGNotification(sub.user.id, msg, channelSourceId, mediaUrl || undefined);
                 }
             }
-        }
+        }));
     } catch (e) {
         // console.error('Channel notify failed', e);
     }
 
-    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\nContent: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`);
+    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\n${mediaUrl ? '🖼 [Media Included]\n' : ''}Content: ${(content || '').substring(0, 50)}${(content || '').length > 50 ? '...' : ''}\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`);
 
     res.json(post);
   } catch (e) {
@@ -1552,7 +1655,7 @@ app.get('/api/admin/all-chats', authenticateToken, requireOwner, async (req: any
 });
 
 app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res: any) => {
-    const { targetId, action, reason } = req.body;
+    const { targetId, action, reason, durationHours } = req.body;
     const targetUser = await prisma.user.findFirst({
         where: { OR: [{ id: targetId }, { username: targetId }] }
     });
@@ -1561,11 +1664,13 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
     try {
         const sysId = await getSystemUserId();
         if (action === 'ban') {
+            const until = durationHours ? new Date(Date.now() + durationHours * 60 * 60 * 1000) : null;
             await prisma.user.update({
                 where: { id: targetUser.id },
-                data: { banStatus: 'BANNED', banReason: reason, banUntil: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) }
+                data: { banStatus: 'BANNED', banReason: reason, banUntil: until }
             });
-            const msg = `🔴 БАН: Ваши права доступа ограничены администратором.\n\nПричина: ${reason || 'не указана'}\nСрок: 7 дней.`;
+            const durationText = durationHours ? `${durationHours} ч.` : 'Перманентно';
+            const msg = `🔴 БАН: Ваши права доступа ограничены администратором.\n\nПричина: ${reason || 'не указана'}\nСрок: ${durationText}`;
             await prisma.message.create({
                 data: { senderId: sysId, receiverId: targetUser.id, content: msg }
             });
@@ -1591,7 +1696,7 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
             if (newWarnings >= 3) {
                 banStatus = 'BANNED';
                 banReason = 'Автоматическая блокировка за 3 нарушения';
-                banUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+                banUntil = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours for auto ban
             }
 
             await prisma.user.update({
@@ -1604,7 +1709,7 @@ app.post('/api/sanctions', authenticateToken, requireOwner, async (req: any, res
                 }
             });
 
-            const msg = `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason || 'за нарушение правил'}\n\nНарушений: ${newWarnings}/3.\n${newWarnings >= 3 ? 'Вы автоматически заблокированы на 7 дней.' : ''}`;
+            const msg = `⚠️ ПРЕДУПРЕЖДЕНИЕ: ${reason || 'за нарушение правил'}\n\nНарушений: ${newWarnings}/3.\n${newWarnings >= 3 ? 'Вы автоматически заблокированы на 24 часа.' : ''}`;
             await prisma.message.create({
                 data: { senderId: sysId, receiverId: targetUser.id, content: msg }
             });
@@ -1631,16 +1736,21 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
     const sysId = await getSystemUserId();
     for (let i = 0; i < users.length; i += batchSize) {
         const batch = users.slice(i, i + batchSize);
-        await Promise.all(batch.map(async (u) => {
-            await sendTGNotification(u.id, `<b>📢 ОБЩАЯ РАССЫЛКА</b>\n\n${content}`, 'BROADCAST');
-            return prisma.message.create({
-                data: {
-                    senderId: sysId,
-                    receiverId: u.id,
-                    content: `[РАССЫЛКА: ${title}]\n${content}`,
-                    mediaType: 'text'
-                }
-            });
+        await Promise.allSettled(batch.map(async (u) => {
+            try {
+                const escapedContent = escapeHTML(content);
+                await sendTGNotification(u.id, `<b>📢 ОБЩАЯ РАССЫЛКА</b>\n\n${escapedContent}`, 'BROADCAST');
+                await prisma.message.create({
+                    data: {
+                        senderId: sysId,
+                        receiverId: u.id,
+                        content: `[РАССЫЛКА: ${title}]\n${content}`,
+                        mediaType: 'text'
+                    }
+                });
+            } catch (innerE) {
+                console.error(`Broadcast failed for user ${u.id}:`, innerE);
+            }
         }));
     }
     
