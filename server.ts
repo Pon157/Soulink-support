@@ -1089,12 +1089,31 @@ app.get('/api/games/:id', authenticateToken, async (req: any, res: any) => {
 app.post('/api/games/:id/move', authenticateToken, async (req: any, res: any) => {
     const { state, move } = req.body;
     try {
+        // BUGFIX: history is Json? (single JSON field), NOT a scalar list.
+        // Prisma's { push: move } syntax only works on scalar lists like String[].
+        // Using it on Json? throws a Prisma runtime error → server returns 500
+        // → frontend catch block reverts the optimistic move → snap-back bug.
+        // Fix: manually fetch current history array and append the new move.
+        let historyData: any = undefined;
+        if (move) {
+            const current = await prisma.gameSession.findUnique({
+                where: { id: req.params.id },
+                select: { history: true }
+            });
+            const existing = Array.isArray(current?.history) ? current.history : [];
+            historyData = [...existing, move];
+        }
+
         const session = await prisma.gameSession.update({
             where: { id: req.params.id },
-            data: { state, history: move ? { push: move } : undefined }
+            data: {
+                state,
+                ...(historyData !== undefined ? { history: historyData } : {})
+            }
         });
         res.json(session);
     } catch (e) {
+        console.error('Game move error:', e);
         res.status(500).json({ error: 'Failed to update game' });
     }
 });
