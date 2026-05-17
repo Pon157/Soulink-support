@@ -56,7 +56,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       const updated = await res.json();
       setUser(updated);
     } catch (e) {
-      setErrorModal('Не удалось переключить режим отдыха');
+      setErrorModal('Не удалось переключить режим отдыха :(');
     }
   };
 
@@ -77,10 +77,10 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
   };
 
   const themes = [
-    { id: 'dark', label: 'Dark Slate', color: 'bg-[#0f172a]' },
-    { id: 'oled', label: 'OLED Black', color: 'bg-[#000000]' },
-    { id: 'light', label: 'Pure White', color: 'bg-white' },
-    { id: 'forest', label: 'Emerald Forest', color: 'bg-[#061f14]' },
+    { id: 'dark', label: 'Темный', color: 'bg-[#0f172a]' },
+    { id: 'oled', label: 'Черный', color: 'bg-[#000000]' },
+    { id: 'light', label: 'Светлый', color: 'bg-white' },
+    { id: 'forest', label: 'Темно-зеленый', color: 'bg-[#061f14]' },
   ];
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,7 +92,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       const updatedUser = await updateProfile({ avatar: url });
       setUser(updatedUser);
     } catch (error) {
-      setErrorModal('Не удалось обновить аватар.');
+      setErrorModal('Не удалось обновить аватар :с');
     } finally {
       setUploading(false);
     }
@@ -107,7 +107,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       const updatedUser = await updateProfile({ banner: url });
       setUser(updatedUser);
     } catch (error) {
-      setErrorModal('Не удалось обновить баннер.');
+      setErrorModal('Не удалось обновить баннер :с');
     } finally {
       setUploading(false);
     }
@@ -131,7 +131,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       setUser(updatedUser);
       setShowNickModal(false);
     } catch (error) {
-      setErrorModal('Ошибка при обновлении профиля');
+      setErrorModal('Ошибка при обновлении профиля :с');
     }
   };
 
@@ -145,10 +145,10 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       if (res.ok) {
         setShowSecurity(false);
         setPasswords({ old: '', new: '' });
-        alert('Пароль успешно изменен');
+        alert('Пароль успешно изменен)');
       } else {
         const d = await res.json();
-        setErrorModal(d.error || 'Ошибка смены пароля');
+        setErrorModal(d.error || 'Ошибка смены пароля :с');
       }
     } catch (e) {
       setErrorModal('Ошибка сети');
@@ -199,7 +199,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
                 </div>
             </div>
             <div className="space-y-2 text-[11px] md:text-sm text-text-dim italic leading-tight">
-                <p>1. Откройте @SoulLink_Notif_bot</p>
+                <p>1. Откройте @soulnotifs_bot</p>
                 <p>2. Отправьте: <code className="bg-bg-secondary px-2 py-1 rounded text-accent break-all">/start {botToken}</code></p>
             </div>
             <div className="space-y-4 pt-4 border-t border-slate-800">
@@ -374,11 +374,10 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
 
           {[
             { label: 'Безопасность', icon: Shield, color: 'text-emerald-400', onClick: () => setShowSecurity(true) },
-            { label: 'Ботоводство', icon: Bell, color: 'text-amber-400', onClick: fetchBotToken },
+            { label: 'Привязка Telegram', icon: Bell, color: 'text-amber-400', onClick: fetchBotToken },
             { label: 'Тема и оформление', icon: Palette, color: 'text-purple-400', onClick: () => setShowTheme(true) },
             { label: 'Создать баннер', icon: PenTool, color: 'text-orange-400', onClick: () => setShowPaint(true) },
             { label: user.isOnRest ? 'Закончить отдых' : 'Уйти на отдых', icon: Coffee, color: user.isOnRest ? 'text-amber-400' : 'text-blue-400', onClick: handleToggleRest, hide: user.role === 'USER' },
-            { label: 'Помощь', icon: HelpCircle, color: 'text-slate-400', onClick: () => setShowHelp(true) },
           ].filter(i => !i.hide).map((item, i) => (
             <button key={i} onClick={item.onClick} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between group hover:border-slate-700 transition-all text-left">
               <div className="flex items-center gap-4">
