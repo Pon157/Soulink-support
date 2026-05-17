@@ -987,7 +987,7 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
       return {
         id: partner.id,
         name: partner.nickname,
-        avatar: partner.avatar || `https://i.pravatar.cc/150?u=${partner.id}`,
+        avatar: partner.avatar || null,
         lastMsg: lastMsg?.content || (lastMsg?.mediaType === 'voice' ? 'Голосовое сообщение' : 'Медиа'),
         time: lastMsg?.createdAt || new Date(),
         unread: messages.filter(m => m.receiverId === userId && m.senderId === partner.id && !m.read).length,
