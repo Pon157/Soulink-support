@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -47,9 +46,16 @@ export const LoginPage = ({ setUser }: { setUser: (u: any) => void }) => {
         className="w-full max-w-md bg-slate-900 border border-slate-800 p-10 rounded-[3rem] shadow-2xl space-y-8"
       >
         <div className="text-center space-y-2">
-          <div className="w-20 h-20 bg-blue-600 rounded-[2rem] mx-auto flex items-center justify-center shadow-xl shadow-blue-500/20">
+          {/* --- Замена иконки на изображение --- */}
+          {/* <div className="w-20 h-20 bg-blue-600 rounded-[2rem] mx-auto flex items-center justify-center shadow-xl shadow-blue-500/20">
             <ShieldCheck size={40} className="text-white" />
-          </div>
+          </div> */}
+          <img
+            src="https://s3.twcstorage.ru/404695f6-ab2f-417a-95e7-1d73e67c9c9b/SoulLink%20banner.png"
+            alt="SoulLink Logo"
+            className="w-full max-w-[12rem] mx-auto rounded-xl mb-4 shadow-xl shadow-slate-950/20"
+          />
+          {/* -------------------------------------- */}
           <h1 className="text-3xl font-black text-white italic tracking-tighter">SoulLink</h1>
           <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.3em]">С возвращением</p>
         </div>
@@ -167,21 +173,30 @@ export const RegisterPage = () => {
       <section className="space-y-2">
         <h4 className="text-white font-black uppercase tracking-widest text-[11px] px-1">1. Анонимность и Данные</h4>
         <div className="bg-slate-800/30 p-4 rounded-2xl border border-slate-800 text-xs text-slate-400 italic leading-relaxed">
-          SoulLink — это платформа для анонимной психологической поддержки. Мы не запрашиваем ваше реальное имя, адрес проживания или номер телефона. Email используется исключительно для восстановления доступа.
+          SoulLink — это платформа для анонимной психологической поддержки и общения. Мы стремимся к максимальной защите вашей личности. Мы не запрашиваем и не храним ваше реальное имя, адрес проживания или номер телефона. Ваш Email используется исключительно в технических целях: для восстановления доступа к аккаунту и обеспечения безопасности. Доступ к вашему Email-адресу имеет только ограниченный круг администраторов безопасности.
         </div>
       </section>
 
       <section className="space-y-2">
-        <h4 className="text-white font-black uppercase tracking-widest text-[11px] px-1">2. Шифрование переписки</h4>
+        <h4 className="text-white font-black uppercase tracking-widest text-[11px] px-1">2. Переписки и Чаты</h4>
         <div className="bg-slate-800/30 p-4 rounded-2xl border border-slate-800 text-xs text-slate-400 italic leading-relaxed">
-          Все ваши диалоги со специалистами защищены сквозным шифрованием. Сотрудники SoulLink имеют доступ к чату только в случае поступления жалобы на нарушение правил сообщества.
+          Все ваши чаты с администраторами (специалистами) являются строго конфиденциальными. Сотрудники SoulLink, с которыми вы общаетесь, имеют доступ к вашей истории общения только для предоставления качественной помощи. Доступ третьих лиц к чатам полностью исключен. Исключением является поступление жалобы на нарушение правил сообщества, когда чат может быть просмотрен службой безопасности для разрешения конфликта.
         </div>
       </section>
 
       <section className="space-y-2">
-        <h4 className="text-white font-black uppercase tracking-widest text-[11px] px-1">3. Правила общения</h4>
+        <h4 className="text-white font-black uppercase tracking-widest text-[11px] px-1">3. Правила общения и Отзывы</h4>
         <div className="bg-slate-800/30 p-4 rounded-2xl border border-slate-800 text-xs text-slate-400 italic leading-relaxed">
-          Запрещены угрозы, пропаганда насилия, реклама сторонних услуг и попытки деанонимизации специалиста. За нарушение правил аккаунт может быть заблокирован навсегда.
+          Для поддержания здоровой атмосферы на платформе действуют строгие правила. Пользователи имеют право оставлять честные и конструктивные отзывы об администраторах, с которыми они общались. Эти отзывы помогают нам улучшать качество сервиса.
+
+          <p className="mt-2 text-rose-400 font-bold">В чатах и отзывах ЗАПРЕЩЕНЫ:</p>
+          <ul className="list-disc list-inside space-y-1 mt-1 pl-1 text-slate-400">
+            <li>Любая форма агрессии, угрозы, оскорбления, буллинг.</li>
+            <li>Пропаганда насилия, ненависти, расизма или дискриминации.</li>
+            <li>Реклама, спам, распространение вредоносных ссылок.</li>
+            <li>Попытки деанонимизации или оскорбления специалиста в отзыве.</li>
+          </ul>
+          За нарушение данных правил ваш аккаунт может быть заблокирован навсегда без возможности восстановления.
         </div>
       </section>
 
@@ -210,7 +225,7 @@ export const RegisterPage = () => {
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-black text-white italic tracking-tighter">Регистрация</h1>
           <div className="flex justify-center gap-1">
-            <div className={cn("h-1 w-8 rounded-full transition-all", step === 1 ? "bg-blue-500" : "bg-slate-800")} onClick={() => setStep(1)}></div>
+            <div className={cn("h-1 w-8 rounded-full transition-all cursor-pointer", step === 1 ? "bg-blue-500" : "bg-slate-800")} onClick={() => setStep(1)}></div>
             <div className={cn("h-1 w-8 rounded-full transition-all", step === 2 ? "bg-blue-500" : "bg-slate-800")}></div>
           </div>
         </div>
@@ -266,7 +281,7 @@ export const RegisterPage = () => {
                 </button>
               </div>
               {error && <p className="text-rose-500 text-[10px] text-center font-black uppercase tracking-widest">{error}</p>}
-              <button disabled={loading} className="w-full bg-blue-600 py-5 rounded-2xl font-black text-white uppercase tracking-widest text-[10px] shadow-xl shadow-blue-600/20">
+              <button disabled={loading} className="w-full bg-blue-600 py-5 rounded-2xl font-black text-white uppercase tracking-widest text-[10px] shadow-xl shadow-blue-600/20 disabled:opacity-50 transition-opacity">
                 {loading ? 'Отправка...' : 'Отправить код'}
               </button>
             </motion.form>
@@ -290,8 +305,8 @@ export const RegisterPage = () => {
                   className="w-full bg-slate-800/50 border border-slate-800 p-4 rounded-2xl text-slate-200 outline-none focus:border-blue-500"
                 />
               {error && <p className="text-rose-500 text-[10px] text-center font-black uppercase tracking-widest">{error}</p>}
-              <button disabled={loading} className="w-full bg-emerald-600 py-5 rounded-2xl font-black text-white uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-600/20">
-                Завершить регистрацию
+              <button disabled={loading} className="w-full bg-emerald-600 py-5 rounded-2xl font-black text-white uppercase tracking-widest text-[10px] shadow-xl shadow-emerald-600/20 disabled:opacity-50 transition-opacity">
+                {loading ? 'Завершение...' : 'Завершить регистрацию'}
               </button>
             </motion.form>
           )}
