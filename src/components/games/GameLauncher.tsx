@@ -451,6 +451,9 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: {
 
     const onDrop = (from: string, to: string): boolean => {
         if (!isMyTurn || sending) return false;
+        // Сбрасываем selection чтобы старые подсказки не висели после drag
+        setSelectedSq(null);
+        setHintSquares({});
         return attemptMove(from, to);
     };
 
@@ -483,11 +486,12 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: {
                     position={fen}
                     onPieceDrop={onDrop}
                     onSquareClick={onSquareClick}
-                    onPieceDragBegin={(_: string, sq: string) => {
-                        if (!isMyTurn || sending) return;
-                        selectPiece(sq);
-                    }}
-                    onPieceDragEnd={() => { setSelectedSq(null); setHintSquares({}); }}
+                    // onPieceDragBegin/onPieceDragEnd убраны — они конфликтовали с
+                    // onSquareClick: на каждый клик react-chessboard стрелял
+                    // dragBegin (selectPiece) + dragEnd (clearSelection) до того
+                    // как отработал click, из-за чего подсказки мгновенно пропадали.
+                    // Ходы мышью обрабатываются через onPieceDrop, клики — через onSquareClick.
+                    arePiecesDraggable={isMyTurn && !sending}
                     animationDuration={200}
                     customSquareStyles={displaySquares}
                     boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
@@ -498,7 +502,6 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: {
                         overflow: 'hidden',
                         boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)',
                     }}
-                    draggable={isMyTurn && !sending}
                 />
 
                 {/* Ошибка */}
