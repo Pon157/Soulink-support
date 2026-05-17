@@ -59,7 +59,7 @@ const App = () => {
         <div className="w-16 h-16 bg-blue-600 rounded-[2rem] animate-bounce mb-6 flex items-center justify-center shadow-2xl shadow-blue-500/20">
           <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
         </div>
-        <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">SoulLink Engine Loading...</p>
+        <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.5em] animate-pulse">Еще чуть-чуть...</p>
       </div>
     );
   }
@@ -72,7 +72,7 @@ const App = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m11 3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
-        <h1 className="text-4xl font-black text-white italic mb-4 tracking-tighter">ДОСТУП ЗАБЛОКИРОВАН</h1>
+        <h1 className="text-4xl font-black text-white italic mb-4 tracking-tighter">ВЫ БЫЛИ ЗАБЛОКИРОВАНЫ!!</h1>
         <div className="max-w-md w-full bg-bg-secondary p-8 rounded-[2.5rem] border border-slate-800 space-y-4">
             <div>
                 <p className="text-[10px] font-black uppercase text-text-dim tracking-widest mb-1">Причина</p>
