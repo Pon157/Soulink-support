@@ -24,7 +24,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -682,7 +682,7 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
     const maxRetries = 2;
     let attempt = 0;
 
-    const executeRequest = async () => {
+    const executeRequest = async (): Promise<any> => {
         try {
             const recipient = await prisma.user.findUnique({ where: { id: recipientId } });
             if (!recipient?.telegramId) return;
@@ -699,66 +699,73 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
             if (!token) return;
 
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 35000); // 35s timeout
+            const timeout = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
-            const method = mediaUrl ? 'sendPhoto' : 'sendMessage';
-            const formData = new FormData();
-            formData.append('chat_id', recipient.telegramId);
-            formData.append('parse_mode', 'HTML');
-
+            let response;
             if (mediaUrl) {
+                const formData = new FormData();
+                formData.append('chat_id', recipient.telegramId);
+                formData.append('parse_mode', 'HTML');
                 const mediaPrefix = '🖼 [МЕДИА]\n\n';
                 formData.append('caption', mediaPrefix + text);
                 
                 try {
-                    // Try to download media to send as file
-                    const mediaRes = await fetch(mediaUrl, { keepalive: true });
+                    const mediaRes = await fetch(mediaUrl, { signal: AbortSignal.timeout(10000) });
                     if (mediaRes.ok) {
                         const blob = await mediaRes.blob();
                         formData.append('photo', blob, 'media.jpg');
                     } else {
-                        // Fallback to URL if download fails
                         formData.append('photo', mediaUrl);
                     }
                 } catch (fetchErr) {
-                    // Fallback to URL
                     formData.append('photo', mediaUrl);
                 }
-            } else {
-                formData.append('text', text);
-            }
 
-            const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
-                method: 'POST',
-                body: formData,
-                signal: controller.signal,
-                keepalive: true
-            });
+                response = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+            } else {
+                response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: recipient.telegramId,
+                        text: text,
+                        parse_mode: 'HTML'
+                    }),
+                    signal: controller.signal
+                });
+            }
             
             clearTimeout(timeout);
             
-            if (!res.ok) {
-                const err = await res.json();
+            if (!response.ok) {
+                const err = await response.json();
                 if (err.description?.includes('can\'t parse entities') || (mediaUrl && !err.ok)) {
-                     const fallbackFormData = new FormData();
-                     fallbackFormData.append('chat_id', recipient.telegramId);
-                     fallbackFormData.append('text', (mediaUrl ? '[🖼 МЕДИА]\n' : '') + text.replace(/<[^>]*>/g, '') + (mediaUrl ? `\n\n🔗 ${mediaUrl}` : ''));
-                     
+                     const fallbackBody = {
+                        chat_id: recipient.telegramId,
+                        text: (mediaUrl ? '[🖼 МЕДИА]\n' : '') + text.replace(/<[^>]*>/g, '') + (mediaUrl ? `\n\n🔗 ${mediaUrl}` : ''), 
+                     };
                      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                         method: 'POST',
-                        body: fallbackFormData
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(fallbackBody)
                     });
-                } else if (res.status === 429) {
+                } else if (response.status === 429) {
                     console.error('Telegram Rate Limited (429)');
                 } else {
                     console.error('Telegram API Error:', err.description, 'Source:', sourceId);
                 }
             }
         } catch (e: any) {
-            console.error(`TG notify attempt ${attempt + 1} failed:`, e.message, 'Source:', sourceId);
+            const isTimeout = e.name === 'AbortError' || e.message?.includes('timeout');
+            console.error(`TG notify attempt ${attempt + 1} failed:`, isTimeout ? 'Timeout' : e.message, 'Source:', sourceId);
+            
             if (attempt < maxRetries) {
                 attempt++;
-                const delay = attempt * 2000;
+                const delay = attempt * (isTimeout ? 3000 : 1500);
                 await new Promise(r => setTimeout(r, delay));
                 return executeRequest();
             }
@@ -912,6 +919,7 @@ app.get('/api/users/me', authenticateToken, async (req: any, res: any) => {
             const count = await prisma.review.count({ where: { userId: user.id } });
             (user as any).reviewsCount = count;
             (user as any).givenReviewsCount = count;
+            (user as any).writtenReviewsCount = count;
         } else {
             const count = await prisma.review.count({ where: { adminId: user.id } });
             (user as any).reviewsCount = count;
@@ -1204,6 +1212,7 @@ app.get('/api/stats/system', authenticateToken, async (req: any, res: any) => {
           totalMessages, 
           bannedUsers, 
           botUsersCount,
+          totalReviews: await prisma.review.count(),
           totalDialogs: pairs.size,
           dailyStats: activity.reverse().map(s => s.messages)
       });
