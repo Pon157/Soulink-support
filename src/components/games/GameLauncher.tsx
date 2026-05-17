@@ -98,7 +98,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
     );
 
     switch (gameType) {
-      case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
+      case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} serverMyColor={gameState.myColor ?? null} serverMyPlayerIndex={gameState.myPlayerIndex ?? -1} players={gameState.players} state={gameState.state} />;
       case 'words': return <WordsGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
       case 'checkers': return <CheckersGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
       case 'seabattle': return <SeaBattleGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} onClose={onClose} />;
@@ -109,7 +109,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
             </div>
             <div className="space-y-2">
                 <h3 className="text-xl font-black italic uppercase tracking-tighter">В разработке</h3>
-                <p className="text-[10px] text-text-dim uppercase font-black tracking-widest leading-relaxed">Бля ебашу жестко, скоро готово будет инфа сотка</p>
+                <p className="text-[10px] text-text-dim uppercase font-black tracking-widest leading-relaxed">Разработчики SoulLink трудятся над этим разделом. Скоро здесь будет жарко!</p>
             </div>
             <button onClick={onClose} className="w-full py-4 bg-bg-primary border border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-accent transition-all">Закрыть</button>
         </div>
@@ -128,7 +128,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
             </div>
             <div>
                 <h2 className="text-xl md:text-3xl font-black italic text-text-main uppercase tracking-tighter leading-none">
-                {gameType === 'chess' ? 'Шахматный Мастер' : gameType === 'words' ? 'Битва Слов' : gameType === 'checkers' ? 'Ударные Шашки' : 'SoulБитва'}
+                {gameType === 'chess' ? 'Шахматы' : gameType === 'words' ? 'Слова' : gameType === 'checkers' ? 'Шашки' : 'Морской бой'}
                 </h2>
                 <div className="flex items-center gap-2 mt-1 md:mt-2">
                     <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-emerald-500 rounded-full animate-ping" />
@@ -264,8 +264,8 @@ const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh
 //  • Отдельные состояния для хинтов (movableHighlights vs hintSquares)
 //  • DEBUG-панель в углу — показывает myColor / isMyTurn / turn
 // ─────────────────────────────────────────────────────────────────────────────
-const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: {
-    sessionId: string, partnerName: string, currentUserId: string, players: any[], state: any
+const ChessGame = ({ sessionId, partnerName, serverMyColor, serverMyPlayerIndex, players, state }: {
+    sessionId: string, partnerName: string, serverMyColor: 'w' | 'b' | null, serverMyPlayerIndex: number, players: any[], state: any
 }) => {
     // Мутабельный Chess-объект в ref — не вызывает лишних ре-рендеров
     const gameRef = useRef<any>(null);
@@ -287,16 +287,10 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: {
     // Последний FEN который мы сами отправили — чтобы поллинг не откатил его
     const lastSentFen = useRef<string>('');
 
-    // ── Мой цвет — из state.players (гарантированный порядок сервера) ────────
-    // index 0 = создатель = белые, index 1 = партнёр = чёрные
-    const myColor = useMemo((): 'w' | 'b' | null => {
-        const src = (state?.players?.length ? state.players : players) as any[];
-        if (!src) return null;
-        const idx = src.findIndex((p: any) => p?.id === currentUserId);
-        return idx === 0 ? 'w' : idx === 1 ? 'b' : null;
-    }, [state?.players, players, currentUserId]);
-
-    const myPlayerIndex = myColor === 'w' ? 0 : myColor === 'b' ? 1 : -1;
+    // ── Мой цвет — приходит с сервера (JWT надёжнее чем client-side matching) ──
+    // serverMyColor вычислен в GET /api/games/:id по req.user.userId из токена
+    const myColor = serverMyColor;
+    const myPlayerIndex = serverMyPlayerIndex;
 
     // ── isMyTurn от сервера, не от game.turn() ────────────────────────────────
     // game.turn() = локальное состояние (может расходиться с сервером)
@@ -428,7 +422,7 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: {
             } catch { gameRef.current = new Chess(); }
             lastSentFen.current = '';
             setFen(gameRef.current.fen());
-            setErrMsg('Ошибка отправки хода. Обновите сервер! (history: { push: move })');
+            setErrMsg('Ошибка отправки хода. Попробуйте ещё раз.');
             setTimeout(() => setErrMsg(''), 5000);
         })
         .finally(() => setSending(false));
@@ -459,9 +453,6 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: {
 
     const ChessboardAny = Chessboard as any;
 
-    // Временная debug-строка — убери её после того как всё заработает
-    const debugLine = `myColor=${myColor ?? '?'} | serverTurn=${state?.turn ?? '?'} | isMyTurn=${isMyTurn} | sending=${sending}`;
-
     return (
         <div className="flex flex-col items-center gap-3 w-full">
             {/* ── Статус-бар ── */}
@@ -472,11 +463,6 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, players, state }: {
                 </p>
                 {isMyTurn && <span className="text-[9px] font-black text-emerald-400 uppercase animate-pulse">● Ваш ход</span>}
                 {sending && <span className="text-[9px] font-black text-accent uppercase animate-pulse">Отправка...</span>}
-            </div>
-
-            {/* ── Debug панель (убери после отладки) ── */}
-            <div className="px-4 py-1 bg-black/40 rounded-lg border border-white/5 max-w-full overflow-hidden">
-                <p className="text-[8px] font-mono text-white/40 truncate">{debugLine}</p>
             </div>
 
             {/* ── Доска ── */}
@@ -799,7 +785,7 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, players, state }:
                     <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
                         <div className="bg-bg-primary/95 backdrop-blur-md p-6 rounded-[2.5rem] border border-accent/20 text-center space-y-2 shadow-2xl pointer-events-auto transform -rotate-1">
                             <p className="text-xs font-black uppercase text-accent animate-pulse italic">Ожидание хода {partnerName}...</p>
-                            <p className="text-[8px] text-text-dim font-black uppercase tracking-widest leading-none">Соперник думает</p>
+                            <p className="text-[8px] text-text-dim font-black uppercase tracking-widest leading-none">Соперник выбирает стратегию</p>
                         </div>
                     </div>
                 )}
