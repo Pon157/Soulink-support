@@ -497,7 +497,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
     <div className="flex justify-between items-center border-b border-slate-800 pb-4">
       <div>
         <h3 className="text-2xl font-black text-white italic tracking-tighter">Устав & Регламент SoulLink</h3>
-        <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Редакция для администрации и специалистов</p>
+        <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Просьба ознакомиться</p>
       </div>
       <span className="text-[10px] font-black text-slate-500 bg-slate-800/40 px-3 py-1.5 rounded-full border border-slate-800">v2.5</span>
     </div>
