@@ -24,7 +24,7 @@ app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
 
 // Port MUST be 3000 for this environment
-const PORT = 3212;
+const PORT = 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
 // S3 Client setup
@@ -699,26 +699,38 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
             if (!token) return;
 
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 25000); // 25s timeout
+            const timeout = setTimeout(() => controller.abort(), 35000); // 35s timeout
 
             const method = mediaUrl ? 'sendPhoto' : 'sendMessage';
-            const body: any = {
-                chat_id: recipient.telegramId,
-                parse_mode: 'HTML'
-            };
+            const formData = new FormData();
+            formData.append('chat_id', recipient.telegramId);
+            formData.append('parse_mode', 'HTML');
 
-            const mediaPrefix = mediaUrl ? '🖼 [МЕДИА]\n\n' : '';
             if (mediaUrl) {
-                body.photo = mediaUrl;
-                body.caption = mediaPrefix + text;
+                const mediaPrefix = '🖼 [МЕДИА]\n\n';
+                formData.append('caption', mediaPrefix + text);
+                
+                try {
+                    // Try to download media to send as file
+                    const mediaRes = await fetch(mediaUrl, { keepalive: true });
+                    if (mediaRes.ok) {
+                        const blob = await mediaRes.blob();
+                        formData.append('photo', blob, 'media.jpg');
+                    } else {
+                        // Fallback to URL if download fails
+                        formData.append('photo', mediaUrl);
+                    }
+                } catch (fetchErr) {
+                    // Fallback to URL
+                    formData.append('photo', mediaUrl);
+                }
             } else {
-                body.text = text;
+                formData.append('text', text);
             }
 
             const res = await fetch(`https://api.telegram.org/bot${token}/${method}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
+                body: formData,
                 signal: controller.signal,
                 keepalive: true
             });
@@ -728,13 +740,13 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
             if (!res.ok) {
                 const err = await res.json();
                 if (err.description?.includes('can\'t parse entities') || (mediaUrl && !err.ok)) {
+                     const fallbackFormData = new FormData();
+                     fallbackFormData.append('chat_id', recipient.telegramId);
+                     fallbackFormData.append('text', (mediaUrl ? '[🖼 МЕДИА]\n' : '') + text.replace(/<[^>]*>/g, '') + (mediaUrl ? `\n\n🔗 ${mediaUrl}` : ''));
+                     
                      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            chat_id: recipient.telegramId,
-                            text: (mediaUrl ? '[🖼 МЕДИА]\n' : '') + text.replace(/<[^>]*>/g, '') + (mediaUrl ? `\n\n🔗 ${mediaUrl}` : ''), 
-                        })
+                        body: fallbackFormData
                     });
                 } else if (res.status === 429) {
                     console.error('Telegram Rate Limited (429)');
@@ -866,11 +878,19 @@ app.get('/api/users/profile/:id', authenticateToken, async (req: any, res: any) 
         });
         (user as any).unreadCount = unreadCount;
 
-    if (user && (user as any).role === 'USER') {
+        // Statistics based on role
+        if (user.role === 'USER') {
             const givenReviews = await prisma.review.findMany({ where: { userId } });
             const avg = givenReviews.length > 0 ? (givenReviews.reduce((a, b) => a + b.rating, 0) / givenReviews.length) : 0;
-            (user as any).givenReviewsCount = givenReviews.length;
+            (user as any).reviewsCount = givenReviews.length;
+            (user as any).writtenReviewsCount = givenReviews.length;
             (user as any).averageRatingGiven = avg;
+        } else {
+            const reviewsReceived = await prisma.review.count({
+                where: { adminId: userId }
+            });
+            (user as any).reviewsCount = reviewsReceived;
+            (user as any).receivedReviewsCount = reviewsReceived;
         }
     }
 
@@ -887,6 +907,17 @@ app.get('/api/users/me', authenticateToken, async (req: any, res: any) => {
       where: { id: req.user.userId },
       include: { stats: true }
     });
+    if (user) {
+        if (user.role === 'USER') {
+            const count = await prisma.review.count({ where: { userId: user.id } });
+            (user as any).reviewsCount = count;
+            (user as any).givenReviewsCount = count;
+        } else {
+            const count = await prisma.review.count({ where: { adminId: user.id } });
+            (user as any).reviewsCount = count;
+            (user as any).receivedReviewsCount = count;
+        }
+    }
     res.json(user);
   } catch (error) {
     res.status(401).json({ error: 'Invalid token' });
