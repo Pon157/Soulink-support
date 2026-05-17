@@ -34,7 +34,8 @@ export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 bg-bg-primary">
+    // Добавлен pb-32 для комфортной прокрутки до самого конца
+    <div className="flex-1 overflow-y-auto p-6 pb-32 bg-bg-primary">
         <header className="mb-8">
             <h2 className="text-3xl font-black italic tracking-tighter text-text-main">Каналы</h2>
             <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Контент от наших администраторов :3</p>
@@ -301,7 +302,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
 
             <Modal isOpen={!!selectedPostForComments} onClose={() => setSelectedPostForComments(null)} title="Комментарии">
                 <div className="flex flex-col h-[60vh]">
-                    <div className="flex-1 overflow-y-auto space-y-4 pr-2">
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-8">
                         {comments.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black tracking-widest italic">Пока нет комментариев</p>}
                         {comments.map(c => (
                             <div key={c.id} className="bg-bg-primary p-4 rounded-2xl border border-slate-800/50 group relative">
@@ -373,12 +374,13 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                 </div>
             </Modal>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+            {/* Добавлен pb-32 для комфортной прокрутки постов до самого конца */}
+            <div className="flex-1 overflow-y-auto p-8 space-y-6 pb-32">
                 <div className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50">
                     <p className="text-sm italic text-text-dim italic leading-relaxed">{channel.description || 'Обзоры, новости и полезные советы от администрации SoulLink.'}</p>
                 </div>
 
-                <div className="space-y-4 pb-12">
+                <div className="space-y-4">
                     <h4 className="text-xs font-black uppercase tracking-[0.3em] text-text-dim px-2">Последние посты</h4>
                     {posts.map(post => (
                         <div key={post.id} className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50 space-y-4 group">
