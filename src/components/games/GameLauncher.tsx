@@ -255,294 +255,25 @@ const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHESS GAME — окончательная версия
-// Самодостаточный компонент: хранит myColor в ref, isMyTurn без useMemo,
-// синхронизация через единственный useEffect на изменение fen+turn.
+// CHESS GAME — временная заглушка
 // ─────────────────────────────────────────────────────────────────────────────
-const ChessGame = ({
-    sessionId, partnerName, currentUserId,
-    serverMyColor, serverMyPlayerIndex,
-    players, state,
-}: {
-    sessionId: string;
-    partnerName: string;
-    currentUserId: string;
-    serverMyColor: 'w' | 'b' | null;
-    serverMyPlayerIndex: number;
-    players: any[];
-    state: any;
-}) => {
-    // ── Chess engine ──────────────────────────────────────────────────────────
-    const chessRef = useRef<any>(new Chess());
-
-    // ── Мой цвет: храним в ref чтобы не терялся между рендерами ─────────────
-    const myColorRef = useRef<'w' | 'b' | null>(null);
-
-    // Вычисляем myColor один раз как только получаем данные и больше не меняем
-    if (!myColorRef.current) {
-        if (serverMyColor) {
-            myColorRef.current = serverMyColor;
-        } else if (state?.whiteId && state?.blackId) {
-            if (state.whiteId === currentUserId) myColorRef.current = 'w';
-            else if (state.blackId === currentUserId) myColorRef.current = 'b';
-        } else {
-            const src: any[] = state?.players?.length ? state.players : players;
-            const idx = src?.findIndex((p: any) => p?.id === currentUserId) ?? -1;
-            if (idx === 0) myColorRef.current = 'w';
-            else if (idx === 1) myColorRef.current = 'b';
-        }
-    }
-    // Если сервер позже прислал myColor — обновляем (случай первого рендера)
-    if (serverMyColor && myColorRef.current !== serverMyColor) {
-        myColorRef.current = serverMyColor;
-    }
-
-    const myColor = myColorRef.current;
-
-    // ── UI-состояние ─────────────────────────────────────────────────────────
-    const [fen, setFen] = useState<string>('start');
-    const [selectedSq, setSelectedSq] = useState<string | null>(null);
-    const [hintSquares, setHintSquares] = useState<Record<string, any>>({});
-    const [movableSquares, setMovableSquares] = useState<Record<string, any>>({});
-    const [sending, setSending] = useState(false);
-    const [errMsg, setErrMsg] = useState('');
-
-    // ── isMyTurn: вычисляем прямо из props, без useMemo ──────────────────────
-    const serverTurn: 'white' | 'black' | undefined = state?.turn;
-    const isMyTurn = !!myColor && (
-        (myColor === 'w' && serverTurn === 'white') ||
-        (myColor === 'b' && serverTurn === 'black')
-    );
-
-    // ── Синхронизация доски с сервером ────────────────────────────────────────
-    const lastSentFenRef = useRef<string>('');
-    const lastSyncKeyRef = useRef<string>('');
-
-    useEffect(() => {
-        if (!state?.fen) return;
-
-        const syncKey = `${state.fen}|${state.turn}`;
-        if (syncKey === lastSyncKeyRef.current) return;
-        lastSyncKeyRef.current = syncKey;
-
-        const targetFen = state.fen === 'start'
-            ? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-            : state.fen;
-
-        // Не откатываем свой только что отправленный ход
-        if (targetFen === lastSentFenRef.current && !sending) {
-            lastSentFenRef.current = '';
-        }
-
-        if (sending && targetFen !== lastSentFenRef.current) return;
-
-        try {
-            const nextChess = state.fen === 'start' ? new Chess() : new Chess(targetFen);
-            chessRef.current = nextChess;
-            setFen(nextChess.fen());
-        } catch (e) {
-            console.error('[Chess] FEN parse error:', e);
-        }
-        setSelectedSq(null);
-        setHintSquares({});
-    }, [state?.fen, state?.turn]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // ── Подсветка ходимых фигур (пересчитываем после каждого обновления) ─────
-    useEffect(() => {
-        if (!isMyTurn || !myColor) { setMovableSquares({}); return; }
-
-        const result: Record<string, any> = {};
-        try {
-            const board = chessRef.current.board() as any[][];
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const piece = board[r]?.[c];
-                    if (!piece || piece.color !== myColor) continue;
-                    const sq = `${String.fromCharCode(97 + c)}${8 - r}`;
-                    const moves = chessRef.current.moves({ square: sq }) as string[];
-                    if (moves.length > 0) {
-                        result[sq] = { background: 'rgba(59,130,246,0.35)', borderRadius: '50%' };
-                    }
-                }
-            }
-        } catch (e) { console.error('[Chess] movable squares error:', e); }
-        setMovableSquares(result);
-    }, [fen, isMyTurn, myColor]); // перечитываем при каждом изменении FEN или хода
-
-    // ── Выбор фигуры ──────────────────────────────────────────────────────────
-    const selectPiece = (sq: string) => {
-        const piece = chessRef.current.get(sq);
-        if (!piece || piece.color !== myColor) {
-            setSelectedSq(null);
-            setHintSquares({});
-            return false;
-        }
-        const moves = chessRef.current.moves({ square: sq, verbose: true }) as any[];
-        if (!moves.length) return false;
-
-        const hints: Record<string, any> = {
-            [sq]: { background: 'rgba(59,130,246,0.50)', borderRadius: '4px', boxShadow: 'inset 0 0 0 3px #3b82f6' }
-        };
-        moves.forEach((m: any) => {
-            hints[m.to] = m.captured
-                ? { background: 'radial-gradient(circle, rgba(239,68,68,0.85) 65%, transparent 70%)', borderRadius: '50%' }
-                : { background: 'radial-gradient(circle, rgba(59,130,246,0.75) 28%, transparent 32%)', borderRadius: '50%' };
-        });
-        setSelectedSq(sq);
-        setHintSquares(hints);
-        return true;
-    };
-
-    // ── Попытка сделать ход ───────────────────────────────────────────────────
-    const attemptMove = (from: string, to: string): boolean => {
-        if (!isMyTurn || sending) return false;
-
-        let result: any;
-        try { result = chessRef.current.move({ from, to, promotion: 'q' }); }
-        catch { return false; }
-        if (!result) return false;
-
-        const newFen = chessRef.current.fen();
-        const nextTurn = chessRef.current.turn() === 'w' ? 'white' : 'black';
-        lastSentFenRef.current = newFen;
-
-        setFen(newFen);
-        setSelectedSq(null);
-        setHintSquares({});
-        setMovableSquares({});
-        setSending(true);
-
-        const newState = {
-            ...state,
-            fen: newFen,
-            turn: nextTurn,
-        };
-
-        apiFetch(`/api/games/${sessionId}/move`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                state: newState,
-                move: { from: result.from, to: result.to, san: result.san, piece: result.piece },
-            }),
-        })
-        .then(async r => {
-            if (!r.ok) {
-                const text = await r.text().catch(() => '');
-                throw new Error(`HTTP ${r.status}: ${text}`);
-            }
-        })
-        .catch(err => {
-            console.error('[Chess] move rejected:', err);
-            // Откат
-            try {
-                chessRef.current = state?.fen && state.fen !== 'start'
-                    ? new Chess(state.fen)
-                    : new Chess();
-            } catch { chessRef.current = new Chess(); }
-            lastSentFenRef.current = '';
-            setFen(chessRef.current.fen());
-            setErrMsg('Ошибка сети. Попробуйте ещё раз.');
-            setTimeout(() => setErrMsg(''), 4000);
-        })
-        .finally(() => setSending(false));
-
-        return true;
-    };
-
-    // ── Обработчики доски ────────────────────────────────────────────────────
-    const onSquareClick = (sq: string) => {
-        if (!isMyTurn || sending) return;
-        if (selectedSq === sq) { setSelectedSq(null); setHintSquares({}); return; }
-        if (selectedSq) {
-            if (attemptMove(selectedSq, sq)) return;
-            selectPiece(sq);
-            return;
-        }
-        selectPiece(sq);
-    };
-
-    const onDrop = (from: string, to: string): boolean => {
-        if (!isMyTurn || sending) return false;
-        setSelectedSq(null);
-        setHintSquares({});
-        return attemptMove(from, to);
-    };
-
-    const displaySquares = selectedSq ? hintSquares : movableSquares;
-    const myPlayerIndex = myColor === 'w' ? 0 : 1;
-    const ChessboardAny = Chessboard as any;
-
-    return (
-        <div className="flex flex-col items-center gap-3 w-full">
-            {/* Статус */}
-            <div className="flex items-center gap-3 px-5 py-2 bg-bg-primary/50 backdrop-blur-md rounded-full border border-white/5 shadow-xl flex-wrap justify-center">
-                <div className={cn(
-                    'w-2.5 h-2.5 rounded-full flex-shrink-0',
-                    myColor === 'w' ? 'bg-white border border-slate-400'
-                    : myColor === 'b' ? 'bg-slate-900 border border-slate-600'
-                    : 'bg-rose-500'
-                )} />
-                <p className="text-[10px] font-black uppercase tracking-widest text-text-main">
-                    {myColor === 'w' ? 'Вы — Белые' : myColor === 'b' ? 'Вы — Чёрные' : 'Определяем цвет...'}
-                </p>
-                {isMyTurn && <span className="text-[9px] font-black text-emerald-400 uppercase animate-pulse">● Ваш ход</span>}
-                {sending && <span className="text-[9px] font-black text-accent uppercase animate-pulse">Отправка...</span>}
-            </div>
-
-            {/* Доска */}
-            <div className="w-full max-w-sm md:max-w-md aspect-square bg-bg-secondary rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden border-[6px] md:border-[12px] border-bg-primary shadow-2xl relative animate-in zoom-in duration-500 p-1 md:p-3">
-                <ChessboardAny
-                    id="ChessBoard"
-                    position={fen}
-                    onPieceDrop={onDrop}
-                    onSquareClick={onSquareClick}
-                    arePiecesDraggable={isMyTurn && !sending}
-                    animationDuration={200}
-                    customSquareStyles={displaySquares}
-                    boardOrientation={myPlayerIndex === 1 ? 'black' : 'white'}
-                    customDarkSquareStyle={{ backgroundColor: '#475569' }}
-                    customLightSquareStyle={{ backgroundColor: '#cbd5e1' }}
-                    customBoardStyle={{ borderRadius: '0.75rem', overflow: 'hidden', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.3)' }}
-                />
-
-                {errMsg && (
-                    <div className="absolute inset-x-4 top-4 bg-rose-500/90 backdrop-blur-md p-3 rounded-2xl z-40 text-center">
-                        <p className="text-[10px] font-black text-white uppercase tracking-widest">{errMsg}</p>
-                    </div>
-                )}
-
-                {chessRef.current.isGameOver() && (
-                    <div className="absolute inset-0 bg-bg-primary/90 flex flex-col items-center justify-center p-8 text-center space-y-4 backdrop-blur-md z-30">
-                        <Trophy className="text-amber-500 animate-bounce" size={64} />
-                        <h2 className="text-2xl font-black italic uppercase tracking-tighter">Игра окончена!</h2>
-                        <p className="text-text-dim font-bold uppercase text-[10px] tracking-widest">
-                            {chessRef.current.isCheckmate() ? 'Мат!' : 'Ничья'}
-                        </p>
-                        <button
-                            onClick={() => apiFetch(`/api/games/${sessionId}/reset`, { method: 'POST' }).catch(() => {})}
-                            className="mt-2 px-6 py-3 bg-accent text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent/80 transition-all active:scale-95"
-                        >
-                            Сыграть ещё раз
-                        </button>
-                    </div>
-                )}
-
-                {!isMyTurn && !chessRef.current.isGameOver() && (
-                    <div className="absolute inset-x-0 bottom-6 flex justify-center pointer-events-none">
-                        <div className="bg-bg-primary/95 backdrop-blur-md px-6 py-4 rounded-[2rem] border border-accent/20 shadow-2xl flex items-center gap-3">
-                            <Brain className="text-accent animate-pulse flex-shrink-0" size={18} />
-                            <div>
-                                <p className="text-xs font-black italic uppercase tracking-tighter">Ход {partnerName}...</p>
-                                <p className="text-[8px] text-text-dim uppercase font-black tracking-widest">Соперник обдумывает</p>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
+const ChessGame = ({ partnerName }: any) => (
+    <div className="flex flex-col items-center justify-center gap-6 p-8 text-center max-w-xs animate-in fade-in zoom-in duration-500">
+        <div className="w-24 h-24 bg-accent/10 rounded-[2.5rem] flex items-center justify-center border border-accent/20 shadow-2xl shadow-accent/10">
+            <Swords className="text-accent" size={40} />
         </div>
-    );
-};
+        <div className="space-y-2">
+            <h3 className="text-2xl font-black italic uppercase tracking-tighter text-text-main">Шахматы</h3>
+            <p className="text-[10px] font-black uppercase tracking-widest text-text-dim leading-relaxed">
+                Режим в разработке.<br/>Скоро здесь будет полноценный матч против {partnerName}!
+            </p>
+        </div>
+        <div className="flex items-center gap-2 px-5 py-3 bg-accent/10 rounded-2xl border border-accent/20">
+            <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+            <span className="text-[9px] font-black uppercase tracking-widest text-accent">Ожидайте обновления</span>
+        </div>
+    </div>
+);
 const CheckersGame = ({ sessionId, partnerName, currentUserId, players, state }: any) => {
     const [selected, setSelected] = useState<number | null>(null);
     const [board, setBoard] = useState<any[]>(state?.board || []);
@@ -1008,11 +739,13 @@ const SeaBattleGame = ({ sessionId, partnerName, currentUserId, players, state, 
         const newShots = [...shots, index];
         setShots(newShots);
 
+        const isHit = opponentShips.includes(index);
         let winner = undefined;
         const allHits = newShots.filter((s: number) => opponentShips.includes(s));
         if (allHits.length === 20) winner = currentUserId;
 
-        updateState({ shots: newShots }, true, false, winner);
+        // При попадании ход остаётся у стрелявшего (keepTurn = isHit)
+        updateState({ shots: newShots }, true, isHit, winner);
     };
 
     const updateState = async (myData: any, isMove = false, keepTurn = false, winner?: string) => {
