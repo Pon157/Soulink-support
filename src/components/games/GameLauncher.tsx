@@ -472,9 +472,6 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, serverMyColor, serve
 
     const ChessboardAny = Chessboard as any;
 
-    // Debug: убери эту строку когда шахматы заработают
-    const _dbg = `srv=${serverMyColor ?? '?'} wId=${(state?.whiteId ?? '?').slice(-4)} bId=${(state?.blackId ?? '?').slice(-4)} me=${currentUserId.slice(-4)} → color=${myColor ?? '!'} turn=${state?.turn ?? '?'} isMyTurn=${isMyTurn}`;
-
     return (
         <div className="flex flex-col items-center gap-3 w-full">
             {/* ── Статус-бар ── */}
@@ -485,10 +482,6 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, serverMyColor, serve
                 </p>
                 {isMyTurn && <span className="text-[9px] font-black text-emerald-400 uppercase animate-pulse">● Ваш ход</span>}
                 {sending && <span className="text-[9px] font-black text-accent uppercase animate-pulse">Отправка...</span>}
-            </div>
-            {/* ── Debug (убери после отладки) ── */}
-            <div className="px-3 py-1 bg-black/60 rounded-lg max-w-full overflow-x-auto">
-                <p className="text-[8px] font-mono text-yellow-400/70 whitespace-nowrap">{_dbg}</p>
             </div>
 
             {/* ── Доска ── */}
@@ -531,6 +524,16 @@ const ChessGame = ({ sessionId, partnerName, currentUserId, serverMyColor, serve
                         <p className="text-text-dim font-bold uppercase text-[10px] tracking-widest">
                             {gameRef.current.isCheckmate() ? 'Мат!' : 'Ничья'}
                         </p>
+                        <button
+                            onClick={() => {
+                                apiFetch(`/api/games/${sessionId}/reset`, { method: 'POST' })
+                                    .then(r => r.ok ? r.json() : Promise.reject())
+                                    .catch(() => {});
+                            }}
+                            className="mt-2 px-6 py-3 bg-accent text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent/80 transition-all active:scale-95"
+                        >
+                            Сыграть ещё раз
+                        </button>
                     </div>
                 )}
 
