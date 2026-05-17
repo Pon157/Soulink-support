@@ -37,17 +37,17 @@ export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any
     <div className="flex-1 overflow-y-auto p-6 bg-bg-primary">
         <header className="mb-8">
             <h2 className="text-3xl font-black italic tracking-tighter text-text-main">Каналы</h2>
-            <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Мир экспертного контента</p>
+            <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Контент от наших администраторов :3</p>
         </header>
 
         <div className="bg-bg-secondary border border-slate-800 p-8 rounded-[3rem] text-center space-y-4 mb-8">
             <Users size={48} className="mx-auto text-accent" />
-            <h2 className="text-2xl font-black italic tracking-tighter">Авторские каналы</h2>
-            <p className="text-text-dim text-xs italic px-6">Подписывайтесь на блоги наших администраторов, чтобы быть в курсе обновлений.</p>
+            <h2 className="text-2xl font-black italic tracking-tighter">Каналы</h2>
+            <p className="text-text-dim text-xs italic px-6">Подписывайтесь на блоги наших администраторов</p>
         </div>
 
         <div className="grid gap-3">
-            {loading && <p className="text-center text-text-dim py-12 animate-pulse font-black uppercase text-[10px] tracking-widest">Загрузка каналов...</p>}
+            {loading && <p className="text-center text-text-dim py-12 animate-pulse font-black uppercase text-[10px] tracking-widest">Загружаю каналы...</p>}
             {channels.map((ch) => (
                 <button 
                     key={ch.id} 
