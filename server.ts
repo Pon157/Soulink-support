@@ -15,10 +15,36 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const buildDatabaseUrl = () => {
+  const base = process.env.DATABASE_URL;
+  if (!base) return undefined;
+  const sep = base.includes('?') ? '&' : '?';
+  // connection_limit — пул соединений
+  // pool_timeout    — сколько ждать свободного соединения из пула (сек)
+  // keepalives=1 + keepalives_idle=30 — TCP keepalive чтобы PG не дропал простаивающие соединения
+  return `${base}${sep}connection_limit=5&pool_timeout=30&keepalives=1&keepalives_idle=30&keepalives_interval=10&keepalives_count=5`;
+};
+
 const prisma = new PrismaClient({
   log: ['error'],
-  datasourceUrl: process.env.DATABASE_URL ? `${process.env.DATABASE_URL}${process.env.DATABASE_URL.includes('?') ? '&' : '?'}connection_limit=10` : undefined
+  datasourceUrl: buildDatabaseUrl(),
 });
+
+// ── Keepalive: каждые 4 минуты отправляем SELECT 1 чтобы соединение не умирало ──
+// Обычный idle_session_timeout на хостингах — 5–10 минут.
+setInterval(async () => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (e: any) {
+    console.error('[Keepalive] failed, reconnecting…', e?.message);
+    try {
+      await prisma.$disconnect();
+      await prisma.$connect();
+    } catch (reconnErr) {
+      console.error('[Keepalive] reconnect failed:', reconnErr);
+    }
+  }
+}, 4 * 60 * 1000); // 4 минуты
 const app = express();
 app.use(express.json({ limit: '60mb' }));
 app.use(express.urlencoded({ limit: '60mb', extended: true }));
@@ -1586,12 +1612,28 @@ app.get('/api/games/:id', authenticateToken, async (req: any, res: any) => {
 app.post('/api/games/:id/move', authenticateToken, async (req: any, res: any) => {
     const { state, move } = req.body;
     try {
+        // Prisma не поддерживает { push } для JSON-полей — только для scalar list.
+        // Читаем текущую историю и вручную добавляем новый ход.
+        let newHistory: any[] | undefined;
+        if (move) {
+            const current = await prisma.gameSession.findUnique({
+                where: { id: req.params.id },
+                select: { history: true }
+            });
+            const prevHistory = Array.isArray(current?.history) ? current.history : [];
+            newHistory = [...prevHistory, move];
+        }
+
         const session = await prisma.gameSession.update({
             where: { id: req.params.id },
-            data: { state, history: move ? { push: move } : undefined }
+            data: {
+                state,
+                ...(newHistory !== undefined ? { history: newHistory } : {})
+            }
         });
         res.json(session);
     } catch (e) {
+        console.error('Game move error:', e);
         res.status(500).json({ error: 'Failed to update game' });
     }
 });
