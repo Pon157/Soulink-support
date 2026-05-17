@@ -1472,7 +1472,8 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
                     if (wantsNotify) {
                         let msg = `<b>📢 НОВЫЙ ПОСТ: ${escapedName}</b>\n\n`;
                         msg += `${escapedContent.substring(0, 300)}${postContent.length > 300 ? '...' : ''}\n\n`;
-                        msg += `<a href="${process.env.APP_URL || '#'}">Открыть канал</a>`;
+                        // Ссылка заменена на статичную
+                        msg += `<a href="https://t.me/soulnotifs_bot/SoulLink">Открыть канал</a>`;
                         
                         await sendTGNotification(sub.user.id, msg, channelSourceId, mediaUrl || undefined);
                     }
@@ -1486,7 +1487,8 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
         // console.error('Channel notify failed', e);
     }
 
-    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\n${mediaUrl ? '🖼 [Media Included]\n' : ''}Content: ${(content || '').substring(0, 50)}${(content || '').length > 50 ? '...' : ''}\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`);
+    // Уведомление внешнего бота с использованием той же ссылки
+    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\n${mediaUrl ? '🖼 [Media Included]\n' : ''}Content: ${(content || '').substring(0, 50)}${(content || '').length > 50 ? '...' : ''}\n<a href="https://t.me/soulnotifs_bot/SoulLink">Открыть приложение</a>`);
 
     res.json(post);
   } catch (e) {
