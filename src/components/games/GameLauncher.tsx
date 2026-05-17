@@ -109,7 +109,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
             </div>
             <div className="space-y-2">
                 <h3 className="text-xl font-black italic uppercase tracking-tighter">В разработке</h3>
-                <p className="text-[10px] text-text-dim uppercase font-black tracking-widest leading-relaxed">Разработчики SoulLink трудятся над этим разделом. Скоро здесь будет жарко!</p>
+                <p className="text-[10px] text-text-dim uppercase font-black tracking-widest leading-relaxed">Бля ебашу жестко, скоро готово будет инфа сотка</p>
             </div>
             <button onClick={onClose} className="w-full py-4 bg-bg-primary border border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:border-accent transition-all">Закрыть</button>
         </div>
@@ -799,7 +799,7 @@ const CheckersGame = ({ sessionId, partnerName, currentUserId, players, state }:
                     <div className="absolute inset-x-0 bottom-8 flex justify-center pointer-events-none">
                         <div className="bg-bg-primary/95 backdrop-blur-md p-6 rounded-[2.5rem] border border-accent/20 text-center space-y-2 shadow-2xl pointer-events-auto transform -rotate-1">
                             <p className="text-xs font-black uppercase text-accent animate-pulse italic">Ожидание хода {partnerName}...</p>
-                            <p className="text-[8px] text-text-dim font-black uppercase tracking-widest leading-none">Соперник выбирает стратегию</p>
+                            <p className="text-[8px] text-text-dim font-black uppercase tracking-widest leading-none">Соперник думает</p>
                         </div>
                     </div>
                 )}
