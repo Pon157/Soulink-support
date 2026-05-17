@@ -10,12 +10,12 @@ load_dotenv()
 
 # Token from environment
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-APP_URL = 'https://t.me/soulnotifs_bot/SoulLink'
+APP_URL = os.getenv('APP_URL', 'https://supportkmbp.webtm.ru/').rstrip('/')
 if not APP_URL.startswith('http'):
     APP_URL = f"https://{APP_URL}"
 
 # Deriving API URL - ensure no double slashes or missing schemes
-API_URL = APP_URL 
+API_URL = APP_URL
 print(f"API_URL установлен: {API_URL}")
 
 # Proxy configuration
@@ -67,7 +67,7 @@ def send_welcome(message):
             return
 
     markup = telebot.types.InlineKeyboardMarkup()
-    btn = telebot.types.InlineKeyboardButton("Открыть Мини-Приложение", url=APP_URL)
+    btn = telebot.types.InlineKeyboardButton("Открыть Мини-Приложение", url='http://t.me/soulnotifs_bot/SoulLink')
     markup.add(btn)
     
     bot.reply_to(message, "Привет! Я бот SoulLink. \n\nЧтобы привязать аккаунт и получать личные уведомления, перейдите в профиль -> настройки и получите пригласительный токен.", reply_markup=markup)
