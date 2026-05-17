@@ -98,7 +98,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
     );
 
     switch (gameType) {
-      case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} serverMyColor={gameState.myColor ?? null} serverMyPlayerIndex={gameState.myPlayerIndex ?? -1} players={gameState.players} state={gameState.state} />;
+      case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} serverMyColor={gameState.myColor ?? null} serverMyPlayerIndex={gameState.myPlayerIndex ?? -1} players={gameState.players} state={gameState.state} />;
       case 'words': return <WordsGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
       case 'checkers': return <CheckersGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
       case 'seabattle': return <SeaBattleGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} onClose={onClose} />;
@@ -264,8 +264,8 @@ const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh
 //  • Отдельные состояния для хинтов (movableHighlights vs hintSquares)
 //  • DEBUG-панель в углу — показывает myColor / isMyTurn / turn
 // ─────────────────────────────────────────────────────────────────────────────
-const ChessGame = ({ sessionId, partnerName, serverMyColor, serverMyPlayerIndex, players, state }: {
-    sessionId: string, partnerName: string, serverMyColor: 'w' | 'b' | null, serverMyPlayerIndex: number, players: any[], state: any
+const ChessGame = ({ sessionId, partnerName, currentUserId, serverMyColor, serverMyPlayerIndex, players, state }: {
+    sessionId: string, partnerName: string, currentUserId: string, serverMyColor: 'w' | 'b' | null, serverMyPlayerIndex: number, players: any[], state: any
 }) => {
     // Мутабельный Chess-объект в ref — не вызывает лишних ре-рендеров
     const gameRef = useRef<any>(null);
@@ -287,10 +287,29 @@ const ChessGame = ({ sessionId, partnerName, serverMyColor, serverMyPlayerIndex,
     // Последний FEN который мы сами отправили — чтобы поллинг не откатил его
     const lastSentFen = useRef<string>('');
 
-    // ── Мой цвет — приходит с сервера (JWT надёжнее чем client-side matching) ──
-    // serverMyColor вычислен в GET /api/games/:id по req.user.userId из токена
-    const myColor = serverMyColor;
-    const myPlayerIndex = serverMyPlayerIndex;
+    // ── Мой цвет: три уровня надёжности ────────────────────────────────────────
+    // 1. serverMyColor — вычислен сервером через JWT (самый надёжный)
+    // 2. state.whiteId/blackId — хранится прямо в state JSON (новые игры)
+    // 3. state.players / players — fallback для старых игр
+    const myColor = useMemo((): 'w' | 'b' | null => {
+        // Уровень 1: сервер вернул myColor
+        if (serverMyColor) return serverMyColor;
+
+        // Уровень 2: state содержит whiteId/blackId (новые игры)
+        if (state?.whiteId && state?.blackId) {
+            if (state.whiteId === currentUserId) return 'w';
+            if (state.blackId === currentUserId) return 'b';
+            return null;
+        }
+
+        // Уровень 3: ищем в state.players или players prop
+        const src = (state?.players?.length ? state.players : players) as any[];
+        if (!src?.length) return null;
+        const idx = src.findIndex((p: any) => p?.id === currentUserId);
+        return idx === 0 ? 'w' : idx === 1 ? 'b' : null;
+    }, [serverMyColor, state?.whiteId, state?.blackId, state?.players, players, currentUserId]);
+
+    const myPlayerIndex = myColor === 'w' ? 0 : myColor === 'b' ? 1 : -1;
 
     // ── isMyTurn от сервера, не от game.turn() ────────────────────────────────
     // game.turn() = локальное состояние (может расходиться с сервером)
@@ -453,6 +472,9 @@ const ChessGame = ({ sessionId, partnerName, serverMyColor, serverMyPlayerIndex,
 
     const ChessboardAny = Chessboard as any;
 
+    // Debug: убери эту строку когда шахматы заработают
+    const _dbg = `srv=${serverMyColor ?? '?'} wId=${(state?.whiteId ?? '?').slice(-4)} bId=${(state?.blackId ?? '?').slice(-4)} me=${currentUserId.slice(-4)} → color=${myColor ?? '!'} turn=${state?.turn ?? '?'} isMyTurn=${isMyTurn}`;
+
     return (
         <div className="flex flex-col items-center gap-3 w-full">
             {/* ── Статус-бар ── */}
@@ -463,6 +485,10 @@ const ChessGame = ({ sessionId, partnerName, serverMyColor, serverMyPlayerIndex,
                 </p>
                 {isMyTurn && <span className="text-[9px] font-black text-emerald-400 uppercase animate-pulse">● Ваш ход</span>}
                 {sending && <span className="text-[9px] font-black text-accent uppercase animate-pulse">Отправка...</span>}
+            </div>
+            {/* ── Debug (убери после отладки) ── */}
+            <div className="px-3 py-1 bg-black/60 rounded-lg max-w-full overflow-x-auto">
+                <p className="text-[8px] font-mono text-yellow-400/70 whitespace-nowrap">{_dbg}</p>
             </div>
 
             {/* ── Доска ── */}
