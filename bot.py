@@ -10,7 +10,7 @@ load_dotenv()
 
 # Token from environment
 TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-APP_URL = os.getenv('APP_URL', 'https://t.me/soulnotifs_bot/SoulLink').rstrip('/')
+APP_URL = 'https://t.me/soulnotifs_bot/SoulLink'
 if not APP_URL.startswith('http'):
     APP_URL = f"https://{APP_URL}"
 
