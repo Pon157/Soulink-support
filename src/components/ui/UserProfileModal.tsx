@@ -69,14 +69,19 @@ export const UserProfileModal = ({ userId, onClose, onChat }: UserProfileModalPr
              <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
                 <div className="flex items-center gap-2 text-amber-500 mb-1">
                   <Star size={14} fill="currentColor" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Рейтинг</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">{profile.role === 'USER' ? 'Оценка' : 'Рейтинг'}</span>
                 </div>
-                <p className="text-2xl font-black italic tracking-tighter">{(profile.stats?.averageRating || 0).toFixed(1)}</p>
+                <p className="text-2xl font-black italic tracking-tighter">
+                  {profile.role === 'USER' 
+                    ? (profile.averageRatingGiven || 0).toFixed(1)
+                    : (profile.stats?.averageRating || 0).toFixed(1)
+                  }
+                </p>
              </div>
              <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
                 <div className="flex items-center gap-2 text-accent mb-1">
                   <Award size={14} />
-                  <span className="text-[10px] font-black uppercase tracking-widest">Отзывов</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">{profile.role === 'USER' ? 'Написал' : 'Получил'}</span>
                 </div>
                 <p className="text-2xl font-black italic tracking-tighter">{profile.reviewsCount || 0}</p>
              </div>
