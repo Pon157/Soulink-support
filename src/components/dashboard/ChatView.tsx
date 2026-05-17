@@ -143,7 +143,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
   useEffect(() => {
     if (chatId === 'SYSTEM') {
       setPartner({
-        nickname: 'Техподдержка Команды',
+        nickname: 'Техподдержка',
         role: 'OWNER',
         avatar: null,
         isSystem: true
@@ -260,7 +260,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
       const url = await uploadFile(file);
       await handleSend('', url, 'photo');
     } catch (e) {
-      setErrorModal('Не удалось отправить рисунок');
+      setErrorModal('Не удалось отправить рисунок :(');
     } finally {
       setUploading(false);
     }
@@ -325,7 +325,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
       setComment('');
       setReviewPhoto(null);
     } catch (e) {
-      setErrorModal('Не удалось отправить отзыв');
+      setErrorModal('Не удалось отправить отзыв :(');
     }
   };
 
@@ -409,7 +409,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
 
       <Modal isOpen={showRating} onClose={() => setShowRating(false)} title="Оцените работу">
         <div className="text-center space-y-8">
-          <p className="text-sm font-medium italic text-slate-400">Ваш отзыв поможет нам стать лучше</p>
+          <p className="text-sm font-medium italic text-slate-400">Ваш отзыв поможет нам стать лучше :3</p>
           <div className="flex justify-center gap-2">
             {[1, 2, 3, 4, 5].map((star) => (
               <button
@@ -546,7 +546,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
 
       <Modal isOpen={showTicketModal} onClose={() => setShowTicketModal(false)} title="Создать обращение">
           <div className="space-y-4">
-              <p className="text-xs text-text-dim italic text-center">Опишите вашу проблему, и технический специалист SoulLink поможет вам в ближайшее время.</p>
+              <p className="text-xs text-text-dim italic text-center">Опишите вашу проблему, и мы поможем Вам в ближайшее время.</p>
               <div className="bg-bg-primary p-6 rounded-[2.5rem] border border-slate-800 space-y-4">
                   <input 
                     value={ticketSubject}
@@ -679,7 +679,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                     {msg.mediaUrl === 'chess' ? 'Шахматная партия' : msg.mediaUrl === 'words' ? 'Битва в слова' : 'Игровая дуэль'}
                 </p>
                 <p className="text-[10px] uppercase font-black tracking-widest opacity-60">
-                    {isMe ? 'Вы отправили вызов' : 'Вас вызывают на бой!'}
+                    {isMe ? 'Вы отправили предложение сыграть' : 'Собеседник предложил сыграть'}
                 </p>
             </div>
             <button 
@@ -689,7 +689,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                     isMe ? "bg-white text-slate-900" : "bg-accent text-white"
                 )}
             >
-                {isMe ? 'Наблюдать' : 'Принять вызов'}
+                {isMe ? 'Наблюдать' : 'Принять предложение'}
             </button>
         </div>
       ) : msg.mediaType === 'voice' ? (
