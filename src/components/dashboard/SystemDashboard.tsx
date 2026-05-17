@@ -492,19 +492,65 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         </form>
       )}
 
-      {view === 'rules' && (
-        <div className="bg-bg-secondary border border-slate-800 rounded-[2.5rem] p-8 space-y-6">
-          <h3 className="text-2xl font-black text-white italic tracking-tighter">Устав SoulLink</h3>
-          <div className="space-y-4">
-            {["Строгая анонимность", "Запрет на деанон", "Этика и поддержка", "Мгновенная реакция"].map((r, i) => (
-              <div key={i} className="flex gap-4 items-center bg-bg-primary p-4 rounded-2xl border border-slate-800/50">
-                <span className="text-[10px] font-black text-accent">{i+1}</span>
-                <p className="text-sm text-text-dim italic font-medium">{r}</p>
-              </div>
-            ))}
+{view === 'rules' && (
+  <div className="bg-bg-secondary border border-slate-800 rounded-[2.5rem] p-8 space-y-6">
+    <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h3 className="text-2xl font-black text-white italic tracking-tighter">Устав & Регламент SoulLink</h3>
+        <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Редакция для администрации и специалистов</p>
+      </div>
+      <span className="text-[10px] font-black text-slate-500 bg-slate-800/40 px-3 py-1.5 rounded-full border border-slate-800">v2.5</span>
+    </div>
+
+    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+      {[
+        // --- 1. Конфиденциальность и Безопасность ---
+        { text: "Запрещено разглашение личной информации пользователей (адрес, паспортные данные, контакты).", category: "Безопасность" },
+        { text: "Строгий запрет на деанон и любую попытку деанонимизации пользователей платформы.", category: "Безопасность" },
+        { text: "Запрещено выносить скриншоты, логи или текстовое содержимое переписок за пределы рабочего пространства SoulLink.", category: "Безопасность" },
+        { text: "Администратор обязан обеспечивать безопасность своего аккаунта (2FA) и не передавать доступ третьим лицам.", category: "Безопасность" },
+
+        // --- 2. Профессиональные Границы ---
+        { text: "Строго запрещено переводить общение с пользователями на сторонние площадки (личный Telegram, Discord, соцсети).", category: "Границы" },
+        { text: "Запрещено вступать с пользователями в личные, дружеские, романтические или финансовые отношения.", category: "Границы" },
+        { text: "Запрещено принимать от пользователей подарки, материальные вознаграждения или оказывать платные услуги в обход платформы.", category: "Границы" },
+
+        // --- 3. Этика и Психологическая гигиена ---
+        { text: "Будьте этичны, эмпатичны и проявляйте стопроцентную безоценочность к любой проблеме пользователя.", category: "Этика" },
+        { text: "Запрещено давать прямые директивные советы («уходи от него», «увольняйся») — ведите пользователя к его собственному выбору.", category: "Этика" },
+        { text: "Запрещено обесценивать переживания пользователя («это глупости», «бывает хуже», «само пройдет»).", category: "Этика" },
+        { text: "Запрещено навязывать пользователям личные религиозные, политические, философские или моральные убеждения.", category: "Этика" },
+
+        // --- 4. Конфликты и Экстренные случаи ---
+        { text: "Запрещено отвечать агрессией на провокации. В случае оскорблений — делайте вежливое предупреждение строго по методичке.", category: "Конфликты" },
+        { text: "При выявлении у пользователя суицидальных намерений или селфхарм-статусов, немедленно действовать по кризисному протоколу.", category: "Кризис" },
+        { text: "Специалист обязан следить за своим ментальным состоянием и сообщать руководству о признаках сильного выгорания.", category: "Гигиена" }
+      ].map((item, i) => (
+        <div key={i} className="flex gap-4 items-start bg-bg-primary p-5 rounded-2xl border border-slate-800/50 hover:border-slate-800 transition-all group">
+          <div className="flex flex-col items-center justify-center min-w-[28px]">
+            <span className="text-[10px] font-black text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20 group-hover:bg-accent group-hover:text-black transition-colors">
+              {i + 1}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 block">
+              {item.category}
+            </span>
+            <p className="text-sm text-text-dim italic font-medium leading-relaxed">
+              {item.text}
+            </p>
           </div>
         </div>
-      )}
+      ))}
+    </div>
+
+    <div className="pt-2 border-t border-slate-800">
+      <p className="text-center text-[9px] font-black text-rose-500/80 uppercase tracking-widest">
+        ⚠️ Нарушение пунктов устава влечет за собой деавторизацию и немедленное увольнение из проекта
+      </p>
+    </div>
+  </div>
+)}
 
       {view === 'tickets' && (
         <div className="h-full flex flex-col">
