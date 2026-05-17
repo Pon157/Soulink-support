@@ -70,7 +70,7 @@ export const ReviewsView = ({ onImageClick, onProfileClick }: { onImageClick: (u
     <div className="flex-1 overflow-y-auto p-6 bg-bg-primary pb-24">
       <header className="mb-8">
         <h2 className="text-3xl font-black italic tracking-tighter text-text-main">Отзывы</h2>
-        <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1 italic">Честное мнение нашего сообщества</p>
+        <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1 italic">Честное мнение о наших администраторах</p>
       </header>
 
       <div className="flex flex-wrap gap-2 mb-6">
