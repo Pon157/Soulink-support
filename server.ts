@@ -1556,6 +1556,10 @@ app.post('/api/games/create', authenticateToken, async (req: any, res: any) => {
         else if (type === 'chess') initialState.state = { 
             fen: 'start', 
             turn: 'white',
+            // whiteId/blackId — источник истины для определения цвета.
+            // Не зависит от порядка массива players или JWT-декодирования.
+            whiteId: req.user.userId,
+            blackId: partnerId,
             players: [
                 { id: req.user.userId, nickname: req.user.nickname },
                 { id: partnerId, nickname: partnerUser.nickname }
@@ -1605,25 +1609,36 @@ app.get('/api/games/:id', authenticateToken, async (req: any, res: any) => {
         });
         if (!session) return res.status(404).json({ error: 'Game not found' });
 
-        // Определяем цвет/индекс текущего пользователя на сервере —
-        // JWT надёжнее чем currentUserId пришедший с клиента.
-        const stateAny = session.state as any;
-        const statePlayers: { id: string }[] = Array.isArray(stateAny?.players)
-            ? stateAny.players
-            : [];
+        const st = session.state as any;
+        const uid = req.user.userId;
 
-        // Ищем в state.players (они упорядочены: 0=создатель=белые, 1=партнёр=чёрные)
-        let myPlayerIndex = statePlayers.findIndex(p => p.id === req.user.userId);
+        // Определяем цвет через whiteId/blackId — прямое сравнение строк,
+        // никакого findIndex, никакой зависимости от порядка массива.
+        let myColor: 'w' | 'b' | null = null;
+        let myPlayerIndex = -1;
 
-        // Если не нашли в state.players — ищем в Prisma-релейшене (запасной вариант)
-        if (myPlayerIndex === -1) {
-            myPlayerIndex = (session.players as any[]).findIndex(
-                (p: any) => p.id === req.user.userId
-            );
+        if (st?.whiteId && st?.blackId) {
+            // Новые игры: явные поля whiteId/blackId
+            if (st.whiteId === uid)      { myColor = 'w'; myPlayerIndex = 0; }
+            else if (st.blackId === uid) { myColor = 'b'; myPlayerIndex = 1; }
+        } else {
+            // Старые игры: fallback на players[]-массив из state
+            const statePlayers: { id: string }[] = Array.isArray(st?.players) ? st.players : [];
+            const idx = statePlayers.findIndex((p: any) => p.id === uid);
+            if (idx !== -1) {
+                myColor = idx === 0 ? 'w' : 'b';
+                myPlayerIndex = idx;
+            } else {
+                // Последний fallback: Prisma relation (порядок не гарантирован, но лучше чем ничего)
+                const prismaIdx = (session.players as any[]).findIndex((p: any) => p.id === uid);
+                if (prismaIdx !== -1) {
+                    myColor = prismaIdx === 0 ? 'w' : 'b';
+                    myPlayerIndex = prismaIdx;
+                }
+            }
         }
 
-        const myColor = myPlayerIndex === 0 ? 'w' : myPlayerIndex === 1 ? 'b' : null;
-
+        console.log(`[GET /api/games/${session.id}] uid=${uid} whiteId=${st?.whiteId} blackId=${st?.blackId} → myColor=${myColor}`);
         res.json({ ...session, myColor, myPlayerIndex });
     } catch (e) {
         res.status(500).json({ error: 'Failed to fetch game' });
