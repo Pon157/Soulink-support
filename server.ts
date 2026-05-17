@@ -1674,6 +1674,39 @@ app.post('/api/games/:id/move', authenticateToken, async (req: any, res: any) =>
     }
 });
 
+// Сброс шахматной игры в начальное состояние (для старых зависших сессий)
+app.post('/api/games/:id/reset', authenticateToken, async (req: any, res: any) => {
+    try {
+        const session = await prisma.gameSession.findUnique({
+            where: { id: req.params.id },
+            select: { state: true, players: { select: { id: true } } }
+        });
+        if (!session) return res.status(404).json({ error: 'Not found' });
+
+        // Убеждаемся что пользователь — участник игры
+        const isPlayer = (session.players as any[]).some((p: any) => p.id === req.user.userId);
+        if (!isPlayer) return res.status(403).json({ error: 'Not a player' });
+
+        const st = session.state as any;
+        const updated = await prisma.gameSession.update({
+            where: { id: req.params.id },
+            data: {
+                state: {
+                    ...st,
+                    fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+                    turn: 'white',
+                },
+                history: []
+            }
+        });
+        console.log(`[RESET] Game ${req.params.id} reset by ${req.user.userId}`);
+        res.json(updated);
+    } catch (e) {
+        console.error('Game reset error:', e);
+        res.status(500).json({ error: 'Failed to reset game' });
+    }
+});
+
 // Moderation API
 app.post('/api/moderation/warn', authenticateToken, async (req: any, res: any) => {
     const { targetUserId, reason } = req.body;
