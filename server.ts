@@ -1603,7 +1603,28 @@ app.get('/api/games/:id', authenticateToken, async (req: any, res: any) => {
             where: { id: req.params.id },
             include: { players: { select: { id: true, nickname: true, avatar: true } } }
         });
-        res.json(session);
+        if (!session) return res.status(404).json({ error: 'Game not found' });
+
+        // Определяем цвет/индекс текущего пользователя на сервере —
+        // JWT надёжнее чем currentUserId пришедший с клиента.
+        const stateAny = session.state as any;
+        const statePlayers: { id: string }[] = Array.isArray(stateAny?.players)
+            ? stateAny.players
+            : [];
+
+        // Ищем в state.players (они упорядочены: 0=создатель=белые, 1=партнёр=чёрные)
+        let myPlayerIndex = statePlayers.findIndex(p => p.id === req.user.userId);
+
+        // Если не нашли в state.players — ищем в Prisma-релейшене (запасной вариант)
+        if (myPlayerIndex === -1) {
+            myPlayerIndex = (session.players as any[]).findIndex(
+                (p: any) => p.id === req.user.userId
+            );
+        }
+
+        const myColor = myPlayerIndex === 0 ? 'w' : myPlayerIndex === 1 ? 'b' : null;
+
+        res.json({ ...session, myColor, myPlayerIndex });
     } catch (e) {
         res.status(500).json({ error: 'Failed to fetch game' });
     }
