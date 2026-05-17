@@ -19,6 +19,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
   const [showPaint, setShowPaint] = useState(false);
   const [passwords, setPasswords] = useState({ old: '', new: '' });
   const [stats, setStats] = useState<any>(null);
+  const [profileData, setProfileData] = useState<any>(null);
   const [botToken, setBotToken] = useState<string | null>(null);
   const [loadingToken, setLoadingToken] = useState(false);
 
@@ -40,6 +41,7 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       try {
         const res = await apiFetch(`/api/users/profile/${user.id}`);
         const data = await res.json();
+        setProfileData(data);
         setStats(data.stats);
       } catch (e) {
         console.error(e);
@@ -334,12 +336,12 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
                 <>
                 <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
                     <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Оставлено отзывов</p>
-                    <p className="text-2xl font-black italic mt-1">{user.givenReviewsCount || 0}</p>
+                    <p className="text-2xl font-black italic mt-1">{profileData?.reviewsCount || 0}</p>
                 </div>
                 <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
                     <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Средний балл</p>
                     <div className="flex items-center gap-1.5 mt-1 text-amber-500">
-                        <span className="text-2xl font-black italic">{user.averageRatingGiven?.toFixed(1) || '0.0'}</span>
+                        <span className="text-2xl font-black italic">{(profileData?.averageRatingGiven || 0).toFixed(1)}</span>
                         <Star size={16} fill="currentColor" />
                     </div>
                 </div>
@@ -347,15 +349,15 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
             ) : (
                 <>
                 <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
-                    <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Сообщений</p>
-                    <p className="text-2xl font-black italic mt-1">{stats?.messagesSent || 0}</p>
-                </div>
-                <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
                     <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Рейтинг</p>
                     <div className="flex items-center gap-1.5 mt-1 text-amber-500">
-                        <span className="text-2xl font-black italic">{stats?.averageRating?.toFixed(1) || '0.0'}</span>
+                        <span className="text-2xl font-black italic">{(stats?.averageRating || 0).toFixed(1)}</span>
                         <Star size={16} fill="currentColor" />
                     </div>
+                </div>
+                <div className="bg-bg-secondary p-4 rounded-3xl border border-slate-800/50">
+                    <p className="text-[9px] text-text-dim font-black uppercase tracking-widest">Отзывов получено</p>
+                    <p className="text-2xl font-black italic mt-1">{profileData?.reviewsCount || 0}</p>
                 </div>
                 </>
             )}
