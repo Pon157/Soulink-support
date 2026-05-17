@@ -715,10 +715,13 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
                         const blob = await mediaRes.blob();
                         formData.append('photo', blob, 'media.jpg');
                     } else {
-                        formData.append('photo', mediaUrl);
+                        // If download fails, we strictly avoid sending the URL as photo to avoid exposure
+                        // We will instead let it fall back to sendMessage in the outer catch/check
+                        throw new Error('Media download failed');
                     }
                 } catch (fetchErr) {
-                    formData.append('photo', mediaUrl);
+                    // Re-throw so it goes to fallback or next attempt
+                    throw fetchErr;
                 }
 
                 response = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
@@ -746,7 +749,7 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
                 if (err.description?.includes('can\'t parse entities') || (mediaUrl && !err.ok)) {
                      const fallbackBody = {
                         chat_id: recipient.telegramId,
-                        text: (mediaUrl ? '[🖼 МЕДИА]\n' : '') + text.replace(/<[^>]*>/g, '') + (mediaUrl ? `\n\n🔗 ${mediaUrl}` : ''), 
+                        text: (mediaUrl ? '[🖼 МЕДИА]\n' : '') + text.replace(/<[^>]*>/g, ''), 
                      };
                      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                         method: 'POST',
