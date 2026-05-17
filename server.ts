@@ -998,15 +998,9 @@ app.get('/api/chats', authenticateToken, async (req: any, res: any) => {
 
     // Add Tickets
     const tickets = await prisma.ticket.findMany({
-        where: req.user.role === 'USER' 
-            ? { userId, status: 'open' } 
-            : { 
-                OR: [
-                    { managerId: userId },
-                    { managerId: null }
-                ],
-                status: 'open'
-            },
+        where: req.user.role === 'USER'
+            ? { userId, status: 'open' }         // Пользователь видит только свои тикеты
+            : { managerId: userId, status: 'open' }, // Стафф видит только назначенные на него
         include: { messages: { orderBy: { createdAt: 'desc' }, take: 1 }, user: true },
         orderBy: { updatedAt: 'desc' }
     });
@@ -1056,12 +1050,17 @@ app.get('/api/messages/:otherId', authenticateToken, async (req: any, res: any) 
   try {
     if (otherId.startsWith('TICKET_')) {
         const ticketId = otherId.split('_')[1];
+        // Проверяем что пользователь — владелец тикета или стафф
+        const ticket = await prisma.ticket.findUnique({ where: { id: ticketId }, select: { userId: true } });
+        if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+        const isStaff = ['ADMIN', 'CURATOR', 'OWNER'].includes(req.user.role);
+        if (!isStaff && ticket.userId !== userId) return res.status(403).json({ error: 'Forbidden' });
+
         const messages = await prisma.ticketMessage.findMany({
             where: { ticketId },
             orderBy: { createdAt: 'asc' },
             include: { sender: { select: { nickname: true, avatar: true, role: true } } }
         });
-        // Map to standard message format
         return res.json(messages.map(m => ({
             id: m.id,
             content: m.content,
