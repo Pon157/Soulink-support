@@ -217,8 +217,8 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
 
       <header className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-black text-text-main italic tracking-tighter uppercase">Nexus</h1>
-          <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Доступ: {role}</p>
+          <h1 className="text-3xl font-black text-text-main italic tracking-tighter uppercase">Админ-панель</h1>
+          <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Твой уровень доступа: {role}</p>
         </div>
         {role === 'OWNER' && view === 'staff' && (
           <button onClick={() => setShowAddStaff(true)} className="w-12 h-12 bg-accent rounded-2xl flex items-center justify-center text-white"><Plus size={24} /></button>
