@@ -484,7 +484,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                         ) : (
                             <>
                                 <div className="w-1.5 h-1.5 rounded-full bg-slate-500" />
-                                <span className="text-[9px] text-text-dim font-black uppercase tracking-widest">был {partner?.lastSeen ? new Date(partner.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'давно'}</span>
+                                <span className="text-[9px] text-text-dim font-black uppercase tracking-widest">был(а) {partner?.lastSeen ? new Date(partner.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'недавно'}</span>
                             </>
                         )
                     )}
