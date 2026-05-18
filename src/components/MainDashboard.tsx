@@ -68,7 +68,7 @@ export const MainDashboard = ({ user, setUser, onLogout }: { user: any, setUser:
       <div className="flex flex-col w-full h-full bg-bg-primary text-text-main overflow-hidden dashboard-container relative" style={mainStyle}>
         <div className="h-1 bg-gradient-to-r from-accent via-indigo-500 to-emerald-500 w-full shrink-0" />
 
-        <div className={cn("flex-1 flex flex-col overflow-hidden relative", !isFullScreen && "pb-24")}>
+        <div className={cn("flex-1 flex flex-col overflow-hidden relative", !isFullScreen && "pb-28 md:pb-32")}>
           <Outlet context={{ setPreviewImage, setSelectedProfile, totalUnread }} />
         </div>
 
