@@ -44,7 +44,7 @@ export const ChatList = ({ onSelectChat, user }: { onSelectChat: (id: string) =>
   if (loading && chats.length === 0) return <div className="p-12 text-center text-text-dim font-black uppercase text-[10px] tracking-widest animate-pulse">Загрузка диалогов...</div>;
 
   return (
-    <div className="flex-1 overflow-y-auto pb-24 bg-bg-primary">
+    <div className="flex-1 overflow-y-auto bg-bg-primary">
       <div className="p-6 flex items-center justify-between sticky top-0 bg-bg-primary/80 backdrop-blur-md z-10">
         <div>
           <h2 className="text-2xl font-black text-text-main tracking-tight italic">Чаты</h2>
