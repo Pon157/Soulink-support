@@ -9,6 +9,7 @@ import { ChatView } from './ChatView';
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandChat: (id: string) => void }) => {
+  const currentUserId = user?.id;
   const navigate = useNavigate();
   const { '*': tabPath } = useParams();
   const rawView = tabPath || 'stats';
@@ -185,7 +186,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
   ].filter(t => (!t.ownerOnly || role === 'OWNER') && (!t.curatorOnly || role === 'CURATOR' || role === 'OWNER'));
 
   return (
-    <div className="flex-1 overflow-y-auto pb-40 bg-bg-primary p-4 md:p-6 lg:p-8">
+    <div className="flex-1 overflow-y-auto bg-bg-primary p-4 md:p-6 lg:p-8">
       {/* ... existing modals ... */}
       <Modal isOpen={showAddStaff} onClose={() => setShowAddStaff(false)} title="Новый сотрудник">
         <form onSubmit={handleAddStaff} className="space-y-4">
@@ -376,7 +377,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
                                   <span>Дедлайн: {new Date(t.deadline).toLocaleDateString()}</span>
                               </div>
                           )}
-                          {t.assigneeId === user.id && t.status !== 'completed' && (
+                          {t.assigneeId === currentUserId && t.status !== 'completed' && (
                               <button onClick={() => handleUpdateTaskStatus(t.id, 'completed')} className="w-full py-4 bg-emerald-600 rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">Завершить задание</button>
                           )}
                       </div>
