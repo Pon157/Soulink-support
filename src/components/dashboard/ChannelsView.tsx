@@ -41,7 +41,7 @@ const ChannelList = ({ onImageClick, onProfileClick }: { onImageClick: (url: str
   }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 bg-bg-primary">
+    <div className="flex-1 overflow-y-auto p-6 pb-32 bg-bg-primary">
         <header className="mb-0.5">
             <h2 className="text-3xl font-black italic tracking-tighter text-text-main">Каналы</h2>
             <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Контент от наших администраторов :3</p>
@@ -70,7 +70,10 @@ const ChannelList = ({ onImageClick, onProfileClick }: { onImageClick: (url: str
                         </div>
                         <div>
                             <p className="font-black italic tracking-tight text-text-main">{ch.name}</p>
-                            <p className="text-[9px] text-text-dim uppercase font-bold tracking-widest">{ch._count?.subscribers || 0} подп. • {ch._count?.posts || 0} пост.</p>
+                            <div className="flex items-center gap-2">
+                                <p className="text-[9px] text-text-dim uppercase font-bold tracking-widest">{ch._count?.subscribers || 0} подп. • {ch._count?.posts || 0} пост.</p>
+                                {ch.isSubscribed && <span className="text-[7px] bg-accent/20 text-accent px-1.5 py-0.5 rounded-full font-black uppercase tracking-tighter">Подписан</span>}
+                            </div>
                         </div>
                     </div>
                     <ChevronRight size={20} className="text-text-dim group-hover:text-accent transition-colors" />
@@ -117,6 +120,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
     const [tgAllowedChats, setTgAllowedChats] = useState<string[]>(user.tgAllowedChats || []);
 
     const [showPostModal, setShowPostModal] = useState(false);
+    const [editingPost, setEditingPost] = useState<any>(null);
     const [showEditChannelModal, setShowEditChannelModal] = useState(false);
     const [editedChannel, setEditedChannel] = useState({ name: channel.name, description: channel.description, avatar: channel.avatar, banner: channel.banner });
     const [selectedPostForComments, setSelectedPostForComments] = useState<any>(null);
@@ -171,11 +175,19 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
     const handleCreatePost = async () => {
         if (!newPost.content) return;
         try {
-            await apiFetch('/api/posts', {
-                method: 'POST',
-                body: JSON.stringify({ ...newPost, channelId: channel.id })
-            });
+            if (editingPost) {
+                await apiFetch(`/api/posts/${editingPost.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(newPost)
+                });
+            } else {
+                await apiFetch('/api/posts', {
+                    method: 'POST',
+                    body: JSON.stringify({ ...newPost, channelId: channel.id })
+                });
+            }
             setShowPostModal(false);
+            setEditingPost(null);
             setNewPost({ content: '', mediaUrl: '' });
             fetchPosts();
             onUpdate();
@@ -248,6 +260,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
             const res = await apiFetch(`/api/channels/subscribe/${channel.id}`, { method: 'POST' });
             const data = await res.json();
             setIsSubscribed(!data.unsubscribed);
+            onUpdate(); // Refresh counts immediately
         } catch (e) {
             console.error(e);
         }
@@ -326,7 +339,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                 </div>
             </div>
 
-            <Modal isOpen={showPostModal} onClose={() => setShowPostModal(false)} title="Новая публикация">
+            <Modal isOpen={showPostModal} onClose={() => { setShowPostModal(false); setEditingPost(null); setNewPost({ content: '', mediaUrl: '' }); }} title={editingPost ? "Редактировать пост" : "Новая публикация"}>
                  <div className="space-y-4">
                     <textarea 
                         value={newPost.content}
@@ -342,7 +355,9 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                         </label>
                         {uploading && <Loader2 size={20} className="animate-spin text-accent" />}
                     </div>
-                    <button onClick={handleCreatePost} disabled={!newPost.content || uploading} className="w-full bg-accent text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest disabled:opacity-50">Опубликовать</button>
+                    <button onClick={handleCreatePost} disabled={!newPost.content || uploading} className="w-full bg-accent text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest disabled:opacity-50">
+                        {editingPost ? 'Сохранить изменения' : 'Опубликовать'}
+                    </button>
                  </div>
             </Modal>
 
@@ -420,7 +435,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                 </div>
             </Modal>
 
-            <div className="flex-1 overflow-y-auto p-8 space-y-6">
+            <div className="flex-1 overflow-y-auto p-8 pt-4 pb-32 space-y-6">
                 <div className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50">
                     <p className="text-sm italic text-text-dim italic leading-relaxed">{channel.description || 'Обзоры, новости и полезные советы от администрации SoulLink.'}</p>
                 </div>
@@ -429,10 +444,27 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                     <h4 className="text-xs font-black uppercase tracking-[0.3em] text-text-dim px-2">Последние посты</h4>
                     {posts.map(post => (
                         <div key={post.id} className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50 space-y-4 group">
-                            <div className="flex justify-between items-start">
-                                <p className="text-sm font-medium italic text-text-main leading-relaxed">{post.content}</p>
-                                {isOwner && <button onClick={() => handleDeletePost(post.id)} className="p-2 text-text-dim hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash size={18} /></button>}
+                            <div className="flex justify-between items-start gap-2">
+                                <p className="text-sm font-medium italic text-text-main leading-relaxed flex-1">{post.content}</p>
+                                {isOwner && (
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity translate-y-1">
+                                        <button 
+                                            onClick={() => {
+                                                setEditingPost(post);
+                                                setNewPost({ content: post.content, mediaUrl: post.mediaUrl || '' });
+                                                setShowPostModal(true);
+                                            }} 
+                                            className="p-2 text-text-dim hover:text-accent transition-colors"
+                                        >
+                                            <Edit3 size={16} />
+                                        </button>
+                                        <button onClick={() => handleDeletePost(post.id)} className="p-2 text-text-dim hover:text-rose-500 transition-colors">
+                                            <Trash size={16} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
+
                             {post.mediaUrl && <img src={post.mediaUrl} className="rounded-3xl w-full border border-slate-800 cursor-zoom-in" onClick={() => onImageClick(post.mediaUrl)} />}
                             <div className="flex items-center justify-between pt-4 border-t border-slate-800/50">
                                 <div className="flex gap-4">
