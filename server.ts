@@ -2033,7 +2033,7 @@ app.get('/api/channels', authenticateToken, async (req: any, res: any) => {
         });
         
         // Add isSubscribed flag
-        const userSubscriptions = await prisma.subscriber.findMany({
+        const userSubscriptions = await prisma.subscription.findMany({
             where: { userId: req.user.userId },
             select: { channelId: true }
         });
@@ -2059,11 +2059,26 @@ app.get('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
         });
         if (!channel) return res.status(404).json({ error: 'Channel not found' });
         
-        const subscription = await prisma.subscriber.findFirst({
+        const subscription = await prisma.subscription.findFirst({
             where: { channelId: req.params.id, userId: req.user.userId }
         });
         
         res.json({ ...channel, isSubscribed: !!subscription });
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.get('/api/posts', authenticateToken, async (req: any, res: any) => {
+    const { channelId } = req.query;
+    try {
+        const posts = await prisma.post.findMany({
+            where: channelId ? { channelId: channelId as string } : {},
+            orderBy: { createdAt: 'desc' },
+            include: { 
+                _count: { select: { comments: true, reactions: true } },
+                reactions: { where: { userId: req.user.userId } }
+            }
+        });
+        res.json(posts);
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
