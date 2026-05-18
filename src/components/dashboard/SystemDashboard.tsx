@@ -185,7 +185,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
   ].filter(t => (!t.ownerOnly || role === 'OWNER') && (!t.curatorOnly || role === 'CURATOR' || role === 'OWNER'));
 
   return (
-    <div className="flex-1 overflow-y-auto pb-24 bg-bg-primary p-4 md:p-6 lg:p-8">
+    <div className="flex-1 overflow-y-auto pb-40 bg-bg-primary p-4 md:p-6 lg:p-8">
       {/* ... existing modals ... */}
       <Modal isOpen={showAddStaff} onClose={() => setShowAddStaff(false)} title="Новый сотрудник">
         <form onSubmit={handleAddStaff} className="space-y-4">
