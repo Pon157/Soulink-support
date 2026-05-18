@@ -68,8 +68,8 @@ export const MainDashboard = ({ user, setUser, onLogout }: { user: any, setUser:
       <div className="flex flex-col w-full h-full bg-bg-primary text-text-main overflow-hidden dashboard-container relative" style={mainStyle}>
         <div className="h-1 bg-gradient-to-r from-accent via-indigo-500 to-emerald-500 w-full shrink-0" />
 
-        <div className="flex-1 flex flex-col overflow-hidden relative">
-            <Outlet context={{ setPreviewImage, setSelectedProfile, totalUnread }} />
+        <div className={cn("flex-1 flex flex-col overflow-hidden relative", !isFullScreen && "pb-24")}>
+          <Outlet context={{ setPreviewImage, setSelectedProfile, totalUnread }} />
         </div>
 
         {!isFullScreen && (
@@ -93,11 +93,19 @@ export const MainDashboard = ({ user, setUser, onLogout }: { user: any, setUser:
           )}
         </AnimatePresence>
 
-        <UserProfileModal 
-          userId={selectedProfile} 
-          onClose={() => setSelectedProfile(null)} 
-          onChat={(id) => { navigate(`/chats/${id}`); setSelectedProfile(null); }}
-        />
+        <AnimatePresence>
+          {selectedProfile && (
+            <UserProfileModal 
+              userId={selectedProfile} 
+              currentUserId={user.id}
+              onClose={() => setSelectedProfile(null)} 
+              onChat={(id) => {
+                navigate(`/chats/${id}`);
+                setSelectedProfile(null);
+              }}
+            />
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );
