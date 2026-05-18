@@ -1472,8 +1472,7 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
                     if (wantsNotify) {
                         let msg = `<b>📢 НОВЫЙ ПОСТ: ${escapedName}</b>\n\n`;
                         msg += `${escapedContent.substring(0, 300)}${postContent.length > 300 ? '...' : ''}\n\n`;
-                        // Ссылка заменена на статичную
-                        msg += `<a href="https://t.me/soulnotifs_bot/SoulLink">Открыть канал</a>`;
+                        msg += `<a href="${process.env.APP_URL || '#'}">Открыть канал</a>`;
                         
                         await sendTGNotification(sub.user.id, msg, channelSourceId, mediaUrl || undefined);
                     }
@@ -1487,8 +1486,7 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
         // console.error('Channel notify failed', e);
     }
 
-    // Уведомление внешнего бота с использованием той же ссылки
-    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\n${mediaUrl ? '🖼 [Media Included]\n' : ''}Content: ${(content || '').substring(0, 50)}${(content || '').length > 50 ? '...' : ''}\n<a href="https://t.me/soulnotifs_bot/SoulLink">Открыть приложение</a>`);
+    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\n${mediaUrl ? '🖼 [Media Included]\n' : ''}Content: ${(content || '').substring(0, 50)}${(content || '').length > 50 ? '...' : ''}\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`);
 
     res.json(post);
   } catch (e) {
@@ -1554,13 +1552,28 @@ app.post('/api/games/create', authenticateToken, async (req: any, res: any) => {
                  ]
              };
         }
-        else if (type === 'chess') initialState.state = { 
-            fen: 'start', 
-            turn: 'white',
-            // whiteId/blackId — источник истины для определения цвета.
-            // Не зависит от порядка массива players или JWT-декодирования.
-            whiteId: req.user.userId,
-            blackId: partnerId,
+        else if (type === 'tictactoe') initialState.state = {
+            // board: 9 ячеек, null | 'X' | 'O'
+            board: Array(9).fill(null),
+            turn: req.user.userId,   // создатель ходит первым (X)
+            xId: req.user.userId,
+            oId: partnerId,
+            winner: null,
+            players: [
+                { id: req.user.userId, nickname: req.user.nickname },
+                { id: partnerId, nickname: partnerUser.nickname }
+            ]
+        };
+        else if (type === 'hangman') initialState.state = {
+            // Создатель загадывает слово, партнёр угадывает
+            phase: 'waiting_word',   // waiting_word → guessing → finished
+            word: null,              // зашифрованное слово (null до момента загадки)
+            guessed: [],             // угаданные буквы
+            mistakes: 0,
+            maxMistakes: 6,
+            masterId: req.user.userId,  // кто загадывает
+            guessingId: partnerId,      // кто угадывает
+            winner: null,
             players: [
                 { id: req.user.userId, nickname: req.user.nickname },
                 { id: partnerId, nickname: partnerUser.nickname }
