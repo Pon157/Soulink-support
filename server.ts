@@ -183,9 +183,15 @@ app.get('/api/staff/subordinates', authenticateToken, async (req: any, res: any)
     try {
         const subordinates = await prisma.user.findMany({
             where: { managedById: req.user.userId },
-            include: { stats: true }
+            include: { 
+                stats: true,
+                _count: { select: { reviews: true } }
+            }
         });
-        res.json(subordinates);
+        res.json(subordinates.map(s => ({
+            ...s,
+            reviewsCount: s._count.reviews
+        })));
     } catch (e) {
         res.status(500).json({ error: 'Failed' });
     }
@@ -804,7 +810,7 @@ async function sendTGNotification(recipientId: string, text: string, sourceId: s
     return executeRequest();
 }
 
-async function notifyExternalBot(message: string) {
+async function notifyExternalBot(message: string, mediaUrl?: string) {
     const token = process.env.TELEGRAM_BOT_TOKEN;
     const adminChatId = "-1002334814885"; // Admin group
     if (!token) return;
@@ -815,23 +821,50 @@ async function notifyExternalBot(message: string) {
     const executeRequest = async () => {
         try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 15000);
+            const timeout = setTimeout(() => controller.abort(), 20000);
 
-            const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: adminChatId,
-                    text: message,
-                    parse_mode: 'HTML'
-                }),
-                signal: controller.signal,
-                keepalive: true
-            });
+            let response;
+            if (mediaUrl) {
+                const formData = new FormData();
+                formData.append('chat_id', adminChatId);
+                formData.append('parse_mode', 'HTML');
+                formData.append('caption', message);
+                
+                try {
+                    const mediaRes = await fetch(mediaUrl, { signal: AbortSignal.timeout(10000) });
+                    if (mediaRes.ok) {
+                        const blob = await mediaRes.blob();
+                        formData.append('photo', blob, 'media.jpg');
+                    } else {
+                        throw new Error('Media download failed');
+                    }
+                } catch (e) {
+                    throw e;
+                }
+
+                response = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal
+                });
+            } else {
+                response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: adminChatId,
+                        text: message,
+                        parse_mode: 'HTML'
+                    }),
+                    signal: controller.signal,
+                    keepalive: true
+                });
+            }
+            
             clearTimeout(timeout);
 
-            if (!res.ok) {
-                const err = await res.json();
+            if (!response.ok) {
+                const err = await response.json();
                 if (err.description?.includes('can\'t parse entities')) {
                      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                         method: 'POST',
@@ -1189,9 +1222,15 @@ app.get('/api/staff', authenticateToken, async (req: any, res: any) => {
   try {
     const admins = await prisma.user.findMany({
       where: { OR: [{ role: 'ADMIN' }, { role: 'CURATOR' }, { role: 'OWNER' }] },
-      include: { stats: true },
+      include: { 
+        stats: true,
+        _count: { select: { reviews: true } }
+      },
     });
-    res.json(admins);
+    res.json(admins.map(a => ({
+        ...a,
+        reviewsCount: a._count.reviews
+    })));
   } catch {
     res.status(500).json({ error: 'Failed' });
   }
@@ -1486,7 +1525,7 @@ app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
         // console.error('Channel notify failed', e);
     }
 
-    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\n${mediaUrl ? '🖼 [Media Included]\n' : ''}Content: ${(content || '').substring(0, 50)}${(content || '').length > 50 ? '...' : ''}\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`);
+    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\nContent: ${(content || '').substring(0, 200)}${(content || '').length > 200 ? '...' : ''}\n\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`, mediaUrl || undefined);
 
     res.json(post);
   } catch (e) {
