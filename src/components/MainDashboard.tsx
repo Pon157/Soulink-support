@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate, useLocation, useParams, Routes, Route, Navigate } from 'react-router-dom';
 import { 
   MessageSquare, Users, Settings, LayoutDashboard, Search, 
   Menu, X, Bell, LogOut, Shield, Heart, Plus, Mic, Star, 
@@ -14,6 +15,7 @@ import { ChannelsView } from './dashboard/ChannelsView';
 import { ReviewsView } from './dashboard/ReviewsView';
 import { UserProfileModal } from './ui/UserProfileModal';
 import { UserAvatar } from './ui/UserAvatar';
+import { GameLauncher } from './games/GameLauncher';
 
 // --- TYPES ---
 type Role = 'USER' | 'ADMIN' | 'CURATOR' | 'OWNER';
@@ -34,12 +36,35 @@ const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLogout: () => void }) => {
   const [user, setUser] = useState<User>(initialUser);
-  const [activeTab, setActiveTab] = useState('chats');
-  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
+
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-
   const [totalUnread, setTotalUnread] = useState(0);
+
+  // Derive active tab from path
+  const activeTab = useMemo(() => {
+    const path = location.pathname;
+    if (path.startsWith('/chats')) return 'chats';
+    if (path.startsWith('/reviews')) return 'reviews';
+    if (path.startsWith('/channels')) return 'channels';
+    if (path.startsWith('/system')) return 'system';
+    if (path.startsWith('/settings')) return 'settings';
+    return 'chats';
+  }, [location.pathname]);
+
+  // Handle chatId from URL
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  useEffect(() => {
+    const chatMatch = location.pathname.match(/\/chats\/([^/]+)/);
+    if (chatMatch) {
+      setSelectedChat(chatMatch[1]);
+    } else {
+      setSelectedChat(null);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (user?.theme) {
@@ -75,54 +100,102 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
       <div className="flex flex-col w-full h-full bg-bg-primary text-text-main overflow-hidden dashboard-container relative" style={mainStyle}>
         <div className="h-1 bg-gradient-to-r from-accent via-indigo-500 to-emerald-500 w-full shrink-0" />
 
-        <AnimatePresence mode="wait">
-          <motion.div 
-            key={activeTab}
-            initial={{ opacity: 0, x: 10 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -10 }}
-            transition={{ duration: 0.3, ease: 'circOut' }}
-            className="flex-1 flex flex-col overflow-hidden dashboard-tab-content"
-          >
-          {activeTab === 'chats' && (
-             <ChatList onSelectChat={(id) => setSelectedChat(id)} user={user} />
-          )}
-          {activeTab === 'reviews' && (
-             <ReviewsView onImageClick={setPreviewImage} onProfileClick={setSelectedProfile} />
-          )}
-          {activeTab === 'channels' && (
-             <ChannelsView user={user} onImageClick={setPreviewImage} onProfileClick={setSelectedProfile} />
-          )}
-          {activeTab === 'system' && (user.role !== 'USER') && (
-            <SystemDashboard user={user} onExpandChat={setSelectedChat} />
-          )}
-          {activeTab === 'settings' && (
-            <SettingsView user={user} setUser={setUser} onLogout={onLogout} />
-          )}
-        </motion.div>
-      </AnimatePresence>
+        <Routes>
+          <Route path="/" element={<Navigate to="/chats" replace />} />
+          
+          <Route path="/chats/*" element={
+            <motion.div 
+              key="chats"
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.3 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <ChatList onSelectChat={(id) => navigate(`/chats/${id}`)} user={user} />
+            </motion.div>
+          } />
 
-      {!selectedChat && <Navbar activeTab={activeTab} onTabChange={setActiveTab} role={user.role} unreadCount={totalUnread} />}
+          <Route path="/reviews" element={
+            <motion.div 
+              key="reviews"
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.3 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <ReviewsView onImageClick={setPreviewImage} onProfileClick={setSelectedProfile} />
+            </motion.div>
+          } />
 
-      <AnimatePresence>
-        {selectedChat && (
-          <motion.div 
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-50 bg-bg-primary"
-          >
-            <ChatView 
-              chatId={selectedChat} 
-              onBack={() => setSelectedChat(null)} 
-              onImageClick={(url) => setPreviewImage(url)} 
-              currentUser={user}
-              wallpaper={user.wallpaper}
-            />
-          </motion.div>
+          <Route path="/channels/*" element={
+            <motion.div 
+              key="channels"
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.3 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <ChannelsView user={user} onImageClick={setPreviewImage} onProfileClick={setSelectedProfile} />
+            </motion.div>
+          } />
+
+          <Route path="/system" element={
+            (user.role !== 'USER') ? (
+              <motion.div 
+                key="system"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.3 }}
+                className="flex-1 flex flex-col overflow-hidden"
+              >
+                <SystemDashboard user={user} onExpandChat={(id) => navigate(`/chats/${id}`)} />
+              </motion.div>
+            ) : <Navigate to="/chats" replace />
+          } />
+
+          <Route path="/settings" element={
+            <motion.div 
+              key="settings"
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -10 }}
+              transition={{ duration: 0.3 }}
+              className="flex-1 flex flex-col overflow-hidden"
+            >
+              <SettingsView user={user} setUser={setUser} onLogout={onLogout} />
+            </motion.div>
+          } />
+
+          <Route path="/games/:sessionId" element={<GameRoute user={user} onBack={() => navigate(-1)} />} />
+        </Routes>
+
+        {!selectedChat && !location.pathname.startsWith('/games/') && (
+          <Navbar activeTab={activeTab} onTabChange={(tab) => navigate(`/${tab}`)} role={user.role} unreadCount={totalUnread} />
         )}
-      </AnimatePresence>
+
+        <AnimatePresence>
+          {selectedChat && (
+            <motion.div 
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-0 z-50 bg-bg-primary"
+            >
+              <ChatView 
+                chatId={selectedChat} 
+                onBack={() => navigate('/chats')} 
+                onImageClick={(url) => setPreviewImage(url)} 
+                currentUser={user}
+                wallpaper={user.wallpaper}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       {previewImage && (
         <div 
@@ -142,11 +215,31 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
       <UserProfileModal 
         userId={selectedProfile} 
         onClose={() => setSelectedProfile(null)} 
-        onChat={(id) => { setSelectedChat(id); setActiveTab('chats'); }}
+        onChat={(id) => { navigate(`/chats/${id}`); }}
       />
       </div>
     </div>
   );
+};
+
+const GameRoute = ({ user, onBack }: { user: any, onBack: () => void }) => {
+    const { sessionId } = useParams();
+    const location = useLocation();
+    const query = new URLSearchParams(location.search);
+    const type = query.get('type') || 'tictactoe';
+    const partner = query.get('partner') || 'Оппонент';
+
+    return (
+        <div className="fixed inset-0 z-[70] bg-bg-primary">
+            <GameLauncher 
+                gameType={type as any} 
+                sessionId={sessionId!} 
+                currentUserId={user.id} 
+                partnerName={partner}
+                onClose={onBack} 
+            />
+        </div>
+    );
 };
 
 // --- CHATLIST COMPONENT ---
