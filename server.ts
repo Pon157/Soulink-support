@@ -2022,6 +2022,91 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
   }
 });
 
+// Channels & Posts
+app.get('/api/channels', authenticateToken, async (req: any, res: any) => {
+    try {
+        const channels = await prisma.channel.findMany({
+            include: { 
+                owner: { select: { nickname: true, avatar: true } },
+                _count: { select: { posts: true } }
+            }
+        });
+        res.json(channels);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.get('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
+    try {
+        const channel = await prisma.channel.findUnique({
+            where: { id: req.params.id },
+            include: { owner: { select: { nickname: true, avatar: true } } }
+        });
+        if (!channel) return res.status(404).json({ error: 'Channel not found' });
+        res.json(channel);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.get('/api/channels/:id/posts', authenticateToken, async (req: any, res: any) => {
+    try {
+        const posts = await prisma.post.findMany({
+            where: { channelId: req.params.id },
+            orderBy: { createdAt: 'desc' },
+            include: { _count: { select: { comments: true } } }
+        });
+        res.json(posts);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/channels/:id/posts', authenticateToken, async (req: any, res: any) => {
+    const { content, mediaUrl, mediaType } = req.body;
+    try {
+        const channel = await prisma.channel.findUnique({ where: { id: req.params.id } });
+        if (!channel || (channel.ownerId !== req.user.userId && req.user.role !== 'OWNER')) {
+            return res.status(403).json({ error: 'Only channel owner or system can post' });
+        }
+        const post = await prisma.post.create({
+            data: {
+                content,
+                mediaUrl,
+                mediaType: mediaType || 'text',
+                channelId: req.params.id
+            }
+        });
+        
+        // Notify fans (optional logic could be here)
+        notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\nContent: ${(content || '').substring(0, 200)}${(content || '').length > 200 ? '...' : ''}\n\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`, mediaUrl || undefined);
+        
+        res.json(post);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.get('/api/posts/:id/comments', authenticateToken, async (req: any, res: any) => {
+    try {
+        const comments = await prisma.postComment.findMany({
+            where: { postId: req.params.id },
+            include: { user: { select: { nickname: true, avatar: true } } },
+            orderBy: { createdAt: 'asc' }
+        });
+        res.json(comments);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.post('/api/posts/:id/comments', authenticateToken, async (req: any, res: any) => {
+    const { content, replyToId } = req.body;
+    try {
+        const comment = await prisma.postComment.create({
+            data: {
+                content,
+                postId: req.params.id,
+                userId: req.user.userId,
+                replyToId
+            },
+            include: { user: { select: { nickname: true, avatar: true } } }
+        });
+        res.json(comment);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
 // All reviews
 app.get('/api/reviews/all', authenticateToken, async (req: any, res: any) => {
   const { adminId } = req.query;
