@@ -42,19 +42,19 @@ const ChannelList = ({ onImageClick, onProfileClick }: { onImageClick: (url: str
 
   return (
     <div className="flex-1 overflow-y-auto p-6 bg-bg-primary">
-        <header className="mb-8">
+        <header className="mb-0.5">
             <h2 className="text-3xl font-black italic tracking-tighter text-text-main">Каналы</h2>
-            <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Мир экспертного контента</p>
+            <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Контент от наших администраторов :3</p>
         </header>
 
         <div className="bg-bg-secondary border border-slate-800 p-8 rounded-[3rem] text-center space-y-4 mb-8">
             <Users size={48} className="mx-auto text-accent" />
-            <h2 className="text-2xl font-black italic tracking-tighter">Авторские каналы</h2>
-            <p className="text-text-dim text-xs italic px-6">Подписывайтесь на блоги наших администраторов, чтобы быть в курсе обновлений.</p>
+            <h2 className="text-2xl font-black italic tracking-tighter">Каналы</h2>
+            <p className="text-text-dim text-xs italic px-6">Подписывайтесь на блоги наших администраторов</p>
         </div>
 
         <div className="grid gap-3">
-            {loading && <p className="text-center text-text-dim py-12 animate-pulse font-black uppercase text-[10px] tracking-widest">Загрузка каналов...</p>}
+            {loading && <p className="text-center text-text-dim py-12 animate-pulse font-black uppercase text-[10px] tracking-widest">Загружаю каналы...</p>}
             {channels.map((ch) => (
                 <button 
                     key={ch.id} 
@@ -116,14 +116,6 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
     const [isSubscribed, setIsSubscribed] = useState(channel.isSubscribed || false);
     const [tgAllowedChats, setTgAllowedChats] = useState<string[]>(user.tgAllowedChats || []);
 
-    useEffect(() => {
-        setIsSubscribed(channel.isSubscribed || false);
-    }, [channel.id, channel.isSubscribed]);
-    
-    useEffect(() => {
-        setTgAllowedChats(user.tgAllowedChats || []);
-    }, [user.tgAllowedChats]);
-
     const [showPostModal, setShowPostModal] = useState(false);
     const [showEditChannelModal, setShowEditChannelModal] = useState(false);
     const [editedChannel, setEditedChannel] = useState({ name: channel.name, description: channel.description, avatar: channel.avatar, banner: channel.banner });
@@ -138,6 +130,14 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
     const channelSourceId = `CHANNEL_${channel.id}`;
     const isNotifying = user.tgNotifyAll || tgAllowedChats.includes(channelSourceId);
 
+    useEffect(() => {
+        setIsSubscribed(channel.isSubscribed || false);
+    }, [channel.id, channel.isSubscribed]);
+    
+    useEffect(() => {
+        setTgAllowedChats(user.tgAllowedChats || []);
+    }, [user.tgAllowedChats]);
+
     const fetchPosts = async () => {
         try {
             const res = await apiFetch(`/api/posts?channelId=${channel.id}`);
@@ -146,9 +146,9 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
         } catch (e) { console.error(e); }
     };
     
-    const fetchComments = async (postId: string) => {
+    const fetchComments = async (id: string) => {
         try {
-            const res = await apiFetch(`/api/posts/${postId}/comments`);
+            const res = await apiFetch(`/api/posts/${id}/comments`);
             const data = await res.json();
             setComments(data);
         } catch (e) { console.error(e); }
@@ -182,9 +182,9 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
         } catch (e) { console.error(e); }
     };
 
-    const handleToggleLike = async (postId: string) => {
+    const handleToggleLike = async (id: string) => {
         try {
-            await apiFetch(`/api/posts/${postId}/react`, { method: 'POST' });
+            await apiFetch(`/api/posts/${id}/react`, { method: 'POST' });
             fetchPosts();
         } catch (e) { console.error(e); }
     };
@@ -199,7 +199,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
             setNewComment('');
             setReplyingToComment(null);
             fetchComments(selectedPostForComments.id);
-            fetchPosts(); // Refresh counts
+            fetchPosts();
         } catch (e) { console.error(e); }
     };
 
@@ -239,7 +239,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
             });
             setShowEditChannelModal(false);
             onUpdate();
-            onBack(); // Go back to list as data changed
+            onBack();
         } catch (e) { console.error(e); }
     };
     
@@ -266,7 +266,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
             });
             if (res.ok) {
                 setTgAllowedChats(newAllowed);
-                user.tgAllowedChats = newAllowed; // Keep ref updated too
+                user.tgAllowedChats = newAllowed;
             }
         } catch (e) {}
     };
