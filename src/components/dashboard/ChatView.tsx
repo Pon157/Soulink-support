@@ -573,10 +573,11 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
       <Modal isOpen={showGameMenu} onClose={() => setShowGameMenu(false)} title="Игровой центр">
           <div className="grid grid-cols-2 gap-4">
               {[
-                  { id: 'chess', label: 'Шахматы', icon: <Hash size={24} />, color: 'bg-amber-500' },
+                  { id: 'tictactoe', label: 'Крестики-нолики', icon: <Hash size={24} />, color: 'bg-amber-500' },
                   { id: 'words', label: 'Слова', icon: <Edit3 size={24} />, color: 'bg-emerald-500' },
                   { id: 'checkers', label: 'Шашки', icon: <Shield size={24} />, color: 'bg-indigo-500' },
-                  { id: 'seabattle', label: 'Морской бой', icon: <Video size={24} />, color: 'bg-rose-500' }
+                  { id: 'seabattle', label: 'Морской бой', icon: <Video size={24} />, color: 'bg-rose-500' },
+                  { id: 'hangman', label: 'Виселица', icon: <Gamepad2 size={24} />, color: 'bg-violet-500' },
               ].map(game => (
                   <button 
                     key={game.id}
@@ -676,7 +677,12 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
             </div>
             <div className="space-y-1">
                 <p className="text-sm font-black italic uppercase italic tracking-tighter">
-                    {msg.mediaUrl === 'chess' ? 'Шахматная партия' : msg.mediaUrl === 'words' ? 'Битва в слова' : 'Игровая дуэль'}
+                    {msg.mediaUrl === 'tictactoe' ? 'Крестики-нолики'
+                    : msg.mediaUrl === 'hangman' ? 'Виселица'
+                    : msg.mediaUrl === 'words' ? 'Слова'
+                    : msg.mediaUrl === 'checkers' ? 'Шашки'
+                    : msg.mediaUrl === 'seabattle' ? 'Морской бой'
+                    : 'Игровая дуэль'}
                 </p>
                 <p className="text-[10px] uppercase font-black tracking-widest opacity-60">
                     {isMe ? 'Вы отправили предложение сыграть' : 'Собеседник предложил сыграть'}
