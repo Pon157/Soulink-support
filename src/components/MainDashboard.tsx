@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useNavigate, useLocation, useParams, Outlet, Navigate } from 'react-router-dom';
+import { useNavigate, useLocation, useParams, Outlet, Navigate, Link } from 'react-router-dom';
 import { 
   MessageSquare, Star, Users, LayoutDashboard, Settings, X 
 } from 'lucide-react';
@@ -73,7 +73,7 @@ export const MainDashboard = ({ user, setUser, onLogout }: { user: any, setUser:
         </div>
 
         {!isFullScreen && (
-          <Navbar activeTab={activeTab} onTabChange={(tab) => navigate(`/${tab}`)} role={user.role} unreadCount={totalUnread} />
+          <Navbar activeTab={activeTab} role={user.role} unreadCount={totalUnread} />
         )}
 
         <AnimatePresence>
@@ -104,7 +104,7 @@ export const MainDashboard = ({ user, setUser, onLogout }: { user: any, setUser:
 };
 
 // --- NAVBAR COMPONENT ---
-const Navbar = ({ activeTab, onTabChange, role, unreadCount }: { activeTab: string, onTabChange: (t: string) => void, role: string, unreadCount?: number }) => {
+const Navbar = ({ activeTab, role, unreadCount }: { activeTab: string, role: string, unreadCount?: number }) => {
   const tabs = [
     { id: 'chats', label: 'Чаты', icon: MessageSquare, hasBadge: (unreadCount || 0) > 0 },
     { id: 'reviews', label: 'Отзывы', icon: Star },
@@ -117,15 +117,19 @@ const Navbar = ({ activeTab, onTabChange, role, unreadCount }: { activeTab: stri
     <nav className="fixed bottom-0 left-0 right-0 bg-bg-primary/90 backdrop-blur-xl border-t border-slate-800/50 px-6 py-4 z-40">
       <div className="max-w-md mx-auto flex items-center justify-between">
         {tabs.filter(t => !t.hide).map(tab => (
-          <button key={tab.id} onClick={() => onTabChange(tab.id)} className="flex flex-col items-center p-1 group relative">
-             <div className={cn("p-3 rounded-2xl transition-all duration-300", activeTab === tab.id ? "bg-accent text-white shadow-lg shadow-accent/30 -translate-y-2" : "text-text-dim hover:text-text-main")}>
+          <Link 
+            key={tab.id} 
+            to={`/${tab.id}`} 
+            className="flex flex-col items-center p-1 group relative outline-none"
+          >
+             <div className={cn("p-3 rounded-2xl transition-all duration-300", activeTab === tab.id ? "bg-accent text-white shadow-lg shadow-accent/30 -translate-y-2" : "text-text-dim hover:text-text-main hover:bg-white/5")}>
               <tab.icon size={24} />
               {tab.hasBadge && (activeTab !== tab.id) && (
                 <div className="absolute top-2 right-2 w-3 h-3 bg-rose-500 rounded-full border-2 border-bg-primary" />
               )}
             </div>
-            <span className={cn("text-[8px] font-black uppercase mt-1 tracking-widest", activeTab === tab.id ? "opacity-100" : "opacity-0")}>{tab.label}</span>
-          </button>
+            <span className={cn("text-[8px] font-black uppercase mt-1 tracking-widest transition-opacity duration-300", activeTab === tab.id ? "opacity-100" : "opacity-0")}>{tab.label}</span>
+          </Link>
         ))}
       </div>
     </nav>
