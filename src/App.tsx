@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { 
+  Routes, Route, Navigate, Outlet, useParams, useNavigate, useLocation, useOutletContext 
+} from 'react-router-dom';
 import { MainDashboard } from './components/MainDashboard';
 import { LoginPage, RegisterPage } from './pages/Auth';
 import { apiFetch } from './lib/api';
@@ -13,7 +15,6 @@ import { ReviewsView } from './components/dashboard/ReviewsView';
 import { ChatList } from './components/dashboard/ChatList';
 import { GameLauncher } from './components/games/GameLauncher';
 import { motion, AnimatePresence } from 'motion/react';
-import { useParams, useNavigate, useLocation, useOutletContext } from 'react-router-dom';
 
 const ChatViewWrapper = ({ user }: { user: any }) => {
   const { chatId } = useParams();
@@ -92,6 +93,7 @@ const App = () => {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [banInfo, setBanInfo] = useState<any>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleBanned = (e: any) => {
@@ -212,6 +214,8 @@ const App = () => {
            </RoutingTabWrapper>
         } />
         <Route path="/games/:sessionId" element={<GameRoute user={user} />} />
+        {/* Catch-all redirect */}
+        <Route path="*" element={<Navigate to="/chats" replace />} />
       </Route>
     </Routes>
   );
