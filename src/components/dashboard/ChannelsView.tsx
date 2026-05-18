@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate, useParams, Routes, Route } from 'react-router-dom';
 import { Users, ChevronRight, Plus, MessageSquare, ImageIcon, ArrowLeft, Heart, Share2, MoreHorizontal, Shield, Loader2, Trash, Edit3, Reply, X, Bell } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
@@ -9,9 +10,19 @@ import { UserAvatar } from '../ui/UserAvatar';
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any, onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
+  return (
+    <Routes>
+      <Route path="/" element={<ChannelList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+      <Route path="/:id" element={<ChannelDetailWrapper user={user} onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+      <Route path="/:id/posts/:postId" element={<ChannelDetailWrapper user={user} onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+    </Routes>
+  );
+};
+
+const ChannelList = ({ onImageClick, onProfileClick }: { onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
   const [channels, setChannels] = useState<any[]>([]);
-  const [selectedChannel, setSelectedChannel] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   const fetchChannels = async () => {
     try {
@@ -29,30 +40,25 @@ export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any
     fetchChannels();
   }, []);
 
-  if (selectedChannel) {
-    return <ChannelDetail channel={selectedChannel} onBack={() => setSelectedChannel(null)} user={user} onUpdate={fetchChannels} onImageClick={onImageClick} onProfileClick={onProfileClick} />;
-  }
-
   return (
-    // Добавлен pb-32 для комфортной прокрутки до самого конца
-    <div className="flex-1 overflow-y-auto p-6 pb-32 bg-bg-primary">
+    <div className="flex-1 overflow-y-auto p-6 bg-bg-primary">
         <header className="mb-8">
             <h2 className="text-3xl font-black italic tracking-tighter text-text-main">Каналы</h2>
-            <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Контент от наших администраторов :3</p>
+            <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Мир экспертного контента</p>
         </header>
 
         <div className="bg-bg-secondary border border-slate-800 p-8 rounded-[3rem] text-center space-y-4 mb-8">
             <Users size={48} className="mx-auto text-accent" />
-            <h2 className="text-2xl font-black italic tracking-tighter">Каналы</h2>
-            <p className="text-text-dim text-xs italic px-6">Подписывайтесь на блоги наших администраторов</p>
+            <h2 className="text-2xl font-black italic tracking-tighter">Авторские каналы</h2>
+            <p className="text-text-dim text-xs italic px-6">Подписывайтесь на блоги наших администраторов, чтобы быть в курсе обновлений.</p>
         </div>
 
         <div className="grid gap-3">
-            {loading && <p className="text-center text-text-dim py-12 animate-pulse font-black uppercase text-[10px] tracking-widest">Загружаю каналы...</p>}
+            {loading && <p className="text-center text-text-dim py-12 animate-pulse font-black uppercase text-[10px] tracking-widest">Загрузка каналов...</p>}
             {channels.map((ch) => (
                 <button 
                     key={ch.id} 
-                    onClick={() => setSelectedChannel(ch)}
+                    onClick={() => navigate(`/channels/${ch.id}`)}
                     className="bg-bg-secondary p-5 rounded-[2.5rem] border border-slate-800/50 flex items-center justify-between group hover:border-accent/30 transition-all text-left"
                 >
                     <div className="flex items-center gap-4">
@@ -75,7 +81,37 @@ export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any
   );
 };
 
+const ChannelDetailWrapper = ({ user, onImageClick, onProfileClick }: { user: any, onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [channel, setChannel] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    const fetchChannel = async () => {
+        try {
+            const res = await apiFetch(`/api/channels/${id}`);
+            const data = await res.json();
+            setChannel(data);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchChannel();
+    }, [id]);
+
+    if (loading) return <div className="flex-1 flex items-center justify-center p-12 text-text-dim font-black uppercase text-[10px] tracking-widest animate-pulse">Загрузка канала...</div>;
+    if (!channel) return <div className="flex-1 flex flex-col items-center justify-center p-12 text-text-dim font-black uppercase text-[10px] tracking-widest">Канал не найден<button onClick={() => navigate('/channels')} className="mt-4 text-accent">Вернуться в список</button></div>;
+
+    return <ChannelDetail channel={channel} onBack={() => navigate('/channels')} user={user} onUpdate={fetchChannel} onImageClick={onImageClick} onProfileClick={onProfileClick} />;
+};
+
 const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfileClick }: { channel: any, onBack: () => void, user: any, onUpdate: () => void, onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
+    const { postId } = useParams();
+    const navigate = useNavigate();
     const [posts, setPosts] = useState<any[]>([]);
     const [isSubscribed, setIsSubscribed] = useState(channel.isSubscribed || false);
     const [tgAllowedChats, setTgAllowedChats] = useState<string[]>(user.tgAllowedChats || []);
@@ -121,6 +157,16 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
     useEffect(() => {
         fetchPosts();
     }, [channel.id]);
+
+    useEffect(() => {
+        if (postId && posts.length > 0) {
+            const post = posts.find(p => p.id === postId);
+            if (post) {
+                setSelectedPostForComments(post);
+                fetchComments(post.id);
+            }
+        }
+    }, [postId, posts]);
 
     const handleCreatePost = async () => {
         if (!newPost.content) return;
@@ -300,9 +346,9 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                  </div>
             </Modal>
 
-            <Modal isOpen={!!selectedPostForComments} onClose={() => setSelectedPostForComments(null)} title="Комментарии">
+            <Modal isOpen={!!selectedPostForComments} onClose={() => { setSelectedPostForComments(null); if (postId) navigate(`/channels/${channel.id}`); }} title="Комментарии">
                 <div className="flex flex-col h-[60vh]">
-                    <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-8">
+                    <div className="flex-1 overflow-y-auto space-y-4 pr-2">
                         {comments.length === 0 && <p className="text-center text-text-dim py-12 text-[10px] uppercase font-black tracking-widest italic">Пока нет комментариев</p>}
                         {comments.map(c => (
                             <div key={c.id} className="bg-bg-primary p-4 rounded-2xl border border-slate-800/50 group relative">
@@ -374,13 +420,12 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                 </div>
             </Modal>
 
-            {/* Добавлен pb-32 для комфортной прокрутки постов до самого конца */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-6 pb-32">
+            <div className="flex-1 overflow-y-auto p-8 space-y-6">
                 <div className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50">
                     <p className="text-sm italic text-text-dim italic leading-relaxed">{channel.description || 'Обзоры, новости и полезные советы от администрации SoulLink.'}</p>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-4 pb-12">
                     <h4 className="text-xs font-black uppercase tracking-[0.3em] text-text-dim px-2">Последние посты</h4>
                     {posts.map(post => (
                         <div key={post.id} className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50 space-y-4 group">
@@ -399,7 +444,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                                         <span className="text-[10px] font-black uppercase">{post._count?.reactions || 0}</span>
                                     </button>
                                     <button 
-                                        onClick={() => { setSelectedPostForComments(post); fetchComments(post.id); }}
+                                        onClick={() => { navigate(`/channels/${channel.id}/posts/${post.id}`); }}
                                         className="flex items-center gap-2 text-text-dim hover:text-accent transition-colors"
                                     >
                                         <MessageSquare size={18} />
