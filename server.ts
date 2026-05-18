@@ -2023,31 +2023,6 @@ app.post('/api/broadcast/send', authenticateToken, requireOwner, async (req: any
 });
 
 // Channels & Posts
-app.get('/api/channels', authenticateToken, async (req: any, res: any) => {
-    try {
-        const channels = await prisma.channel.findMany({
-            include: { 
-                owner: { select: { nickname: true, avatar: true } },
-                _count: { select: { posts: true, subscribers: true } }
-            }
-        });
-        
-        // Add isSubscribed flag
-        const userSubscriptions = await prisma.subscription.findMany({
-            where: { userId: req.user.userId },
-            select: { channelId: true }
-        });
-        const subIds = new Set(userSubscriptions.map(s => s.channelId));
-        
-        const channelsWithSub = channels.map(c => ({
-            ...c,
-            isSubscribed: subIds.has(c.id)
-        }));
-        
-        res.json(channelsWithSub);
-    } catch (e) { res.status(500).json({ error: 'Failed' }); }
-});
-
 app.get('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
     try {
         const channel = await prisma.channel.findUnique({
@@ -2064,36 +2039,10 @@ app.get('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
         });
         
         res.json({ ...channel, isSubscribed: !!subscription });
-    } catch (e) { res.status(500).json({ error: 'Failed' }); }
-});
-
-app.get('/api/posts', authenticateToken, async (req: any, res: any) => {
-    const { channelId } = req.query;
-    try {
-        const posts = await prisma.post.findMany({
-            where: channelId ? { channelId: channelId as string } : {},
-            orderBy: { createdAt: 'desc' },
-            include: { 
-                _count: { select: { comments: true, reactions: true } },
-                reactions: { where: { userId: req.user.userId } }
-            }
-        });
-        res.json(posts);
-    } catch (e) { res.status(500).json({ error: 'Failed' }); }
-});
-
-app.get('/api/channels/:id/posts', authenticateToken, async (req: any, res: any) => {
-    try {
-        const posts = await prisma.post.findMany({
-            where: { channelId: req.params.id },
-            orderBy: { createdAt: 'desc' },
-            include: { 
-                _count: { select: { comments: true, reactions: true } },
-                reactions: { where: { userId: req.user.userId } }
-            }
-        });
-        res.json(posts);
-    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+    } catch (e) {
+        console.error('GET /api/channels/:id Error:', e);
+        res.status(500).json({ error: 'Failed' });
+    }
 });
 
 app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
