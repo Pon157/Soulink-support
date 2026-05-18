@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams, Routes, Route } from 'react-router-dom';
+import { useNavigate, useParams, Routes, Route, Link } from 'react-router-dom';
 import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight, Ticket as TicketIcon, ArrowLeft } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
@@ -232,9 +232,9 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-8">
         {tabs.map(tab => (
-          <button 
+          <Link 
             key={tab.id}
-            onClick={() => setView(tab.id as any)}
+            to={`/system/${tab.id}`}
             className={cn(
               "flex items-center gap-2 px-4 py-3 md:px-5 md:py-3 rounded-2xl font-black uppercase text-[8px] md:text-[9px] tracking-widest transition-all",
               view === tab.id ? "bg-accent text-white" : "bg-bg-secondary text-text-dim border border-slate-800/50"
@@ -242,7 +242,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
           >
             <tab.icon size={14} />
             <span className="truncate">{tab.label}</span>
-          </button>
+          </Link>
         ))}
       </div>
 
