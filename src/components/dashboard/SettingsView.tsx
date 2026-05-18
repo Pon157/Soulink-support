@@ -188,10 +188,10 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
         </button>
 
         <Routes>
-           <Route path="/bot-link" element={<BotLinkModal user={user} setUser={setUser} onClose={closeSubView} />} />
-           <Route path="/security" element={<SecurityModal onClose={closeSubView} />} />
-           <Route path="/theme" element={<ThemeModal user={user} setUser={setUser} handleBannerChange={handleBannerChange} handleWallpaper={handleWallpaper} onClose={closeSubView} />} />
-           <Route path="/paint" element={<PaintModal user={user} setUser={setUser} setUploading={setUploading} onClose={closeSubView} setErrorModal={setErrorModal} />} />
+           <Route path="bot-link" element={<BotLinkModal user={user} setUser={setUser} onClose={closeSubView} />} />
+           <Route path="security" element={<SecurityModal onClose={closeSubView} />} />
+           <Route path="theme" element={<ThemeModal user={user} setUser={setUser} handleBannerChange={handleBannerChange} handleWallpaper={handleWallpaper} onClose={closeSubView} />} />
+           <Route path="paint" element={<PaintModal user={user} setUser={setUser} setUploading={setUploading} onClose={closeSubView} setErrorModal={setErrorModal} />} />
         </Routes>
       </div>
 
