@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
+import { useNavigate } from 'react-router-dom';
 import { 
   ChevronRight, Star, Mic, Camera, ArrowRight, CheckCheck, Loader2, Play, Pause, X, Video, Shield, Image as ImageIcon, Gamepad2, Hash, Bell, 
   Trash, Edit3, Reply, MoreVertical, PenTool 
@@ -8,7 +9,6 @@ import { apiFetch } from '../../lib/api';
 import { uploadFile } from '../../lib/services';
 import { Modal } from '../ui/Modal';
 import { UserAvatar } from '../ui/UserAvatar';
-import { GameLauncher } from '../games/GameLauncher';
 import { DrawingCanvas } from './DrawingCanvas';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
@@ -102,6 +102,7 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
 export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, currentUser: any, wallpaper?: string }) => {
   const userRole = currentUser.role;
   const currentUserId = currentUser.id;
+  const navigate = useNavigate();
   const [messages, setMessages] = useState<any[]>([]);
   const [partner, setPartner] = useState<any>(null);
   const [input, setInput] = useState('');
@@ -109,7 +110,6 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
   const [showProfile, setShowProfile] = useState(false);
   const [showGameMenu, setShowGameMenu] = useState(false);
   const [showDrawing, setShowDrawing] = useState(false);
-  const [activeGame, setActiveGame] = useState<any>(null);
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [ticketSubject, setTicketSubject] = useState('');
   const [ticketMessage, setTicketMessage] = useState('');
@@ -399,7 +399,9 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                 </div>
               </div>
               <div className="bg-slate-800/30 p-4 rounded-2xl border border-slate-800">
-                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">Отзывов</p>
+                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
+                  {partner.role === 'USER' ? 'Написано отзывов' : 'Получено отзывов'}
+                </p>
                 <p className="text-lg font-black text-white italic mt-1">{partner.reviewsCount || 0}</p>
               </div>
             </div>
@@ -588,7 +590,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                                 body: JSON.stringify({ type: game.id, partnerId: chatId })
                             });
                             const session = await res.json();
-                            setActiveGame({ type: game.id, sessionId: session.id });
+                            navigate(`/games/${session.id}?type=${game.id}&partner=${encodeURIComponent(partner?.nickname || 'Админ')}`);
                             setShowGameMenu(false);
                         } catch (e) {
                             setErrorModal('Не удалось создать игру');
@@ -604,16 +606,6 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
               ))}
           </div>
       </Modal>
-
-      {activeGame && (
-          <GameLauncher 
-            gameType={activeGame.type} 
-            sessionId={activeGame.sessionId}
-            partnerName={partner?.nickname || 'Админ'} 
-            currentUserId={currentUserId}
-            onClose={() => setActiveGame(null)} 
-          />
-      )}
 
       <div 
         ref={scrollContainerRef}
@@ -689,7 +681,7 @@ export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper 
                 </p>
             </div>
             <button 
-                onClick={(e) => { e.stopPropagation(); setActiveGame({ type: msg.mediaUrl, sessionId: msg.content }); }}
+                onClick={(e) => { e.stopPropagation(); navigate(`/games/${msg.content}?type=${msg.mediaUrl}&partner=${encodeURIComponent(partner?.nickname || 'Админ')}`); }}
                 className={cn(
                     "w-full py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95",
                     isMe ? "bg-white text-slate-900" : "bg-accent text-white"
