@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate, useParams, Routes, Route } from 'react-router-dom';
 import { Star, MessageSquare, ImageIcon, Filter, ChevronDown, User as UserIcon, Shield, Send, X, Reply } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { UserAvatar } from '../ui/UserAvatar';
@@ -8,54 +9,81 @@ import { Modal } from '../ui/Modal';
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const ReviewsView = ({ onImageClick, onProfileClick }: { onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
+  return (
+    <Routes>
+      <Route path="/" element={<ReviewsList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+      <Route path="/:reviewId" element={<ReviewsList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+    </Routes>
+  );
+};
+
+const ReviewsList = ({ onImageClick, onProfileClick }: { onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
+  const { reviewId } = useParams();
+  const navigate = useNavigate();
   const [reviews, setReviews] = useState<any[]>([]);
   const [admins, setAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterAdmin, setFilterAdmin] = useState<string>('');
   const [sortBy, setSortBy] = useState<'newest' | 'rating'>('newest');
   
-  const [selectedReviewForDiscussion, setSelectedReviewForDiscussion] = useState<any>(null);
+  const [selectedReview, setSelectedReview] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState<any>(null);
 
+  const fetchData = async () => {
+    try {
+      const [reviewsRes, adminsRes] = await Promise.all([
+        apiFetch('/api/reviews/all'),
+        apiFetch('/api/admins')
+      ]);
+      const rData = await reviewsRes.json();
+      const aData = await adminsRes.json();
+      setReviews(rData);
+      setAdmins(aData);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [reviewsRes, adminsRes] = await Promise.all([
-          apiFetch('/api/reviews/all'),
-          apiFetch('/api/admins')
-        ]);
-        const rData = await reviewsRes.json();
-        const aData = await adminsRes.json();
-        setReviews(rData);
-        setAdmins(aData);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
-  const fetchComments = async (reviewId: string) => {
+  const fetchComments = async (id: string) => {
     try {
-        const res = await apiFetch(`/api/reviews/${reviewId}/comments`);
+        const res = await apiFetch(`/api/reviews/${id}/comments`);
         setComments(await res.json());
     } catch (e) { console.error(e); }
   }
 
+  useEffect(() => {
+    if (reviewId) {
+        const found = reviews.find(r => r.id === reviewId);
+        if (found) {
+            setSelectedReview(found);
+            fetchComments(found.id);
+        } else if (reviews.length > 0) {
+            // Re-fetch or maybe the review just isn't in the list?
+            // For now just close or navigate away
+        }
+    } else {
+        setSelectedReview(null);
+    }
+  }, [reviewId, reviews]);
+
   const handleSendComment = async () => {
-      if (!newComment || !selectedReviewForDiscussion) return;
+      if (!newComment || !selectedReview) return;
       try {
-          await apiFetch(`/api/reviews/${selectedReviewForDiscussion.id}/comments`, {
+          await apiFetch(`/api/reviews/${selectedReview.id}/comments`, {
               method: 'POST',
               body: JSON.stringify({ content: newComment, replyToId: replyingTo?.id })
           });
           setNewComment('');
           setReplyingTo(null);
-          fetchComments(selectedReviewForDiscussion.id);
+          fetchComments(selectedReview.id);
       } catch (e) { console.error(e); }
   }
 
@@ -139,7 +167,7 @@ export const ReviewsView = ({ onImageClick, onProfileClick }: { onImageClick: (u
 
             <div className="flex items-center justify-between">
                 <button 
-                    onClick={() => { setSelectedReviewForDiscussion(review); fetchComments(review.id); }}
+                    onClick={() => navigate(`/reviews/${review.id}`)}
                     className="flex items-center gap-2 text-text-dim hover:text-accent transition-colors"
                 >
                     <MessageSquare size={16} />
@@ -151,7 +179,7 @@ export const ReviewsView = ({ onImageClick, onProfileClick }: { onImageClick: (u
         ))}
       </div>
 
-      <Modal isOpen={!!selectedReviewForDiscussion} onClose={() => setSelectedReviewForDiscussion(null)} title="Обсуждение отзыва">
+      <Modal isOpen={!!selectedReview} onClose={() => navigate('/reviews')} title="Обсуждение отзыва">
           <div className="flex flex-col h-[60vh]">
               <div className="flex-1 overflow-y-auto space-y-4 pr-2 pb-4">
                   {comments.length === 0 && <p className="text-center py-12 text-text-dim italic text-xs">Пока нет комментариев...</p>}
