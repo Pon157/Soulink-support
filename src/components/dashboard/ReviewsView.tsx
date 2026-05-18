@@ -11,8 +11,8 @@ const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 export const ReviewsView = ({ onImageClick, onProfileClick }: { onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
   return (
     <Routes>
-      <Route path="/" element={<ReviewsList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
-      <Route path="/:reviewId" element={<ReviewsList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+      <Route path="" element={<ReviewsList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+      <Route path=":reviewId" element={<ReviewsList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
     </Routes>
   );
 };
