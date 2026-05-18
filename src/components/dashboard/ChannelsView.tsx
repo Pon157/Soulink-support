@@ -12,9 +12,9 @@ const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 export const ChannelsView = ({ user, onImageClick, onProfileClick }: { user: any, onImageClick: (url: string) => void, onProfileClick: (id: string) => void }) => {
   return (
     <Routes>
-      <Route path="/" element={<ChannelList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
-      <Route path="/:id" element={<ChannelDetailWrapper user={user} onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
-      <Route path="/:id/posts/:postId" element={<ChannelDetailWrapper user={user} onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+      <Route path="" element={<ChannelList onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+      <Route path=":id" element={<ChannelDetailWrapper user={user} onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
+      <Route path=":id/posts/:postId" element={<ChannelDetailWrapper user={user} onImageClick={onImageClick} onProfileClick={onProfileClick} />} />
     </Routes>
   );
 };
