@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { Camera, Shield, Bell, Palette, HelpCircle, User as UserIcon, LogOut, ChevronRight, Loader2, Image as ImageIcon, PenTool, Coffee, Star } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { useNavigate, Routes, Route } from 'react-router-dom';
+import { Camera, Shield, Bell, Palette, HelpCircle, User as UserIcon, LogOut, ChevronRight, Loader2, Image as ImageIcon, PenTool, Coffee, Star, X } from 'lucide-react';
 import { uploadFile, updateProfile } from '../../lib/services';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
@@ -9,34 +10,17 @@ import { DrawingCanvas } from './DrawingCanvas';
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: (u: any) => void, onLogout: () => void }) => {
+  const navigate = useNavigate();
   const [uploading, setUploading] = useState(false);
   const [showNickModal, setShowNickModal] = useState(false);
   const [newNick, setNewNick] = useState(user.nickname);
   const [errorModal, setErrorModal] = useState<string | null>(null);
-  const [showSecurity, setShowSecurity] = useState(false);
-  const [showTheme, setShowTheme] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const [showPaint, setShowPaint] = useState(false);
-  const [passwords, setPasswords] = useState({ old: '', new: '' });
   const [stats, setStats] = useState<any>(null);
   const [profileData, setProfileData] = useState<any>(null);
-  const [botToken, setBotToken] = useState<string | null>(null);
-  const [loadingToken, setLoadingToken] = useState(false);
 
-  const fetchBotToken = async () => {
-    setLoadingToken(true);
-    try {
-      const res = await apiFetch('/api/user/bot-link-token');
-      const data = await res.json();
-      setBotToken(data.token);
-    } catch (e) {
-      setErrorModal('Не удалось получить токен');
-    } finally {
-      setLoadingToken(false);
-    }
-  };
+  const closeSubView = () => navigate('/settings');
 
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchStats = async () => {
       try {
         const res = await apiFetch(`/api/users/profile/${user.id}`);
@@ -59,29 +43,6 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       setErrorModal('Не удалось переключить режим отдыха :(');
     }
   };
-
-  const handleBannerDraw = async (dataUrl: string) => {
-    setUploading(true);
-    try {
-      const blob = await (await fetch(dataUrl)).blob();
-      const file = new File([blob], 'banner_paint.png', { type: 'image/png' });
-      const url = await uploadFile(file);
-      const updatedUser = await updateProfile({ banner: url });
-      setUser(updatedUser);
-      setShowPaint(false);
-    } catch (error) {
-      setErrorModal('Не удалось сохранить рисунок.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const themes = [
-    { id: 'dark', label: 'Темный', color: 'bg-[#0f172a]' },
-    { id: 'oled', label: 'Черный', color: 'bg-[#000000]' },
-    { id: 'light', label: 'Светлый', color: 'bg-white' },
-    { id: 'forest', label: 'Темно-зеленый', color: 'bg-[#061f14]' },
-  ];
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -113,16 +74,6 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
     }
   };
 
-  const handleThemeChange = async (themeId: string) => {
-    try {
-      const updatedUser = await updateProfile({ theme: themeId });
-      setUser(updatedUser);
-      // MainDashboard will handle document attribute
-    } catch (e) {
-      setErrorModal('Ошибка сохранения темы');
-    }
-  };
-
   const handleUpdateNickname = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNick || newNick === user.nickname) return;
@@ -132,26 +83,6 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
       setShowNickModal(false);
     } catch (error) {
       setErrorModal('Ошибка при обновлении профиля :с');
-    }
-  };
-
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const res = await apiFetch('/api/auth/change-password', {
-        method: 'POST',
-        body: JSON.stringify(passwords)
-      });
-      if (res.ok) {
-        setShowSecurity(false);
-        setPasswords({ old: '', new: '' });
-        alert('Пароль успешно изменен)');
-      } else {
-        const d = await res.json();
-        setErrorModal(d.error || 'Ошибка смены пароля :с');
-      }
-    } catch (e) {
-      setErrorModal('Ошибка сети');
     }
   };
 
@@ -172,143 +103,6 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
 
   return (
     <div className="flex-1 overflow-y-auto pb-24 relative bg-bg-primary">
-      <Modal isOpen={!!botToken} onClose={() => setBotToken(null)} title="Привязка Telegram">
-        <div className="space-y-4 md:space-y-6 text-center">
-            <div className="bg-bg-primary p-4 md:p-8 rounded-3xl md:rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full relative">
-                <p className="text-[10px] font-black uppercase text-text-dim mb-2 tracking-[0.2em]">Код авторизации</p>
-                <div className="flex flex-col items-center justify-center gap-3 md:gap-4">
-                  <p className="text-2xl md:text-5xl font-black text-accent tracking-[0.2em] italic select-all cursor-pointer bg-accent/5 p-3 md:p-4 rounded-2xl md:rounded-3xl w-full border border-accent/10 break-all">{botToken}</p>
-                  <button 
-                    onClick={() => {
-                        if (botToken) {
-                            navigator.clipboard.writeText(botToken).then(() => {
-                                const btn = document.activeElement as HTMLButtonElement;
-                                if (btn) {
-                                  const originalHtml = btn.innerHTML;
-                                  btn.innerHTML = '<span class="text-[10px] font-black uppercase tracking-widest text-emerald-400">СКОПИРОВАНО!</span>';
-                                  setTimeout(() => btn.innerHTML = originalHtml, 2000);
-                                }
-                            });
-                        }
-                    }}
-                    className="w-full bg-white/10 p-4 md:p-5 rounded-xl md:rounded-2xl flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95 group border border-white/5"
-                  >
-                    <Star size={18} fill="currentColor" className="text-accent" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-text-main">Скопировать</span>
-                  </button>
-                </div>
-            </div>
-            <div className="space-y-2 text-[11px] md:text-sm text-text-dim italic leading-tight">
-                <p>1. Откройте @soulnotifs_bot</p>
-                <p>2. Отправьте: <code className="bg-bg-secondary px-2 py-1 rounded text-accent break-all">/start {botToken}</code></p>
-            </div>
-            <div className="space-y-4 pt-4 border-t border-slate-800">
-                <div className="flex flex-col gap-1 text-left">
-                    <p className="text-[9px] md:text-[10px] font-black uppercase text-text-dim tracking-widest">Уведомления</p>
-                    <p className="text-[8px] text-slate-500 font-medium">Включите "Все чаты" для получения пушей о личных сообщениях</p>
-                </div>
-                <button 
-                    onClick={async () => {
-                        const next = !user.tgNotifyAll;
-                        const res = await apiFetch('/api/user/tg-settings', {
-                            method: 'POST',
-                            body: JSON.stringify({ tgNotifyAll: next })
-                        });
-                        if (res.ok) setUser({ ...user, tgNotifyAll: next });
-                    }}
-                    className="w-full flex items-center justify-between bg-bg-secondary p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-800"
-                >
-                    <span className="text-xs md:text-sm font-bold italic truncate mr-2">Все ЛС и чаты</span>
-                    <div className={cn("w-10 h-5 rounded-full transition-all relative shrink-0", user.tgNotifyAll ? "bg-accent" : "bg-slate-700")}>
-                        <div className={cn("absolute top-1 w-3 h-3 bg-white rounded-full transition-all", user.tgNotifyAll ? "right-1" : "left-1")} />
-                    </div>
-                </button>
-                <p className="text-[8px] text-text-dim uppercase font-black text-left opacity-60">
-                    * Системные уведомления включены всегда
-                </p>
-            </div>
-
-            <div className="flex gap-2">
-                <button 
-                  onClick={async () => {
-                    try {
-                        const res = await apiFetch('/api/user/bot-link-token/refresh', { method: 'POST' });
-                        if (res.ok) {
-                            const data = await res.json();
-                            setBotToken(data.token);
-                        }
-                    } catch (e) {}
-                  }}
-                  className="flex-1 bg-slate-800 py-3 md:py-4 rounded-xl md:rounded-2xl font-black uppercase text-[10px]"
-                >
-                    Обновить
-                </button>
-                <button onClick={() => setBotToken(null)} className="flex-1 bg-accent py-3 md:py-4 rounded-xl md:rounded-2xl font-black uppercase text-[10px]">Понятно</button>
-            </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={showNickModal} onClose={() => setShowNickModal(false)} title="Сменить имя">
-        <form onSubmit={handleUpdateNickname} className="space-y-4">
-          <input value={newNick} onChange={e => setNewNick(e.target.value)} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main font-bold italic" placeholder="Новый никнейм" />
-          <button type="submit" className="w-full bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Применить</button>
-        </form>
-      </Modal>
-
-      <Modal isOpen={showSecurity} onClose={() => setShowSecurity(false)} title="Защита аккаунта">
-        <form onSubmit={handleChangePassword} className="space-y-4">
-          <input type="password" required value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main" placeholder="Старый пароль" />
-          <input type="password" required value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main" placeholder="Новый пароль" />
-          <button type="submit" className="w-full bg-accent py-5 rounded-2xl font-black uppercase text-[10px] mt-4">Обновить пароль</button>
-        </form>
-      </Modal>
-
-      <Modal isOpen={showTheme} onClose={() => setShowTheme(false)} title="Персонализация">
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-3">
-             {themes.map(t => (
-               <button 
-                key={t.id} 
-                onClick={() => handleThemeChange(t.id)}
-                className={cn(
-                  "p-4 rounded-3xl border-2 transition-all text-left",
-                  user.theme === t.id ? "border-accent bg-accent/10" : "border-slate-800 bg-bg-secondary"
-                )}
-               >
-                 <div className={cn("w-8 h-8 rounded-full mb-3", t.color, t.id === 'light' ? 'border' : '')} />
-                 <p className="text-[10px] font-black uppercase tracking-widest">{t.label}</p>
-               </button>
-             ))}
-          </div>
-          <div className="space-y-3">
-             <p className="text-[10px] font-black uppercase text-text-dim px-2">Шапка профиля (баннер)</p>
-             <label className="flex items-center justify-between bg-bg-secondary p-4 rounded-2xl border border-slate-800 cursor-pointer">
-                <div className="flex items-center gap-3">
-                  <ImageIcon size={20} className="text-accent" />
-                  <span className="text-sm font-bold italic tracking-tight">Загрузить баннер профиля</span>
-                </div>
-                <input type="file" className="hidden" accept="image/*" onChange={handleBannerChange} />
-                <ChevronRight size={18} />
-             </label>
-          </div>
-          <div className="space-y-3">
-             <p className="text-[10px] font-black uppercase text-text-dim px-2">Общий фон приложения</p>
-             <label className="flex items-center justify-between bg-bg-secondary p-4 rounded-2xl border border-slate-800 cursor-pointer">
-                <div className="flex items-center gap-3">
-                  <Palette size={20} className="text-amber-400" />
-                  <span className="text-sm font-bold italic tracking-tight">Загрузить обои фона</span>
-                </div>
-                <input type="file" className="hidden" accept="image/*" onChange={handleWallpaper} />
-                <ChevronRight size={18} />
-             </label>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal isOpen={showPaint} onClose={() => setShowPaint(false)} title="Создать баннер">
-        <DrawingCanvas onSave={handleBannerDraw} onCancel={() => setShowPaint(false)} />
-      </Modal>
-
       <div className="p-8">
         <header className="mb-10 text-center relative pt-12">
             <div className="absolute inset-0 top-0 h-48 -mx-8 overflow-hidden">
@@ -373,10 +167,10 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
           </button>
 
           {[
-            { label: 'Безопасность', icon: Shield, color: 'text-emerald-400', onClick: () => setShowSecurity(true) },
-            { label: 'Привязка Telegram', icon: Bell, color: 'text-amber-400', onClick: fetchBotToken },
-            { label: 'Тема и оформление', icon: Palette, color: 'text-purple-400', onClick: () => setShowTheme(true) },
-            { label: 'Создать баннер', icon: PenTool, color: 'text-orange-400', onClick: () => setShowPaint(true) },
+            { label: 'Безопасность', icon: Shield, color: 'text-emerald-400', onClick: () => navigate('/settings/security') },
+            { label: 'Привязка Telegram', icon: Bell, color: 'text-amber-400', onClick: () => navigate('/settings/bot-link') },
+            { label: 'Тема и оформление', icon: Palette, color: 'text-purple-400', onClick: () => navigate('/settings/theme') },
+            { label: 'Создать баннер', icon: PenTool, color: 'text-orange-400', onClick: () => navigate('/settings/paint') },
             { label: user.isOnRest ? 'Закончить отдых' : 'Уйти на отдых', icon: Coffee, color: user.isOnRest ? 'text-amber-400' : 'text-blue-400', onClick: handleToggleRest, hide: user.role === 'USER' },
           ].filter(i => !i.hide).map((item, i) => (
             <button key={i} onClick={item.onClick} className="w-full bg-bg-secondary border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between group hover:border-slate-700 transition-all text-left">
@@ -392,7 +186,224 @@ export const SettingsView = ({ user, setUser, onLogout }: { user: any, setUser: 
         <button onClick={onLogout} className="w-full mt-8 bg-rose-500/10 border border-rose-500/20 text-rose-500 p-5 rounded-[2rem] flex items-center justify-center gap-3 font-black uppercase text-[10px] tracking-widest hover:bg-rose-500 hover:text-white transition-all">
           <LogOut size={20} /> Выйти
         </button>
+
+        <Routes>
+           <Route path="/bot-link" element={<BotLinkModal user={user} setUser={setUser} onClose={closeSubView} />} />
+           <Route path="/security" element={<SecurityModal onClose={closeSubView} />} />
+           <Route path="/theme" element={<ThemeModal user={user} setUser={setUser} handleBannerChange={handleBannerChange} handleWallpaper={handleWallpaper} onClose={closeSubView} />} />
+           <Route path="/paint" element={<PaintModal user={user} setUser={setUser} setUploading={setUploading} onClose={closeSubView} setErrorModal={setErrorModal} />} />
+        </Routes>
       </div>
+
+      <Modal isOpen={showNickModal} onClose={() => setShowNickModal(false)} title="Сменить имя">
+        <form onSubmit={handleUpdateNickname} className="space-y-4">
+          <input value={newNick} onChange={e => setNewNick(e.target.value)} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main font-bold italic" placeholder="Новый никнейм" />
+          <button type="submit" className="w-full bg-accent py-4 rounded-2xl font-black uppercase text-[10px]">Применить</button>
+        </form>
+      </Modal>
+
+      <Modal isOpen={!!errorModal} onClose={() => setErrorModal(null)} title="Ошибка">
+        <div className="text-center p-4">
+           <p className="text-sm italic text-text-dim">{errorModal}</p>
+           <button onClick={() => setErrorModal(null)} className="mt-4 w-full bg-accent py-3 rounded-2xl font-black uppercase text-[10px]">Ок</button>
+        </div>
+      </Modal>
     </div>
   );
+};
+
+const BotLinkModal = ({ user, setUser, onClose }: any) => {
+    const [botToken, setBotToken] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchBotToken = async () => {
+            setLoading(true);
+            try {
+              const res = await apiFetch('/api/user/bot-link-token');
+              const data = await res.json();
+              setBotToken(data.token);
+            } catch (e) {} finally { setLoading(false); }
+          };
+        fetchBotToken();
+    }, []);
+
+    if (loading) return <Modal isOpen onClose={onClose} title="Загрузка..."><div className="flex justify-center p-12"><Loader2 className="animate-spin text-accent" /></div></Modal>;
+
+    return (
+        <Modal isOpen={true} onClose={onClose} title="Привязка Telegram">
+          <div className="space-y-4 md:space-y-6 text-center">
+              <div className="bg-bg-primary p-4 md:p-8 rounded-3xl md:rounded-[2.5rem] border-2 border-dashed border-accent/30 inline-block w-full relative">
+                  <p className="text-[10px] font-black uppercase text-text-dim mb-2 tracking-[0.2em]">Код авторизации</p>
+                  <div className="flex flex-col items-center justify-center gap-3 md:gap-4">
+                    <p className="text-2xl md:text-5xl font-black text-accent tracking-[0.2em] italic select-all cursor-pointer bg-accent/5 p-3 md:p-4 rounded-2xl md:rounded-3xl w-full border border-accent/10 break-all">{botToken}</p>
+                    <button 
+                      onClick={() => {
+                          if (botToken) {
+                              navigator.clipboard.writeText(botToken).then(() => {
+                                  alert('Скопировано!');
+                              });
+                          }
+                      }}
+                      className="w-full bg-white/10 p-4 md:p-5 rounded-xl md:rounded-2xl flex items-center justify-center gap-2 hover:bg-white/20 transition-all active:scale-95 group border border-white/5"
+                    >
+                      <Star size={18} fill="currentColor" className="text-accent" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-text-main">Скопировать</span>
+                    </button>
+                  </div>
+              </div>
+              <div className="space-y-2 text-[11px] md:text-sm text-text-dim italic leading-tight">
+                  <p>1. Откройте @soulnotifs_bot</p>
+                  <p>2. Отправьте: <code className="bg-bg-secondary px-2 py-1 rounded text-accent break-all">/start {botToken}</code></p>
+              </div>
+              <div className="space-y-4 pt-4 border-t border-slate-800">
+                  <div className="flex flex-col gap-1 text-left">
+                      <p className="text-[9px] md:text-[10px] font-black uppercase text-text-dim tracking-widest">Уведомления</p>
+                      <p className="text-[8px] text-slate-500 font-medium">Включите "Все чаты" для получения пушей о личных сообщениях</p>
+                  </div>
+                  <button 
+                      onClick={async () => {
+                          const next = !user.tgNotifyAll;
+                          const res = await apiFetch('/api/user/tg-settings', {
+                              method: 'POST',
+                              body: JSON.stringify({ tgNotifyAll: next })
+                          });
+                          if (res.ok) setUser({ ...user, tgNotifyAll: next });
+                      }}
+                      className="w-full flex items-center justify-between bg-bg-secondary p-3 md:p-4 rounded-xl md:rounded-2xl border border-slate-800"
+                  >
+                      <span className="text-xs md:text-sm font-bold italic truncate mr-2">Все ЛС и чаты</span>
+                      <div className={cn("w-10 h-5 rounded-full transition-all relative shrink-0", user.tgNotifyAll ? "bg-accent" : "bg-slate-700")}>
+                          <div className={cn("absolute top-1 w-3 h-3 bg-white rounded-full transition-all", user.tgNotifyAll ? "right-1" : "left-1")} />
+                      </div>
+                  </button>
+                  <p className="text-[8px] text-text-dim uppercase font-black text-left opacity-60">
+                      * Системные уведомления включены всегда
+                  </p>
+              </div>
+  
+              <div className="flex gap-2">
+                  <button onClick={onClose} className="w-full bg-accent py-3 md:py-4 rounded-xl md:rounded-2xl font-black uppercase text-[10px]">Понятно</button>
+              </div>
+          </div>
+        </Modal>
+    );
+};
+
+const SecurityModal = ({ onClose }: any) => {
+    const [passwords, setPasswords] = useState({ old: '', new: '' });
+    const handleChangePassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+          const res = await apiFetch('/api/auth/change-password', {
+            method: 'POST',
+            body: JSON.stringify(passwords)
+          });
+          if (res.ok) {
+            onClose();
+            alert('Пароль успешно изменен)');
+          } else {
+            const d = await res.json();
+            alert(d.error || 'Ошибка смены пароля :с');
+          }
+        } catch (e) {
+          alert('Ошибка сети');
+        }
+      };
+
+    return (
+        <Modal isOpen onClose={onClose} title="Защита аккаунта">
+            <form onSubmit={handleChangePassword} className="space-y-4">
+            <input type="password" required value={passwords.old} onChange={e => setPasswords({...passwords, old: e.target.value})} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main font-bold italic text-sm" placeholder="Старый пароль" />
+            <input type="password" required value={passwords.new} onChange={e => setPasswords({...passwords, new: e.target.value})} className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main font-bold italic text-sm" placeholder="Новый пароль" />
+            <button type="submit" className="w-full bg-accent py-5 rounded-2xl font-black uppercase text-[10px] mt-4">Обновить пароль</button>
+            </form>
+        </Modal>
+    );
+};
+
+const ThemeModal = ({ user, setUser, handleBannerChange, handleWallpaper, onClose }: any) => {
+    const themes = [
+        { id: 'dark', label: 'Темный', color: 'bg-[#0f172a]' },
+        { id: 'oled', label: 'Черный', color: 'bg-[#000000]' },
+        { id: 'light', label: 'Светлый', color: 'bg-white' },
+        { id: 'forest', label: 'Темно-зеленый', color: 'bg-[#061f14]' },
+      ];
+
+    const handleThemeChange = async (themeId: string) => {
+        try {
+          const updatedUser = await updateProfile({ theme: themeId });
+          setUser(updatedUser);
+        } catch (e) {
+          alert('Ошибка сохранения темы');
+        }
+      };
+
+    return (
+        <Modal isOpen onClose={onClose} title="Персонализация">
+            <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-3">
+                {themes.map(t => (
+                <button 
+                    key={t.id} 
+                    onClick={() => handleThemeChange(t.id)}
+                    className={cn(
+                    "p-4 rounded-3xl border-2 transition-all text-left",
+                    user.theme === t.id ? "border-accent bg-accent/10" : "border-slate-800 bg-bg-secondary"
+                    )}
+                >
+                    <div className={cn("w-8 h-8 rounded-full mb-3", t.color, t.id === 'light' ? 'border' : '')} />
+                    <p className="text-[10px] font-black uppercase tracking-widest">{t.label}</p>
+                </button>
+                ))}
+            </div>
+            <div className="space-y-3">
+                <p className="text-[10px] font-black uppercase text-text-dim px-2">Шапка профиля (баннер)</p>
+                <label className="flex items-center justify-between bg-bg-secondary p-4 rounded-2xl border border-slate-800 cursor-pointer">
+                    <div className="flex items-center gap-3">
+                    <ImageIcon size={20} className="text-accent" />
+                    <span className="text-sm font-bold italic tracking-tight">Загрузить баннер профиля</span>
+                    </div>
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => { handleBannerChange(e); onClose(); }} />
+                    <ChevronRight size={18} />
+                </label>
+            </div>
+            <div className="space-y-3">
+                <p className="text-[10px] font-black uppercase text-text-dim px-2">Общий фон приложения</p>
+                <label className="flex items-center justify-between bg-bg-secondary p-4 rounded-2xl border border-slate-800 cursor-pointer">
+                    <div className="flex items-center gap-3">
+                    <Palette size={20} className="text-amber-400" />
+                    <span className="text-sm font-bold italic tracking-tight">Загрузить обои фона</span>
+                    </div>
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => { handleWallpaper(e); onClose(); }} />
+                    <ChevronRight size={18} />
+                </label>
+            </div>
+            </div>
+        </Modal>
+    );
+};
+
+const PaintModal = ({ user, setUser, setUploading, onClose, setErrorModal }: any) => {
+    const handleBannerDraw = async (dataUrl: string) => {
+        setUploading(true);
+        try {
+          const blob = await (await fetch(dataUrl)).blob();
+          const file = new File([blob], 'banner_paint.png', { type: 'image/png' });
+          const url = await uploadFile(file);
+          const updatedUser = await updateProfile({ banner: url });
+          setUser(updatedUser);
+          onClose();
+        } catch (error) {
+          setErrorModal('Не удалось сохранить рисунок.');
+        } finally {
+          setUploading(false);
+        }
+      };
+
+    return (
+        <Modal isOpen onClose={onClose} title="Создать баннер">
+            <DrawingCanvas onSave={handleBannerDraw} onCancel={onClose} />
+        </Modal>
+    );
 };
