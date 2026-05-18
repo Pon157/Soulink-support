@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useParams, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams, Routes, Route } from 'react-router-dom';
 import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight, Ticket as TicketIcon, ArrowLeft } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
@@ -10,18 +10,12 @@ const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandChat: (id: string) => void }) => {
   const navigate = useNavigate();
-  const { '*': tabPath } = useParams(); // Get subpath
-
-  const currentTab = useMemo(() => {
-    return tabPath || 'stats';
-  }, [tabPath]);
-
-  const setView = (v: string) => {
-    navigate(`/system/${v}`);
-  };
+  const { '*': tabPath } = useParams();
+  const rawView = tabPath || 'stats';
+  const view = rawView as 'stats' | 'staff' | 'rules' | 'moderation' | 'all_chats' | 'reviews' | 'broadcast' | 'sanctions' | 'tasks' | 'subordinates' | 'tickets';
+  const setView = (v: string) => navigate(`/system/${v}`);
 
   const role = user.role;
-  const currentUserId = user.id;
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [stats, setStats] = useState<any>(null);
   const [staff, setStaff] = useState<any[]>([]);
@@ -228,10 +222,10 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
 
       <header className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-black text-text-main italic tracking-tighter uppercase">Nexus</h1>
-          <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Доступ: {role}</p>
+          <h1 className="text-3xl font-black text-text-main italic tracking-tighter uppercase">Админ-панель</h1>
+          <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Твой уровень доступа: {role}</p>
         </div>
-        {role === 'OWNER' && currentTab === 'staff' && (
+        {role === 'OWNER' && view === 'staff' && (
           <button onClick={() => setShowAddStaff(true)} className="w-12 h-12 bg-accent rounded-2xl flex items-center justify-center text-white"><Plus size={24} /></button>
         )}
       </header>
@@ -243,7 +237,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
             onClick={() => setView(tab.id as any)}
             className={cn(
               "flex items-center gap-2 px-4 py-3 md:px-5 md:py-3 rounded-2xl font-black uppercase text-[8px] md:text-[9px] tracking-widest transition-all",
-              currentTab === tab.id ? "bg-accent text-white" : "bg-bg-secondary text-text-dim border border-slate-800/50"
+              view === tab.id ? "bg-accent text-white" : "bg-bg-secondary text-text-dim border border-slate-800/50"
             )}
           >
             <tab.icon size={14} />
@@ -252,7 +246,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         ))}
       </div>
 
-      {currentTab === 'stats' && (
+      {view === 'stats' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             {role === 'OWNER' ? (
@@ -296,7 +290,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         </div>
       )}
 
-      {currentTab === 'staff' && (
+      {view === 'staff' && (
         <div className="space-y-3">
           {staff.map(s => (
             <div key={s.id} className="bg-bg-secondary border border-slate-800 p-5 rounded-[2rem] flex items-center justify-between">
@@ -316,7 +310,6 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
                       <span className="text-[11px] font-black italic">{s.stats?.averageRating?.toFixed(1) || 0}</span>
                       <Star size={10} fill="currentColor" />
                     </div>
-                    <p className="text-[8px] text-slate-600 font-black uppercase mt-0.5">{s.reviewsCount || 0} ОТЗЫВОВ</p>
                     <p className="text-[8px] text-slate-600 font-black uppercase mt-0.5">{s.stats?.messagesSent || 0} СOOБЩ.</p>
                   </div>
               </div>
@@ -325,7 +318,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         </div>
       )}
 
-      {currentTab === 'subordinates' && (
+      {view === 'subordinates' && (
           <div className="space-y-4">
               <div className="bg-accent/5 border border-accent/10 p-8 rounded-[3rem] text-center space-y-2 mb-6">
                   <Users size={40} className="mx-auto text-accent" />
@@ -348,12 +341,9 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
                           </div>
                           <div className="pt-4 border-t border-slate-800/50 flex gap-4">
                              <button onClick={() => startMonitoring(s.id)} className="flex-1 py-3 bg-bg-primary rounded-2xl text-[9px] font-black uppercase tracking-widest border border-slate-800 hover:border-accent/50 transition-all">Мониторинг чатов</button>
-                             <div className="bg-bg-primary px-4 py-3 rounded-2xl flex flex-col items-center justify-center min-w-[60px]">
-                                <div className="flex items-center gap-1">
-                                    <span className="text-[11px] font-black italic">{s.stats?.averageRating?.toFixed(1) || 0}</span>
-                                    <Star size={10} className="text-amber-500" fill="currentColor" />
-                                </div>
-                                <span className="text-[7px] text-text-dim font-black uppercase mt-1">{s.reviewsCount || 0} REV</span>
+                             <div className="bg-bg-primary px-4 py-3 rounded-2xl flex items-center gap-2">
+                                <span className="text-[11px] font-black italic">{s.stats?.averageRating?.toFixed(1) || 0}</span>
+                                <Star size={10} className="text-amber-500" fill="currentColor" />
                              </div>
                           </div>
                       </div>
@@ -362,7 +352,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
           </div>
       )}
 
-      {currentTab === 'tasks' && (
+      {view === 'tasks' && (
           <div className="space-y-4">
               <div className="space-y-3">
                   {tasks.length === 0 && <p className="text-center text-text-dim py-24 text-[10px] uppercase font-black italic tracking-widest">Заданий пока нет</p>}
@@ -395,7 +385,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
           </div>
       )}
 
-      {currentTab === 'all_chats' && (
+      {view === 'all_chats' && (
         <div className="space-y-3">
           <div className="mb-4">
              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Поиск по никнейму..." className="w-full bg-bg-secondary p-4 rounded-2xl outline-none text-text-main border border-slate-800/50 italic text-xs" />
@@ -418,7 +408,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         </div>
       )}
 
-      {currentTab === 'reviews' && (
+      {view === 'reviews' && (
         <div className="space-y-4">
            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
               <button onClick={() => setAdminFilter('')} className={cn("px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", !adminFilter ? "bg-accent text-white" : "bg-bg-secondary text-text-dim border border-slate-800/50")}>Все</button>
@@ -452,7 +442,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         </div>
       )}
 
-      {currentTab === 'broadcast' && (
+      {view === 'broadcast' && (
         <form onSubmit={handleSendBroadcast} className="space-y-6">
           <div className="bg-blue-600/5 border border-blue-600/10 p-6 md:p-8 rounded-3xl md:rounded-[3rem] text-center space-y-4">
              <Mail size={40} className="mx-auto text-blue-500" />
@@ -467,7 +457,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         </form>
       )}
 
-      {currentTab === 'sanctions' && (
+      {view === 'sanctions' && (
         <form onSubmit={handleApplySanction} className="space-y-6">
           <div className="bg-rose-600/5 border border-rose-600/10 p-6 md:p-8 rounded-3xl md:rounded-[3rem] text-center space-y-4">
              <Lock size={40} className="mx-auto text-rose-500" />
@@ -507,21 +497,67 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         </form>
       )}
 
-      {currentTab === 'rules' && (
-        <div className="bg-bg-secondary border border-slate-800 rounded-[2.5rem] p-8 space-y-6">
-          <h3 className="text-2xl font-black text-white italic tracking-tighter">Устав SoulLink</h3>
-          <div className="space-y-4">
-            {["Строгая анонимность", "Запрет на деанон", "Этика и поддержка", "Мгновенная реакция"].map((r, i) => (
-              <div key={i} className="flex gap-4 items-center bg-bg-primary p-4 rounded-2xl border border-slate-800/50">
-                <span className="text-[10px] font-black text-accent">{i+1}</span>
-                <p className="text-sm text-text-dim italic font-medium">{r}</p>
-              </div>
-            ))}
+{view === 'rules' && (
+  <div className="bg-bg-secondary border border-slate-800 rounded-[2.5rem] p-8 space-y-6">
+    <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+      <div>
+        <h3 className="text-2xl font-black text-white italic tracking-tighter">Устав & Регламент SoulLink</h3>
+        <p className="text-[10px] font-black text-accent uppercase tracking-widest mt-1">Редакция для администрации и специалистов</p>
+      </div>
+      <span className="text-[10px] font-black text-slate-500 bg-slate-800/40 px-3 py-1.5 rounded-full border border-slate-800">v2.5</span>
+    </div>
+
+    <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+      {[
+        // --- 1. Конфиденциальность и Безопасность ---
+        { text: "Запрещено разглашение личной информации пользователей (адрес, паспортные данные, контакты).", category: "Безопасность" },
+        { text: "Строгий запрет на деанон и любую попытку деанонимизации пользователей платформы.", category: "Безопасность" },
+        { text: "Запрещено выносить скриншоты, логи или текстовое содержимое переписок за пределы рабочего пространства SoulLink.", category: "Безопасность" },
+        { text: "Администратор обязан обеспечивать безопасность своего аккаунта (2FA) и не передавать доступ третьим лицам.", category: "Безопасность" },
+
+        // --- 2. Профессиональные Границы ---
+        { text: "Строго запрещено переводить общение с пользователями на сторонние площадки (личный Telegram, Discord, соцсети).", category: "Границы" },
+        { text: "Запрещено вступать с пользователями в личные, дружеские, романтические или финансовые отношения.", category: "Границы" },
+        { text: "Запрещено принимать от пользователей подарки, материальные вознаграждения или оказывать платные услуги в обход платформы.", category: "Границы" },
+
+        // --- 3. Этика и Психологическая гигиена ---
+        { text: "Будьте этичны, эмпатичны и проявляйте стопроцентную безоценочность к любой проблеме пользователя.", category: "Этика" },
+        { text: "Запрещено давать прямые директивные советы («уходи от него», «увольняйся») — ведите пользователя к его собственному выбору.", category: "Этика" },
+        { text: "Запрещено обесценивать переживания пользователя («это глупости», «бывает хуже», «само пройдет»).", category: "Этика" },
+        { text: "Запрещено навязывать пользователям личные религиозные, политические, философские или моральные убеждения.", category: "Этика" },
+
+        // --- 4. Конфликты и Экстренные случаи ---
+        { text: "Запрещено отвечать агрессией на провокации. В случае оскорблений — делайте вежливое предупреждение.", category: "Конфликты" },
+        { text: "При выявлении у пользователя суицидальных намерений или селфхарм-статусов, немедленно сообщать кураторам.", category: "Кризис" },
+        { text: "Специалист обязан следить за своим ментальным состоянием и сообщать руководству о признаках сильного выгорания.", category: "Гигиена" }
+      ].map((item, i) => (
+        <div key={i} className="flex gap-4 items-start bg-bg-primary p-5 rounded-2xl border border-slate-800/50 hover:border-slate-800 transition-all group">
+          <div className="flex flex-col items-center justify-center min-w-[28px]">
+            <span className="text-[10px] font-black text-accent bg-accent/10 px-2 py-0.5 rounded-md border border-accent/20 group-hover:bg-accent group-hover:text-black transition-colors">
+              {i + 1}
+            </span>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 block">
+              {item.category}
+            </span>
+            <p className="text-sm text-text-dim italic font-medium leading-relaxed">
+              {item.text}
+            </p>
           </div>
         </div>
-      )}
+      ))}
+    </div>
 
-      {currentTab === 'tickets' && (
+    <div className="pt-2 border-t border-slate-800">
+      <p className="text-center text-[9px] font-black text-rose-500/80 uppercase tracking-widest">
+        ⚠️ Нарушение пунктов устава влечет за собой деавторизацию и немедленное увольнение из проекта
+      </p>
+    </div>
+  </div>
+)}
+
+      {view === 'tickets' && (
         <div className="h-full flex flex-col">
             {activeChatId ? (
                 <div className="flex-1 flex flex-col -m-6 h-[calc(100%+3rem)]">
