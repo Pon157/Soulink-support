@@ -116,7 +116,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
             </motion.div>
           } />
 
-          <Route path="/reviews" element={
+          <Route path="/reviews/*" element={
             <motion.div 
               key="reviews"
               initial={{ opacity: 0, x: 10 }}
@@ -142,7 +142,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
             </motion.div>
           } />
 
-          <Route path="/system" element={
+          <Route path="/system/*" element={
             (user.role !== 'USER') ? (
               <motion.div 
                 key="system"
@@ -157,7 +157,7 @@ export const MainDashboard = ({ user: initialUser, onLogout }: { user: any, onLo
             ) : <Navigate to="/chats" replace />
           } />
 
-          <Route path="/settings" element={
+          <Route path="/settings/*" element={
             <motion.div 
               key="settings"
               initial={{ opacity: 0, x: 10 }}
