@@ -68,12 +68,14 @@ export const MainDashboard = ({ user, setUser, onLogout }: { user: any, setUser:
       <div className="flex flex-col w-full h-full bg-bg-primary text-text-main overflow-hidden dashboard-container relative" style={mainStyle}>
         <div className="h-1 bg-gradient-to-r from-accent via-indigo-500 to-emerald-500 w-full shrink-0" />
 
-        <div className={cn("flex-1 flex flex-col overflow-hidden relative", !isFullScreen && "pb-32 md:pb-40")}>
+        <div className="flex-1 flex flex-col overflow-hidden relative">
           <Outlet context={{ setPreviewImage, setSelectedProfile, totalUnread }} />
         </div>
 
         {!isFullScreen && (
-          <Navbar activeTab={activeTab} role={user.role} unreadCount={totalUnread} />
+          <div className="shrink-0 z-40">
+            <Navbar activeTab={activeTab} role={user.role} unreadCount={totalUnread} />
+          </div>
         )}
 
         <AnimatePresence>
@@ -122,7 +124,7 @@ const Navbar = ({ activeTab, role, unreadCount }: { activeTab: string, role: str
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-bg-primary/90 backdrop-blur-xl border-t border-slate-800/50 px-6 py-4 z-40">
+    <nav className="bg-bg-primary/95 backdrop-blur-xl border-t border-slate-800/50 px-6 py-4">
       <div className="max-w-md mx-auto flex items-center justify-between">
         {tabs.filter(t => !t.hide).map(tab => (
           <Link 
