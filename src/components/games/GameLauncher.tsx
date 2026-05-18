@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, Trophy, MessageSquare, Gamepad2, Swords, Brain, Hash, Edit3, Shield, Video, Timer, RefreshCw, Star, Trash, Reply, Camera, Mic, ArrowRight, Loader2, Play } from 'lucide-react';
-import { motion } from 'motion/react';
+import { X, Trophy, MessageSquare, Gamepad2, Swords, Brain, Hash, Edit3, Shield, Video, Timer, RefreshCw, Star, Trash, Reply, Camera, Mic, ArrowRight, Loader2, Play, HelpCircle, RotateCcw } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Modal } from '../ui/Modal';
-import { Chess } from 'chess.js';
-import { Chessboard } from 'react-chessboard';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 import { apiFetch } from '../../lib/api';
 
 interface GameLauncherProps {
-  gameType: 'chess' | 'checkers' | 'words' | 'seabattle';
+  gameType: 'tictactoe' | 'hangman' | 'checkers' | 'words' | 'seabattle';
   sessionId: string;
   onClose: () => void;
   partnerName: string;
@@ -98,7 +96,8 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
     );
 
     switch (gameType) {
-      case 'chess': return <ChessGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} serverMyColor={gameState.myColor ?? null} serverMyPlayerIndex={gameState.myPlayerIndex ?? -1} players={gameState.players} state={gameState.state} />;
+      case 'tictactoe': return <TicTacToeGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
+      case 'hangman': return <HangmanGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
       case 'words': return <WordsGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
       case 'checkers': return <CheckersGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} />;
       case 'seabattle': return <SeaBattleGame sessionId={sessionId} partnerName={partnerName} currentUserId={currentUserId} players={gameState.players} state={gameState.state} onClose={onClose} />;
@@ -128,7 +127,7 @@ export const GameLauncher = ({ gameType, sessionId, onClose, partnerName, curren
             </div>
             <div>
                 <h2 className="text-xl md:text-3xl font-black italic text-text-main uppercase tracking-tighter leading-none">
-                {gameType === 'chess' ? 'Шахматы' : gameType === 'words' ? 'Слова' : gameType === 'checkers' ? 'Шашки' : 'Морской бой'}
+                {gameType === 'tictactoe' ? 'Крестики-нолики' : gameType === 'hangman' ? 'Виселица' : gameType === 'words' ? 'Слова' : gameType === 'checkers' ? 'Шашки' : 'Морской бой'}
                 </h2>
                 <div className="flex items-center gap-2 mt-1 md:mt-2">
                     <span className="w-1.5 h-1.5 md:w-2 md:h-2 bg-emerald-500 rounded-full animate-ping" />
@@ -255,25 +254,321 @@ const ChatInGame = ({ partnerName, currentUserId, gameState, messages, onRefresh
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CHESS GAME — временная заглушка
+// КРЕСТИКИ-НОЛИКИ
 // ─────────────────────────────────────────────────────────────────────────────
-const ChessGame = ({ partnerName }: any) => (
-    <div className="flex flex-col items-center justify-center gap-6 p-8 text-center max-w-xs animate-in fade-in zoom-in duration-500">
-        <div className="w-24 h-24 bg-accent/10 rounded-[2.5rem] flex items-center justify-center border border-accent/20 shadow-2xl shadow-accent/10">
-            <Swords className="text-accent" size={40} />
+const LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+
+const TicTacToeGame = ({ sessionId, partnerName, currentUserId, players, state }: any) => {
+    const board: (string|null)[] = state?.board ?? Array(9).fill(null);
+    const isMyTurn = state?.turn === currentUserId;
+    const myMark = state?.xId === currentUserId ? 'X' : 'O';
+    const winner = state?.winner; // userId | 'draw' | null
+    const [sending, setSending] = useState(false);
+
+    const winLine = LINES.find(([a,b,c]) => board[a] && board[a]===board[b] && board[a]===board[c]) ?? null;
+
+    const handleClick = async (i: number) => {
+        if (!isMyTurn || board[i] || winner || sending) return;
+        setSending(true);
+        const newBoard = [...board];
+        newBoard[i] = myMark;
+
+        // Проверяем победу
+        const win = LINES.some(([a,b,c]) => newBoard[a] && newBoard[a]===newBoard[b] && newBoard[a]===newBoard[c]);
+        const draw = !win && newBoard.every(Boolean);
+        const partnerId = players?.find((p:any) => p.id !== currentUserId)?.id;
+
+        const newState = {
+            ...state,
+            board: newBoard,
+            turn: partnerId,
+            winner: win ? currentUserId : draw ? 'draw' : null,
+        };
+        try {
+            await apiFetch(`/api/games/${sessionId}/move`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ state: newState }),
+            });
+        } catch(e) { console.error(e); }
+        finally { setSending(false); }
+    };
+
+    const reset = async () => {
+        const partnerId = players?.find((p:any) => p.id !== currentUserId)?.id;
+        const newState = {
+            ...state,
+            board: Array(9).fill(null),
+            turn: currentUserId,
+            winner: null,
+        };
+        await apiFetch(`/api/games/${sessionId}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: newState }),
+        }).catch(()=>{});
+    };
+
+    const isWin  = winner && winner !== 'draw' && winner === currentUserId;
+    const isLose = winner && winner !== 'draw' && winner !== currentUserId;
+    const isDraw = winner === 'draw';
+
+    return (
+        <div className="flex flex-col items-center gap-5 p-6 animate-in fade-in zoom-in duration-500">
+            {/* Статус */}
+            <div className="flex items-center gap-3 px-5 py-2 bg-bg-primary/50 backdrop-blur-md rounded-full border border-white/5 shadow-xl">
+                <span className={cn('text-lg font-black', myMark==='X' ? 'text-rose-400' : 'text-blue-400')}>{myMark}</span>
+                <p className="text-[10px] font-black uppercase tracking-widest text-text-main">
+                    {winner
+                        ? (isWin ? '🎉 Вы победили!' : isDraw ? '🤝 Ничья' : '😔 Вы проиграли')
+                        : isMyTurn ? '● Ваш ход' : `Ход ${partnerName}...`}
+                </p>
+            </div>
+
+            {/* Доска */}
+            <div className="grid grid-cols-3 gap-2 p-2">
+                {board.map((cell, i) => {
+                    const inWinLine = winLine?.includes(i);
+                    return (
+                        <motion.button
+                            key={i}
+                            whileTap={{ scale: 0.92 }}
+                            onClick={() => handleClick(i)}
+                            disabled={!!cell || !isMyTurn || !!winner || sending}
+                            className={cn(
+                                'w-20 h-20 md:w-24 md:h-24 rounded-[1.5rem] border-2 flex items-center justify-center text-4xl font-black transition-all',
+                                inWinLine
+                                    ? 'bg-emerald-500/20 border-emerald-500 shadow-lg shadow-emerald-500/20'
+                                    : cell
+                                        ? 'bg-bg-primary/60 border-white/10'
+                                        : isMyTurn && !winner
+                                            ? 'bg-bg-primary/30 border-white/5 hover:border-accent/40 hover:bg-accent/5 cursor-pointer'
+                                            : 'bg-bg-primary/20 border-white/5',
+                            )}
+                        >
+                            {cell === 'X' && <span className="text-rose-400">✕</span>}
+                            {cell === 'O' && <span className="text-blue-400">○</span>}
+                        </motion.button>
+                    );
+                })}
+            </div>
+
+            {winner && (
+                <button
+                    onClick={reset}
+                    className="flex items-center gap-2 px-6 py-3 bg-accent text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent/80 transition-all active:scale-95"
+                >
+                    <RotateCcw size={14} />
+                    Сыграть ещё раз
+                </button>
+            )}
         </div>
-        <div className="space-y-2">
-            <h3 className="text-2xl font-black italic uppercase tracking-tighter text-text-main">Шахматы</h3>
-            <p className="text-[10px] font-black uppercase tracking-widest text-text-dim leading-relaxed">
-                Режим в разработке.<br/>Скоро здесь будет полноценный матч против {partnerName}!
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ВИСЕЛИЦА
+// ─────────────────────────────────────────────────────────────────────────────
+const HANGMAN_STAGES = [
+    // 0 ошибок
+    `  +---+\n  |   |\n      |\n      |\n      |\n      |\n=========`,
+    // 1
+    `  +---+\n  |   |\n  O   |\n      |\n      |\n      |\n=========`,
+    // 2
+    `  +---+\n  |   |\n  O   |\n  |   |\n      |\n      |\n=========`,
+    // 3
+    `  +---+\n  |   |\n  O   |\n /|   |\n      |\n      |\n=========`,
+    // 4
+    `  +---+\n  |   |\n  O   |\n /|\\  |\n      |\n      |\n=========`,
+    // 5
+    `  +---+\n  |   |\n  O   |\n /|\\  |\n /    |\n      |\n=========`,
+    // 6 — проигрыш
+    `  +---+\n  |   |\n  O   |\n /|\\  |\n / \\  |\n      |\n=========`,
+];
+
+const ALPHABET = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ'.split('');
+
+const HangmanGame = ({ sessionId, partnerName, currentUserId, players, state }: any) => {
+    const [wordInput, setWordInput] = useState('');
+    const [sending, setSending] = useState(false);
+
+    const phase: string      = state?.phase ?? 'waiting_word';
+    const masterId: string   = state?.masterId;
+    const guessingId: string = state?.guessingId;
+    const isMaster           = currentUserId === masterId;
+    const isGuesser          = currentUserId === guessingId;
+    const mistakes: number   = state?.mistakes ?? 0;
+    const maxMistakes: number = state?.maxMistakes ?? 6;
+    const guessed: string[]  = state?.guessed ?? [];
+    const winner: string|null = state?.winner ?? null;
+
+    // Слово скрыто от угадывающего — сервер хранит настоящее слово,
+    // но для угадывающего показываем маску
+    const secretWord: string = state?.word ?? '';
+    const maskedWord = secretWord.split('').map(ch =>
+        ch === ' ' ? ' ' : guessed.includes(ch.toUpperCase()) ? ch.toUpperCase() : '_'
+    ).join('');
+
+    const sendWord = async () => {
+        const w = wordInput.trim().toUpperCase().replace(/[^А-ЯЁ\s]/g, '');
+        if (!w || w.length < 2) return;
+        setSending(true);
+        await apiFetch(`/api/games/${sessionId}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: { ...state, word: w, phase: 'guessing' } }),
+        }).catch(()=>{});
+        setSending(false);
+        setWordInput('');
+    };
+
+    const guessLetter = async (letter: string) => {
+        if (guessed.includes(letter) || winner || phase !== 'guessing') return;
+        setSending(true);
+        const newGuessed = [...guessed, letter];
+        const wordLetters = secretWord.toUpperCase().split('').filter(c => c !== ' ');
+        const isHit = secretWord.toUpperCase().includes(letter);
+        const newMistakes = isHit ? mistakes : mistakes + 1;
+        const allGuessed = wordLetters.every(c => newGuessed.includes(c));
+        const newWinner = allGuessed ? guessingId : newMistakes >= maxMistakes ? masterId : null;
+        const newPhase = newWinner ? 'finished' : 'guessing';
+        await apiFetch(`/api/games/${sessionId}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: { ...state, guessed: newGuessed, mistakes: newMistakes, winner: newWinner, phase: newPhase } }),
+        }).catch(()=>{});
+        setSending(false);
+    };
+
+    const resetGame = async () => {
+        await apiFetch(`/api/games/${sessionId}/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ state: {
+                ...state,
+                // Меняем роли местами
+                masterId: guessingId,
+                guessingId: masterId,
+                phase: 'waiting_word',
+                word: null, guessed: [], mistakes: 0, winner: null,
+            }}),
+        }).catch(()=>{});
+    };
+
+    const hangmanLines = HANGMAN_STAGES[Math.min(mistakes, 6)].split('\n');
+
+    return (
+        <div className="flex flex-col items-center gap-4 p-4 md:p-6 w-full max-w-sm animate-in fade-in zoom-in duration-500">
+
+            {/* ASCII виселица */}
+            <div className="bg-bg-primary/60 rounded-2xl px-6 py-4 border border-white/5 font-mono text-xs md:text-sm leading-tight text-text-main/70 self-center">
+                {hangmanLines.map((line, i) => <div key={i}>{line}</div>)}
+            </div>
+
+            {/* Ошибки */}
+            <p className="text-[9px] font-black uppercase tracking-widest text-text-dim">
+                Ошибок: <span className={cn('font-black', mistakes >= 4 ? 'text-rose-400' : 'text-text-main')}>{mistakes}</span> / {maxMistakes}
             </p>
+
+            {/* Фаза: загадка */}
+            {phase === 'waiting_word' && isMaster && (
+                <div className="w-full flex flex-col gap-3">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-accent text-center">Загадайте слово или фразу</p>
+                    <input
+                        value={wordInput}
+                        onChange={e => setWordInput(e.target.value.toUpperCase().replace(/[^А-ЯЁ\s]/g, ''))}
+                        onKeyDown={e => e.key === 'Enter' && sendWord()}
+                        placeholder="На русском..."
+                        className="w-full bg-bg-primary border border-white/10 rounded-2xl px-5 py-3 text-sm text-text-main placeholder-text-dim outline-none focus:border-accent/40 text-center font-black uppercase"
+                        maxLength={30}
+                    />
+                    <button
+                        onClick={sendWord}
+                        disabled={sending || wordInput.trim().length < 2}
+                        className="w-full py-3 bg-accent text-white rounded-2xl text-[10px] font-black uppercase tracking-widest disabled:opacity-40 active:scale-95 transition-all"
+                    >
+                        Загадать
+                    </button>
+                </div>
+            )}
+
+            {phase === 'waiting_word' && isGuesser && (
+                <div className="flex items-center gap-2 px-5 py-3 bg-accent/10 rounded-2xl border border-accent/20">
+                    <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+                    <p className="text-[9px] font-black uppercase tracking-widest text-accent">{partnerName} загадывает слово...</p>
+                </div>
+            )}
+
+            {/* Фаза: угадывание */}
+            {phase === 'guessing' && (
+                <>
+                    {/* Маска слова */}
+                    <div className="flex gap-1 flex-wrap justify-center px-2">
+                        {maskedWord.split('').map((ch, i) => (
+                            <div key={i} className={cn(
+                                'w-7 h-9 flex items-end justify-center pb-1 border-b-2 text-sm font-black',
+                                ch === '_' ? 'border-white/20 text-transparent' : ch === ' ' ? 'border-transparent' : 'border-accent text-text-main'
+                            )}>
+                                {ch}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Клавиатура (только для угадывающего) */}
+                    {isGuesser && !winner && (
+                        <div className="flex flex-wrap gap-1.5 justify-center max-w-xs">
+                            {ALPHABET.map(l => (
+                                <button
+                                    key={l}
+                                    onClick={() => guessLetter(l)}
+                                    disabled={guessed.includes(l) || sending}
+                                    className={cn(
+                                        'w-8 h-8 rounded-xl text-[10px] font-black uppercase transition-all active:scale-90',
+                                        guessed.includes(l)
+                                            ? secretWord.toUpperCase().includes(l)
+                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                                : 'bg-rose-500/10 text-rose-400/40 border border-transparent'
+                                            : 'bg-bg-primary border border-white/10 text-text-main hover:border-accent/40 hover:bg-accent/5 cursor-pointer'
+                                    )}
+                                >
+                                    {l}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {isMaster && !winner && (
+                        <p className="text-[9px] font-black uppercase tracking-widest text-text-dim text-center">
+                            {partnerName} угадывает ваше слово...<br/>
+                            <span className="text-accent/60">«{secretWord}»</span>
+                        </p>
+                    )}
+                </>
+            )}
+
+            {/* Финал */}
+            {winner && (
+                <div className="flex flex-col items-center gap-3">
+                    <p className="text-lg font-black italic uppercase">
+                        {winner === currentUserId ? '🎉 Вы победили!' : '😔 Вы проиграли'}
+                    </p>
+                    {phase === 'finished' && secretWord && (
+                        <p className="text-[10px] font-black uppercase text-text-dim tracking-widest">
+                            Слово: <span className="text-accent">{secretWord}</span>
+                        </p>
+                    )}
+                    <button
+                        onClick={resetGame}
+                        className="flex items-center gap-2 px-6 py-3 bg-accent text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-accent/80 transition-all active:scale-95"
+                    >
+                        <RotateCcw size={14} />
+                        Реванш
+                    </button>
+                </div>
+            )}
         </div>
-        <div className="flex items-center gap-2 px-5 py-3 bg-accent/10 rounded-2xl border border-accent/20">
-            <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
-            <span className="text-[9px] font-black uppercase tracking-widest text-accent">Ожидайте обновления</span>
-        </div>
-    </div>
-);
+    );
+};
 const CheckersGame = ({ sessionId, partnerName, currentUserId, players, state }: any) => {
     const [selected, setSelected] = useState<number | null>(null);
     const [board, setBoard] = useState<any[]>(state?.board || []);
