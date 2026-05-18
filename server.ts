@@ -949,10 +949,11 @@ app.get('/api/users/profile/:id', authenticateToken, async (req: any, res: any) 
 
         // Statistics based on role
         if (user.role === 'USER') {
-            const givenReviews = await prisma.review.findMany({ where: { userId } });
+            const writtenCount = await prisma.review.count({ where: { userId } });
+            const givenReviews = await prisma.review.findMany({ where: { userId }, select: { rating: true } });
             const avg = givenReviews.length > 0 ? (givenReviews.reduce((a, b) => a + b.rating, 0) / givenReviews.length) : 0;
-            (user as any).reviewsCount = givenReviews.length;
-            (user as any).writtenReviewsCount = givenReviews.length;
+            (user as any).reviewsCount = writtenCount;
+            (user as any).writtenReviewsCount = writtenCount;
             (user as any).averageRatingGiven = avg;
         } else {
             const reviewsReceived = await prisma.review.count({
@@ -1202,6 +1203,17 @@ app.post('/api/messages', authenticateToken, async (req: any, res: any) => {
                 update: { dialogsCount: { increment: 1 } },
                 create: { userId: receiverId, dialogsCount: 1 }
             });
+
+            // Notify External Bot about NEW DIALOG with Admin
+            try {
+                const receiver = await prisma.user.findUnique({ where: { id: receiverId }, select: { role: true, nickname: true } });
+                if (receiver && ['ADMIN', 'CURATOR', 'OWNER'].includes(receiver.role)) {
+                    const sender = await prisma.user.findUnique({ where: { id: userId }, select: { nickname: true, username: true } });
+                    const escapedSender = escapeHTML(sender?.nickname || 'Пользователь');
+                    const escapedAdmin = escapeHTML(receiver.nickname);
+                    notifyExternalBot(`<b>🆕 НОВЫЙ ДИАЛОГ</b>\n\nАдмин: ${escapedAdmin}\nЮзер: ${escapedSender} (@${sender?.username || '?'})\n\n<a href="${process.env.APP_URL || '#'}">Nexus Panel</a>`);
+                }
+            } catch (e) {}
         }
     }
 
