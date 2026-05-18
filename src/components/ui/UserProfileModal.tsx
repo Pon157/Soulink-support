@@ -8,11 +8,12 @@ const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 interface UserProfileModalProps {
   userId: string | null;
+  currentUserId: string;
   onClose: () => void;
   onChat?: (userId: string) => void;
 }
 
-export const UserProfileModal = ({ userId, onClose, onChat }: UserProfileModalProps) => {
+export const UserProfileModal = ({ userId, currentUserId, onClose, onChat }: UserProfileModalProps) => {
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -102,7 +103,7 @@ export const UserProfileModal = ({ userId, onClose, onChat }: UserProfileModalPr
               )}
           </div>
 
-          {onChat && profile.id !== profile.currentUserId && (
+          {onChat && profile.id !== currentUserId && (
             <button 
               onClick={() => { onChat(profile.id); onClose(); }}
               className="w-full bg-accent text-white py-5 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-xl shadow-accent/20 transition-all active:scale-95 flex items-center justify-center gap-3"
