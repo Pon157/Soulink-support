@@ -100,8 +100,8 @@ const VoiceMessage = ({ url, isOwn }: { url: string, isOwn: boolean }) => {
 };
 
 export const ChatView = ({ chatId, onBack, onImageClick, currentUser, wallpaper }: { chatId: string, onBack: () => void, onImageClick: (url: string) => void, currentUser: any, wallpaper?: string }) => {
-  const userRole = currentUser.role;
-  const currentUserId = currentUser.id;
+  const userRole = currentUser?.role;
+  const currentUserId = currentUser?.id;
   const navigate = useNavigate();
   const [messages, setMessages] = useState<any[]>([]);
   const [partner, setPartner] = useState<any>(null);
