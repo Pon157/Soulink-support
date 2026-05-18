@@ -2028,10 +2028,23 @@ app.get('/api/channels', authenticateToken, async (req: any, res: any) => {
         const channels = await prisma.channel.findMany({
             include: { 
                 owner: { select: { nickname: true, avatar: true } },
-                _count: { select: { posts: true } }
+                _count: { select: { posts: true, subscribers: true } }
             }
         });
-        res.json(channels);
+        
+        // Add isSubscribed flag
+        const userSubscriptions = await prisma.subscriber.findMany({
+            where: { userId: req.user.userId },
+            select: { channelId: true }
+        });
+        const subIds = new Set(userSubscriptions.map(s => s.channelId));
+        
+        const channelsWithSub = channels.map(c => ({
+            ...c,
+            isSubscribed: subIds.has(c.id)
+        }));
+        
+        res.json(channelsWithSub);
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
@@ -2039,10 +2052,18 @@ app.get('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
     try {
         const channel = await prisma.channel.findUnique({
             where: { id: req.params.id },
-            include: { owner: { select: { nickname: true, avatar: true } } }
+            include: { 
+                owner: { select: { nickname: true, avatar: true } },
+                _count: { select: { subscribers: true, posts: true } }
+            }
         });
         if (!channel) return res.status(404).json({ error: 'Channel not found' });
-        res.json(channel);
+        
+        const subscription = await prisma.subscriber.findFirst({
+            where: { channelId: req.params.id, userId: req.user.userId }
+        });
+        
+        res.json({ ...channel, isSubscribed: !!subscription });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
@@ -2051,32 +2072,57 @@ app.get('/api/channels/:id/posts', authenticateToken, async (req: any, res: any)
         const posts = await prisma.post.findMany({
             where: { channelId: req.params.id },
             orderBy: { createdAt: 'desc' },
-            include: { _count: { select: { comments: true } } }
+            include: { 
+                _count: { select: { comments: true, reactions: true } },
+                reactions: { where: { userId: req.user.userId } }
+            }
         });
         res.json(posts);
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
-app.post('/api/channels/:id/posts', authenticateToken, async (req: any, res: any) => {
-    const { content, mediaUrl, mediaType } = req.body;
+app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
+    const { content, mediaUrl, channelId } = req.body;
     try {
-        const channel = await prisma.channel.findUnique({ where: { id: req.params.id } });
+        const channel = await prisma.channel.findUnique({ where: { id: channelId } });
         if (!channel || (channel.ownerId !== req.user.userId && req.user.role !== 'OWNER')) {
-            return res.status(403).json({ error: 'Only channel owner or system can post' });
+            return res.status(403).json({ error: 'Forbidden' });
         }
         const post = await prisma.post.create({
             data: {
                 content,
                 mediaUrl,
-                mediaType: mediaType || 'text',
-                channelId: req.params.id
+                channelId
             }
         });
-        
-        // Notify fans (optional logic could be here)
         notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\nContent: ${(content || '').substring(0, 200)}${(content || '').length > 200 ? '...' : ''}\n\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`, mediaUrl || undefined);
-        
         res.json(post);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.patch('/api/posts/:id', authenticateToken, async (req: any, res: any) => {
+    const { content, mediaUrl } = req.body;
+    try {
+        const post = await prisma.post.findUnique({ include: { channel: true }, where: { id: req.params.id } });
+        if (!post || (post.channel.ownerId !== req.user.userId && req.user.role !== 'OWNER')) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        const updated = await prisma.post.update({
+            where: { id: req.params.id },
+            data: { content, mediaUrl }
+        });
+        res.json(updated);
+    } catch (e) { res.status(500).json({ error: 'Failed' }); }
+});
+
+app.delete('/api/posts/:id', authenticateToken, async (req: any, res: any) => {
+    try {
+        const post = await prisma.post.findUnique({ include: { channel: true }, where: { id: req.params.id } });
+        if (!post || (post.channel.ownerId !== req.user.userId && req.user.role !== 'OWNER')) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+        await prisma.post.delete({ where: { id: req.params.id } });
+        res.json({ success: true });
     } catch (e) { res.status(500).json({ error: 'Failed' }); }
 });
 
