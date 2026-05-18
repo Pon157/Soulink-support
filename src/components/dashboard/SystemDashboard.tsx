@@ -376,7 +376,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
                                   <span>Дедлайн: {new Date(t.deadline).toLocaleDateString()}</span>
                               </div>
                           )}
-                          {t.assigneeId === currentUserId && t.status !== 'completed' && (
+                          {t.assigneeId === user.id && t.status !== 'completed' && (
                               <button onClick={() => handleUpdateTaskStatus(t.id, 'completed')} className="w-full py-4 bg-emerald-600 rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">Завершить задание</button>
                           )}
                       </div>
