@@ -244,3 +244,13 @@ model PostComment {
   replyToId String?
   createdAt DateTime @default(now())
 }
+
+model Track {
+  id        String   @id @default(cuid())
+  title     String
+  artist    String   @default("")
+  audioUrl  String
+  coverUrl  String?
+  category  String   @default("general")
+  createdAt DateTime @default(now())
+}
