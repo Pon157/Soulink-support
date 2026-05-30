@@ -13,7 +13,7 @@ import { SystemDashboard } from './components/dashboard/SystemDashboard';
 import { ReviewsView } from './components/dashboard/ReviewsView';
 import { ChatList } from './components/dashboard/ChatList';
 // ДОБАВЛЕНО: Импорт MusicPlayer согласно вашей структуре папок
-import MusicPlayer from './components/dashboard/MusicPlayer'; 
+import { MusicPlayer } from './components/dashboard/MusicPlayer';
 import { GameLauncher } from './components/games/GameLauncher';
 import { motion, AnimatePresence } from 'motion/react';
 
