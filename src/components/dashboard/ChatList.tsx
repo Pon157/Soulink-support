@@ -41,6 +41,21 @@ export const ChatList = ({ onSelectChat, user }: { onSelectChat: (id: string) =>
     }
   };
 
+  const handleUrgentRequest = async () => {
+    try {
+      const res = await apiFetch('/api/chats/urgent-request', { method: 'POST' });
+      if (res.ok) {
+        setShowAdmins(false);
+        alert('✅ Запрос отправлен! Первый свободный администратор свяжется с вами.');
+      } else {
+        const d = await res.json();
+        alert(d.error || 'Ошибка отправки запроса');
+      }
+    } catch (e) {
+      alert('Ошибка связи с сервером');
+    }
+  };
+
   if (loading && chats.length === 0) return <div className="p-12 text-center text-text-dim font-black uppercase text-[10px] tracking-widest animate-pulse">Загрузка диалогов...</div>;
 
   return (
@@ -56,7 +71,22 @@ export const ChatList = ({ onSelectChat, user }: { onSelectChat: (id: string) =>
         <div className="fixed inset-0 z-[60] bg-bg-primary/80 backdrop-blur-md p-6 flex items-center justify-center" onClick={() => setShowAdmins(false)}>
           <div className="bg-bg-secondary border border-slate-800 p-8 rounded-[3rem] shadow-2xl w-full max-w-sm space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-text-main font-black text-xl italic text-center mb-4">Начать новый диалог</h3>
-            <div className="max-h-[300px] overflow-y-auto space-y-2 pr-2">
+            <button
+              onClick={handleUrgentRequest}
+              className="w-full flex items-center gap-3 p-4 bg-rose-500/10 border border-rose-500/30 hover:border-rose-500/60 rounded-2xl transition-all"
+            >
+              <span className="text-rose-400 text-lg">🚨</span>
+              <div className="text-left">
+                <p className="text-rose-400 font-black text-sm uppercase tracking-wider">Нужно быстрее!</p>
+                <p className="text-[9px] text-rose-400/60 font-bold uppercase tracking-widest">Уведомить всех администраторов</p>
+              </div>
+            </button>
+            <div className="flex items-center gap-3 px-2">
+              <div className="flex-1 h-px bg-slate-800" />
+              <span className="text-[9px] text-text-dim font-black uppercase tracking-widest">или выбрать</span>
+              <div className="flex-1 h-px bg-slate-800" />
+            </div>
+            <div className="max-h-[260px] overflow-y-auto space-y-2 pr-2">
               {admins.map(admin => (
                 <button key={admin.id} onClick={() => { onSelectChat(admin.id); setShowAdmins(false); }} className="w-full flex items-center p-4 bg-bg-primary rounded-2xl hover:border-accent border border-transparent transition-all">
                   <UserAvatar user={admin} size={40} className="shadow-sm" />
