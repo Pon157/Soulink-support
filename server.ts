@@ -1488,62 +1488,7 @@ app.delete('/api/posts/:id', authenticateToken, async (req: any, res: any) => {
     }
 });
 
-app.post('/api/posts', authenticateToken, async (req: any, res: any) => {
-  const { channelId, content, mediaUrl } = req.body;
-  try {
-    // Check if user owns this channel
-    const channel = await prisma.channel.findUnique({ where: { id: channelId } });
-    if (!channel || channel.ownerId !== req.user.userId) {
-        return res.status(403).json({ error: 'Forbidden' });
-    }
-
-    const post = await prisma.post.create({
-      data: { content, mediaUrl, channelId }
-    });
-
-    // Notify subscribers via TG
-    try {
-        const subscribers = await prisma.subscription.findMany({
-            where: { channelId },
-            include: { user: { select: { id: true, telegramId: true, tgNotifyAll: true, tgAllowedChats: true } } }
-        });
-        
-        const channelSourceId = `CHANNEL_${channelId}`;
-        const escapedName = escapeHTML(channel.name);
-        const postContent = content || '';
-        const escapedContent = escapeHTML(postContent);
-
-        const batchSize = 25;
-        for (let i = 0; i < subscribers.length; i += batchSize) {
-            const batch = subscribers.slice(i, i + batchSize);
-            await Promise.allSettled(batch.map(async (sub) => {
-                if (sub.user.telegramId) {
-                    const allowedList = sub.user.tgAllowedChats || [];
-                    const wantsNotify = sub.user.tgNotifyAll || allowedList.includes(channelSourceId);
-                    if (wantsNotify) {
-                        let msg = `<b>📢 НОВЫЙ ПОСТ: ${escapedName}</b>\n\n`;
-                        msg += `${escapedContent.substring(0, 300)}${postContent.length > 300 ? '...' : ''}\n\n`;
-                        msg += `<a href="${process.env.APP_URL || '#'}">Открыть канал</a>`;
-                        
-                        await sendTGNotification(sub.user.id, msg, channelSourceId, mediaUrl || undefined);
-                    }
-                }
-            }));
-            if (i + batchSize < subscribers.length) {
-                await new Promise(r => setTimeout(r, 600));
-            }
-        }
-    } catch (e) {
-        // console.error('Channel notify failed', e);
-    }
-
-    notifyExternalBot(`<b>📢 NEW POST</b>\nChannel: ${channel.name}\nContent: ${(content || '').substring(0, 200)}${(content || '').length > 200 ? '...' : ''}\n\n<a href="${process.env.APP_URL || '#'}">Открыть приложение</a>`, mediaUrl || undefined);
-
-    res.json(post);
-  } catch (e) {
-    res.status(500).json({ error: 'Failed' });
-  }
-});
+);
 
 app.post('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
     const { name, description, avatar, banner } = req.body;
@@ -2285,5 +2230,75 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
+
+// ── Urgent request: notify all admins via Telegram ──
+app.post('/api/chats/urgent-request', authenticateToken, async (req: any, res: any) => {
+  try {
+    const user = await prisma.user.findUnique({ 
+      where: { id: req.user.userId }, 
+      select: { nickname: true, username: true, id: true }
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const appUrl = process.env.APP_URL || '#';
+    const chatLink = `${appUrl}/chats/${user.id}`;
+    const msg = `🚨 <b>СРОЧНЫЙ ЗАПРОС</b>\n\nПользователь <b>${user.nickname}</b> (@${user.username || '?'}) просит срочной помощи!\n\n<a href="${chatLink}">👆 Открыть чат с пользователем</a>\n\n<i>Первый, кто перейдёт по ссылке — закрепляет за собой этот диалог.</i>`;
+    
+    notifyExternalBot(msg);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Urgent request error:', e);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// ── Music API ──
+app.get('/api/music', authenticateToken, async (req: any, res: any) => {
+  const { category } = req.query;
+  try {
+    const tracks = await (prisma as any).track.findMany({
+      where: category ? { category: String(category) } : {},
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(tracks);
+  } catch (e) {
+    console.error('GET /api/music error:', e);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/music', authenticateToken, async (req: any, res: any) => {
+  if (req.user.role !== 'OWNER') return res.status(403).json({ error: 'Forbidden' });
+  const { title, artist, audioUrl, coverUrl, category } = req.body;
+  try {
+    const track = await (prisma as any).track.create({
+      data: { title, artist: artist || '', audioUrl, coverUrl: coverUrl || null, category: category || 'general' }
+    });
+    res.json(track);
+  } catch (e) {
+    console.error('POST /api/music error:', e);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.delete('/api/music/:id', authenticateToken, async (req: any, res: any) => {
+  if (req.user.role !== 'OWNER') return res.status(403).json({ error: 'Forbidden' });
+  try {
+    await (prisma as any).track.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.get('/api/music/categories', authenticateToken, async (req: any, res: any) => {
+  try {
+    const tracks = await (prisma as any).track.findMany({ select: { category: true }, distinct: ['category'] });
+    res.json(tracks.map((t: any) => t.category));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 
 startServer();
