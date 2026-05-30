@@ -41,7 +41,7 @@ const ChannelList = ({ onImageClick, onProfileClick }: { onImageClick: (url: str
   }, []);
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 bg-bg-primary">
+    <div className="flex-1 overflow-y-auto p-6 pb-24 bg-bg-primary">
         <header className="mb-0.5">
             <h2 className="text-3xl font-black italic tracking-tighter text-text-main">Каналы</h2>
             <p className="text-text-dim text-[10px] font-black uppercase tracking-widest mt-1">Контент от наших администраторов :3</p>
@@ -440,7 +440,7 @@ const ChannelDetail = ({ channel, onBack, user, onUpdate, onImageClick, onProfil
                     <p className="text-sm italic text-text-dim italic leading-relaxed">{channel.description || 'Обзоры, новости и полезные советы от администрации SoulLink.'}</p>
                 </div>
 
-                <div className="space-y-4 pb-12">
+                <div className="space-y-4 pb-28">
                     <h4 className="text-xs font-black uppercase tracking-[0.3em] text-text-dim px-2">Последние посты</h4>
                     {posts.map(post => (
                         <div key={post.id} className="bg-bg-secondary p-6 rounded-[2.5rem] border border-slate-800/50 space-y-4 group">
