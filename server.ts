@@ -1488,6 +1488,8 @@ app.delete('/api/posts/:id', authenticateToken, async (req: any, res: any) => {
     }
 });
 
+);
+
 app.post('/api/channels/:id', authenticateToken, async (req: any, res: any) => {
     const { name, description, avatar, banner } = req.body;
     try {
