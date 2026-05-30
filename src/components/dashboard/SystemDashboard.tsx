@@ -370,7 +370,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
           <div className="space-y-4">
               <div className="space-y-3">
                   {tasks.length === 0 && <p className="text-center text-text-dim py-24 text-[10px] uppercase font-black italic tracking-widest">Заданий пока нет</p>}
-                  {tasks.map(t => (
+                  {tasks.map(t => { const _uid = user?.id ?? ''; return (
                       <div key={t.id} className="bg-bg-secondary border border-slate-800 p-6 rounded-[2.5rem] space-y-4">
                           <div className="flex justify-between items-start">
                               <div>
@@ -390,11 +390,11 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
                                   <span>Дедлайн: {new Date(t.deadline).toLocaleDateString()}</span>
                               </div>
                           )}
-                          {t.assigneeId === currentUserId && t.status !== 'completed' && (
+                          {t.assigneeId === _uid && t.status !== 'completed' && (
                               <button onClick={() => handleUpdateTaskStatus(t.id, 'completed')} className="w-full py-4 bg-emerald-600 rounded-2xl font-black uppercase text-[10px] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all">Завершить задание</button>
                           )}
                       </div>
-                  ))}
+                  ); })}
               </div>
           </div>
       )}
