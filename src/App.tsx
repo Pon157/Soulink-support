@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Routes, Route, Navigate, Outlet, useParams, useNavigate, useLocation, useOutletContext 
@@ -13,6 +12,8 @@ import { SettingsView } from './components/dashboard/SettingsView';
 import { SystemDashboard } from './components/dashboard/SystemDashboard';
 import { ReviewsView } from './components/dashboard/ReviewsView';
 import { ChatList } from './components/dashboard/ChatList';
+// ДОБАВЛЕНО: Импорт MusicPlayer согласно вашей структуре папок
+import MusicPlayer from './components/dashboard/MusicPlayer'; 
 import { GameLauncher } from './components/games/GameLauncher';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -64,11 +65,6 @@ const GameRoute = ({ user }: { user: any }) => {
 
 const RoutingTabWrapper = ({ children }: { children: React.ReactNode }) => {
     const { setPreviewImage, setSelectedProfile }: any = useOutletContext();
-    
-    // We clone the children and inject the props if they match the expected interface
-    // But it's easier to just assume they handle it via context if we updated them, 
-    // or we can just pass them as props if we modify them to accept context.
-    // For now, let's just use React.cloneElement to be safe since I used {() => {}} in the routes.
     
     return (
         <motion.div 
@@ -176,48 +172,53 @@ const App = () => {
   }
 
   return (
-    <Routes>
-      <Route 
-        path="/login" 
-        element={!user ? <LoginPage setUser={setUser} /> : <Navigate to="/" />} 
-      />
-      <Route 
-        path="/register" 
-        element={!user ? <RegisterPage /> : <Navigate to="/" />} 
-      />
-      
-      {/* Main Dashboard Routes */}
-      <Route element={user ? <MainDashboard user={user} setUser={setUser} onLogout={handleLogout} /> : <Navigate to="/login" />}>
-        <Route path="/" element={<Navigate to="/chats" replace />} />
-        <Route path="/chats" element={<ChatList onSelectChat={(id) => navigate(`/chats/${id}`)} user={user} />} />
-        <Route path="/chats/:chatId" element={
-          <ChatListWithView user={user} />
-        } />
-        <Route path="/reviews/*" element={
-           <RoutingTabWrapper>
-              <ReviewsView onImageClick={() => {}} onProfileClick={() => {}} />
-           </RoutingTabWrapper>
-        } />
-        <Route path="/channels/*" element={
-           <RoutingTabWrapper>
-              <ChannelsView user={user} onImageClick={() => {}} onProfileClick={() => {}} />
-           </RoutingTabWrapper>
-        } />
-        <Route path="/system/*" element={
-           <RoutingTabWrapper>
-              <SystemDashboard user={user} onExpandChat={(id) => navigate(`/chats/${id}`)} />
-           </RoutingTabWrapper>
-        } />
-        <Route path="/settings/*" element={
-           <RoutingTabWrapper>
-              <SettingsView user={user} setUser={setUser} onLogout={handleLogout} />
-           </RoutingTabWrapper>
-        } />
-        <Route path="/games/:sessionId" element={<GameRoute user={user} />} />
-        {/* Catch-all redirect */}
-        <Route path="*" element={<Navigate to="/chats" replace />} />
-      </Route>
-    </Routes>
+    <>
+      <Routes>
+        <Route 
+          path="/login" 
+          element={!user ? <LoginPage setUser={setUser} /> : <Navigate to="/" />} 
+        />
+        <Route 
+          path="/register" 
+          element={!user ? <RegisterPage /> : <Navigate to="/" />} 
+        />
+        
+        {/* Main Dashboard Routes */}
+        <Route element={user ? <MainDashboard user={user} setUser={setUser} onLogout={handleLogout} /> : <Navigate to="/login" />}>
+          <Route path="/" element={<Navigate to="/chats" replace />} />
+          <Route path="/chats" element={<ChatList onSelectChat={(id) => navigate(`/chats/${id}`)} user={user} />} />
+          <Route path="/chats/:chatId" element={
+            <ChatListWithView user={user} />
+          } />
+          <Route path="/reviews/*" element={
+             <RoutingTabWrapper>
+                <ReviewsView onImageClick={() => {}} onProfileClick={() => {}} />
+             </RoutingTabWrapper>
+          } />
+          <Route path="/channels/*" element={
+             <RoutingTabWrapper>
+                <ChannelsView user={user} onImageClick={() => {}} onProfileClick={() => {}} />
+             </RoutingTabWrapper>
+          } />
+          <Route path="/system/*" element={
+             <RoutingTabWrapper>
+                <SystemDashboard user={user} onExpandChat={(id) => navigate(`/chats/${id}`)} />
+             </RoutingTabWrapper>
+          } />
+          <Route path="/settings/*" element={
+             <RoutingTabWrapper>
+                <SettingsView user={user} setUser={setUser} onLogout={handleLogout} />
+             </RoutingTabWrapper>
+          } />
+          <Route path="/games/:sessionId" element={<GameRoute user={user} />} />
+          {/* Catch-all redirect */}
+          <Route path="*" element={<Navigate to="/chats" replace />} />
+        </Route>
+      </Routes>
+
+      {/* ДОБАВЛЕНО: Глобальный рендер MusicPlayer для авторизованных пользователей */}
+      {user && <MusicPlayer />}
+    </>
   );
 };
 
@@ -232,7 +233,5 @@ const ChatListWithView = ({ user }: { user: any }) => {
         </>
     );
 };
-
-
 
 export default App;
