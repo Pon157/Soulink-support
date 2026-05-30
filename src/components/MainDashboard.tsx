@@ -7,6 +7,7 @@ import {
 import { apiFetch } from '../lib/api';
 import { UserProfileModal } from './ui/UserProfileModal';
 import { UserAvatar } from './ui/UserAvatar';
+import { MusicPlayer } from './dashboard/MusicPlayer';
 
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
@@ -108,6 +109,9 @@ export const MainDashboard = ({ user, setUser, onLogout }: { user: any, setUser:
             />
           )}
         </AnimatePresence>
+
+        {/* Floating Music Player */}
+        <MusicPlayer />
       </div>
     </div>
   );
