@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Routes, Route, Link } from 'react-router-dom';
-import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight, Ticket as TicketIcon, ArrowLeft } from 'lucide-react';
+import { BarChart3, Users, FileText, ShieldAlert, Star, Plus, ShieldCheck, Mail, Lock, Search, Trash2, ChevronRight, Ticket as TicketIcon, ArrowLeft, Music2, Upload, Trash } from 'lucide-react';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../ui/Modal';
 import { UserAvatar } from '../ui/UserAvatar';
@@ -9,7 +9,7 @@ import { ChatView } from './ChatView';
 const cn = (...classes: any[]) => classes.filter(Boolean).join(' ');
 
 export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandChat: (id: string) => void }) => {
-  const currentUserId = user?.id;
+  const currentUserId = user?.id ?? '';
   const navigate = useNavigate();
   const { '*': tabPath } = useParams();
   const rawView = tabPath || 'stats';
@@ -38,6 +38,11 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
   const [adminFilter, setAdminFilter] = useState('');
   const [broadcastData, setBroadcastData] = useState({ title: '', content: '' });
   const [sanctionData, setSanctionData] = useState({ targetId: '', action: 'ban', reason: '', durationHours: 24 });
+  const [tracks, setTracks] = useState<any[]>([]);
+  const [musicCategories, setMusicCategories] = useState<string[]>([]);
+  const [trackFilter, setTrackFilter] = useState('all');
+  const [newTrack, setNewTrack] = useState({ title: '', artist: '', audioUrl: '', coverUrl: '', category: 'general' });
+  const [showAddTrack, setShowAddTrack] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -70,6 +75,13 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
         if (revRes.ok) setReviews(await revRes.json());
         if (chatsRes.ok) setAllChats(await chatsRes.json());
       }
+      // Music tracks (available to all roles)
+      const [tracksRes, catsRes] = await Promise.all([
+        apiFetch('/api/music'),
+        apiFetch('/api/music/categories'),
+      ]);
+      if (tracksRes.ok) setTracks(await tracksRes.json());
+      if (catsRes.ok) setMusicCategories(await catsRes.json());
     } catch (e) {
       console.error(e);
     } finally {
@@ -183,6 +195,7 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
     { id: 'broadcast', label: 'Рассылка', icon: Mail, ownerOnly: true },
     { id: 'sanctions', label: 'Санкции', icon: Lock, ownerOnly: true },
     { id: 'rules', label: 'Устав', icon: FileText, ownerOnly: false },
+    { id: 'music', label: 'Музыка', icon: Music2, ownerOnly: false },
   ].filter(t => (!t.ownerOnly || role === 'OWNER') && (!t.curatorOnly || role === 'CURATOR' || role === 'OWNER'));
 
   return (
@@ -628,6 +641,86 @@ export const SystemDashboard = ({ user, onExpandChat }: { user: any, onExpandCha
               ))}
           </div>
       </Modal>
+      {view === 'music' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-black italic text-text-main tracking-tight">Музыкальный каталог</h3>
+            {role === 'OWNER' && (
+              <button onClick={() => setShowAddTrack(true)} className="bg-accent/10 text-accent p-3 rounded-2xl hover:bg-accent/20 transition-all">
+                <Plus size={20} />
+              </button>
+            )}
+          </div>
+
+          {/* Category filter */}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            <button onClick={() => setTrackFilter('all')} className={`text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl whitespace-nowrap transition-all ${trackFilter === 'all' ? 'bg-accent text-white' : 'bg-bg-secondary text-text-dim hover:text-text-main'}`}>Все</button>
+            {musicCategories.map(cat => (
+              <button key={cat} onClick={() => setTrackFilter(cat)} className={`text-[9px] font-black uppercase tracking-widest px-3 py-2 rounded-xl whitespace-nowrap transition-all ${trackFilter === cat ? 'bg-accent text-white' : 'bg-bg-secondary text-text-dim hover:text-text-main'}`}>{cat}</button>
+            ))}
+          </div>
+
+          {/* Add track form */}
+          {showAddTrack && role === 'OWNER' && (
+            <div className="bg-bg-secondary border border-slate-800 p-6 rounded-[2rem] space-y-3">
+              <h4 className="text-xs font-black uppercase tracking-widest text-text-dim">Новый трек</h4>
+              <input value={newTrack.title} onChange={e => setNewTrack({...newTrack, title: e.target.value})} placeholder="Название *" className="w-full bg-bg-primary p-3 rounded-2xl outline-none text-text-main text-sm" />
+              <input value={newTrack.artist} onChange={e => setNewTrack({...newTrack, artist: e.target.value})} placeholder="Исполнитель" className="w-full bg-bg-primary p-3 rounded-2xl outline-none text-text-main text-sm" />
+              <input value={newTrack.audioUrl} onChange={e => setNewTrack({...newTrack, audioUrl: e.target.value})} placeholder="Ссылка на MP3 *" className="w-full bg-bg-primary p-3 rounded-2xl outline-none text-text-main text-sm" />
+              <input value={newTrack.coverUrl} onChange={e => setNewTrack({...newTrack, coverUrl: e.target.value})} placeholder="Ссылка на обложку (необязательно)" className="w-full bg-bg-primary p-3 rounded-2xl outline-none text-text-main text-sm" />
+              <input value={newTrack.category} onChange={e => setNewTrack({...newTrack, category: e.target.value})} placeholder="Категория (напр: хип-хоп)" className="w-full bg-bg-primary p-3 rounded-2xl outline-none text-text-main text-sm" />
+              <div className="flex gap-2">
+                <button onClick={async () => {
+                  if (!newTrack.title || !newTrack.audioUrl) return alert('Заполните обязательные поля');
+                  const res = await apiFetch('/api/music', { method: 'POST', body: JSON.stringify(newTrack) });
+                  if (res.ok) {
+                    const t = await res.json();
+                    setTracks(prev => [t, ...prev]);
+                    setNewTrack({ title: '', artist: '', audioUrl: '', coverUrl: '', category: 'general' });
+                    setShowAddTrack(false);
+                  } else { alert('Ошибка добавления'); }
+                }} className="flex-1 bg-accent py-3 rounded-2xl font-black uppercase text-[10px] text-white">Добавить</button>
+                <button onClick={() => setShowAddTrack(false)} className="flex-1 bg-bg-primary py-3 rounded-2xl font-black uppercase text-[10px] text-text-dim">Отмена</button>
+              </div>
+            </div>
+          )}
+
+          {/* Track list */}
+          <div className="space-y-2">
+            {(trackFilter === 'all' ? tracks : tracks.filter(t => t.category === trackFilter)).map(track => (
+              <div key={track.id} className="bg-bg-secondary border border-slate-800/50 p-4 rounded-[2rem] flex items-center gap-3 group">
+                <div className="w-10 h-10 bg-accent/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                  {track.coverUrl ? <img src={track.coverUrl} className="w-full h-full rounded-xl object-cover" /> : <Music2 size={18} className="text-accent" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-text-main text-sm truncate">{track.title}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {track.artist && <span className="text-[9px] text-text-dim">{track.artist}</span>}
+                    <span className="text-[9px] font-black uppercase text-accent/60 bg-accent/10 px-2 py-0.5 rounded-lg">{track.category}</span>
+                  </div>
+                </div>
+                {role === 'OWNER' && (
+                  <button onClick={async () => {
+                    if (!confirm('Удалить трек?')) return;
+                    const res = await apiFetch(`/api/music/${track.id}`, { method: 'DELETE' });
+                    if (res.ok) setTracks(prev => prev.filter(t => t.id !== track.id));
+                  }} className="p-2 text-text-dim hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100">
+                    <Trash size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {tracks.length === 0 && (
+              <div className="text-center py-12 text-text-dim">
+                <Music2 size={32} className="mx-auto mb-3 opacity-30" />
+                <p className="text-[10px] font-black uppercase tracking-widest">Треков пока нет</p>
+                {role === 'OWNER' && <p className="text-[9px] mt-1 italic">Добавьте первый трек через кнопку + выше</p>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
